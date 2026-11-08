@@ -16,7 +16,7 @@ const PERM_GROUPS = [
     ['callbacks.edit_all', 'Verzoeken van collega’s bewerken'], ['callbacks.delete', 'Verzoeken verwijderen']]],
   ['Taken', [['tasks.create', 'Taken aanmaken'], ['tasks.assign', 'Taken aan anderen geven'], ['tasks.view_all', 'Taken van collega’s zien'],
     ['tasks.edit_all', 'Taken van collega’s bewerken'], ['tasks.delete', 'Taken verwijderen'], ['tasks.archive', 'Taakarchief: afgeronde taken van iedereen bekijken en aanpassen']]],
-  ['Uren', [['hours.view_all', 'Uren van iedereen zien'], ['hours.approve', 'Uren en verlof goedkeuren'], ['hours.plan', 'Rooster plannen'], ['hours.kiosk', 'Prikklok instellen'], ['hours.kiosk_exit', 'Prikklok verlaten met eigen code'], ['hours.clocked', 'Zien wie ingeklokt is en sinds hoe laat']]],
+  ['Uren', [['hours.view_all', 'Uren van iedereen zien'], ['hours.approve', 'Uren en verlof goedkeuren'], ['hours.plan', 'Rooster plannen'], ['hours.kiosk', 'Prikklok instellen'], ['hours.kiosk_exit', 'Prikklok verlaten met eigen code'], ['hours.clocked', 'Zien wie ingeklokt is en sinds hoe laat'], ['hours.leave_balance', 'Verlofsaldo van medewerkers instellen']]],
   ['Kennis & documenten', [['kb.edit', 'Kennisbank bewerken'], ['docs.upload', 'Documenten uploaden'], ['docs.manage', 'Mappen en documenten beheren']]],
   ['Teamleiding', [['team.board', 'Teambord'], ['reports.view', 'Cijfers'], ['phone.view', 'Telefonie bekijken'], ['audit.view', 'Logboek']]],
   ['Beheer', [['members.manage', 'Medewerkers beheren'], ['roles.manage', 'Rollen en rechten beheren'], ['org.manage', 'Bedrijfsinstellingen']]]
@@ -1013,7 +1013,7 @@ function viewMemberPanel() {
     (self ? '<dl class="kv"><dt>Rol</dt><dd>' + esc(u.roleName) + '</dd></dl>' :
       '<div class="field"><label for="m-role">Rol</label><select class="input" id="m-role" data-act-change="m-role-edit">' + roleOptions(u.roleId) + '</select><div id="m-perms">' + permSummary(u.roleId) + '</div></div>' +
       '<label class="check"><input type="checkbox" id="m-active"' + (u.active ? ' checked' : '') + '> Account actief (kan inloggen)</label>') +
-    (!self || S.me.isOwner ? contractFields(u) : '<dl class="kv"><dt>Contract</dt><dd>' + esc(contractText(u)) + '</dd></dl>') +
+    (!self || S.me.isOwner ? contractFields(u) : '<dl class="kv"><dt>Contract</dt><dd>' + esc(contractText(u)) + '</dd></dl>') + leaveAccountBox(u) +
     (can('members.manage') && (!self || S.me.isOwner || can('members.manage')) ? memberBizFields(u) : '') +
     '<div class="detail-section"><button class="btn dark" data-act="m-save" data-id="' + u.id + '">Opslaan</button>' +
     (self || !can('members.manage') || u.leaving ? '' : '<button class="btn danger" data-act="m-off-open" data-id="' + u.id + '">Uit dienst melden</button>') + '</div>' +
@@ -1079,8 +1079,74 @@ function viewSettings() {
     if (hasFeature('phone')) h += viewPhoneLink();
   }
   if (S.me.isOwner) h += billingCard();
-  h += (can('org.manage') ? breakRulesCard() : '') + locationsCard() + payrollSettingsCard() + mailPrefsCard();
+  h += (can('org.manage') ? breakRulesCard() + leaveRulesCard() : '') + locationsCard() + payrollSettingsCard() + mailPrefsCard();
   return h + securityCards() + (S.me.isOwner ? pinWindowCard() : '') + '</div>';
+}
+// ---------- verlofsaldo ----------
+const COVER = { onbetaald: ['Onbetaald verlof', 'De uren die tekort zijn worden niet doorbetaald.'], voorschot: ['Voorschot', 'Het saldo mag tijdelijk negatief worden en wordt later ingehaald.'],
+  kopen: ['Verlof kopen', 'De uren worden ingehouden op het salaris en staan in de salarisexport.'], overuren: ['Overuren gebruiken', 'Tijd voor tijd: de uren gaan van het overurensaldo af.'] };
+const hrsTxt = v => { const n = Math.round(Number(v || 0) * 100) / 100; return String(n).replace('.', ',') + ' uur'; };
+function leaveHoursField(E, n) {
+  const L = S.abs && S.abs.leave; const self = !E.memberId;
+  const dayH = self && L ? Number(L.dayHours) : 8;
+  const def = Math.round(n * dayH * 100) / 100;
+  const hrs = E.hours !== undefined && E.hours !== '' ? Number(String(E.hours).replace(',', '.')) : def;
+  let h = '<div class="fields2" style="max-width:520px;align-items:end"><div class="field"><label for="abs-hours">Aantal uur</label><input class="input" id="abs-hours" data-abs="hours" inputmode="decimal" value="' + esc(E.hours !== undefined ? E.hours : '') + '" placeholder="' + esc(String(def).replace('.', ',')) + '"></div>' +
+    '<p class="small muted" style="margin:0 0 12px">' + n + (n === 1 ? ' werkdag' : ' werkdagen') + (self ? ' × ' + hrsTxt(dayH) : '') + '. Pas het aan voor bijvoorbeeld een halve dag.</p></div>';
+  if (self && E.kind === 'verlof' && L) {
+    const y = (E.from || today()).slice(0, 4); const st = L.status && String(L.status.year) === y ? L.status : L.next && String(L.next.year) === y ? L.next : null;
+    if (st && st.tracked) {
+      const left = Number(st.left) - Number(st.pending || 0);
+      h += hrs > left
+        ? '<div class="alert warn">Je hebt in ' + y + ' nog ' + hrsTxt(Math.max(left, 0)) + ' verlof over' + (st.pending ? ' (na je andere aanvragen)' : '') + '. Je komt <strong>&nbsp;' + hrsTxt(hrs - Math.max(left, 0)) + '&nbsp;</strong> tekort. Je leidinggevende kiest hoe dat wordt opgelost.</div>'
+        : '<p class="small" style="margin:0">Na deze aanvraag heb je in ' + y + ' nog <strong>' + hrsTxt(left - hrs) + '</strong> verlof over.</p>';
+    }
+  }
+  return h;
+}
+function leaveSaldoCard() {
+  const L = S.abs && S.abs.leave; if (!L || !L.status || !L.status.tracked) return '';
+  const st = L.status; const pct = st.entitled > 0 ? Math.max(0, Math.min(100, st.used / st.entitled * 100)) : 100;
+  return '<section class="card leave-card"><div><span class="small muted">Verlofsaldo ' + st.year + '</span><strong class="leave-big' + (st.left < 0 ? ' neg' : '') + '">' + hrsTxt(st.left) + '</strong><span class="small muted">over van ' + hrsTxt(st.entitled) + '</span></div>' +
+    '<div class="leave-bar"><span style="width:' + pct + '%"></span></div>' +
+    '<div class="small muted">' + hrsTxt(st.used) + ' opgenomen' + (st.pending ? ' · ' + hrsTxt(st.pending) + ' aangevraagd' : '') + (Number(st.tvt) ? ' · overuren: ' + hrsTxt(st.tvtLeft) + ' over' : '') + '</div></section>';
+}
+function leavePendingInfo(a) {
+  const b = a.balance; if (a.kind !== 'verlof' || !b || !b.tracked || a.hours == null) return '';
+  const avail = Math.max(Number(b.left), 0); const short = Number(a.hours) - avail;
+  const L = S.abs && S.abs.leave; const opts = Object.keys(COVER).filter(k => L && L.settings && L.settings[k]);
+  let h = '<div class="small" style="margin-top:4px">Saldo ' + b.year + ': <strong>' + hrsTxt(b.left) + '</strong> over · deze aanvraag: <strong>' + hrsTxt(a.hours) + '</strong>' + (Number(b.tvt) ? ' · overuren: ' + hrsTxt(b.tvtLeft) : '') + '</div>';
+  if (short > 0) {
+    h += '<div class="alert warn" style="margin-top:8px;flex-direction:column;align-items:stretch;gap:6px"><strong>Tekort: ' + hrsTxt(short) + '</strong>' +
+      (opts.length ? '<label class="small" for="cover-' + a.id + '">Hoe los je het tekort op?</label><select class="input" id="cover-' + a.id + '"><option value="">— Kies —</option>' +
+        opts.map(k => '<option value="' + k + '"' + (k === 'overuren' && Number(b.tvtLeft) < short ? ' disabled' : '') + '>' + COVER[k][0] + (k === 'voorschot' ? ' (max. ' + hrsTxt(L.settings.advanceMax) + ' negatief)' : '') + (k === 'overuren' ? ' (' + hrsTxt(b.tvtLeft) + ' beschikbaar)' : '') + '</option>').join('') + '</select>'
+        : '<span class="small">Er staan geen oplossingen aan bij Instellingen → Verlofregels. Wijs de aanvraag af of zet daar een optie aan.</span>') + '</div>';
+  }
+  return h;
+}
+function leaveAccountBox(u) {
+  if (!(S.me.isOwner || can('hours.leave_balance')) || u.contractType !== 'vast') return '';
+  const A = S.leaveAcc && same(S.leaveAcc.memberId, u.id) ? S.leaveAcc : null;
+  const y = S.leaveYear || Number(today().slice(0, 4));
+  if (!A) return '<fieldset class="box" style="margin:0"><legend class="legend" style="padding:0 4px">Verlofsaldo</legend><p class="small muted" style="margin:0">Laden…</p></fieldset>';
+  const d = A.data;
+  return '<fieldset class="box" style="margin:0"><legend class="legend" style="padding:0 4px">Verlofsaldo</legend>' +
+    '<div class="seg"><button class="' + (y === Number(today().slice(0, 4)) ? 'on' : '') + '" data-act="la-year" data-id="' + u.id + '" data-v="' + today().slice(0, 4) + '">' + today().slice(0, 4) + '</button><button class="' + (y === Number(today().slice(0, 4)) + 1 ? 'on' : '') + '" data-act="la-year" data-id="' + u.id + '" data-v="' + (Number(today().slice(0, 4)) + 1) + '">' + (Number(today().slice(0, 4)) + 1) + '</button></div>' +
+    '<div class="fields2"><div class="field"><label for="la-leave">Verlofuren in ' + y + '</label><input class="input" id="la-leave" inputmode="decimal" placeholder="Bijv. 160" value="' + (d.tracked ? esc(String(d.entitled).replace('.', ',')) : '') + '"></div>' +
+    '<div class="field"><label for="la-tvt">Overuren (tijd voor tijd)</label><input class="input" id="la-tvt" inputmode="decimal" placeholder="0" value="' + (d.tracked && Number(d.tvt) ? esc(String(d.tvt).replace('.', ',')) : '') + '"></div></div>' +
+    (d.tracked ? '<p class="small muted" style="margin:0">Opgenomen: ' + hrsTxt(d.used) + ' · over: <strong>' + hrsTxt(d.left) + '</strong>' + (d.pending ? ' · aangevraagd: ' + hrsTxt(d.pending) : '') + (Number(d.tvt) ? ' · overuren over: ' + hrsTxt(d.tvtLeft) : '') + '</p>' : '<p class="small muted" style="margin:0">Nog geen saldo voor ' + y + '. Leeg laten = geen saldo bijhouden.</p>') +
+    '<div class="row"><button class="btn small" data-act="la-save" data-id="' + u.id + '">Saldo opslaan</button></div></fieldset>';
+}
+async function loadLeaveAcc(id) {
+  const y = S.leaveYear || Number(today().slice(0, 4));
+  try { S.leaveAcc = { memberId: id, data: await rpc('cd_leave_account', { p_member: id, p_year: y }) }; } catch (e) { S.leaveAcc = null; }
+}
+function leaveRulesCard() {
+  const L = (S.org.settings || {}).leave || {}; const v = k => L[k] === undefined ? true : !!L[k];
+  return '<section class="card stack" style="gap:12px"><h2>Verlofregels</h2><p class="small muted" style="margin:0">Wat mag er gebeuren als iemand meer verlof aanvraagt dan er op zijn saldo staat? Wie het verlof goedkeurt, kiest dan uit de opties die hier aan staan.</p>' +
+    Object.keys(COVER).map(k => '<label class="check"><input type="checkbox" id="lr-' + k + '"' + (v(k) ? ' checked' : '') + '> <span><strong>' + COVER[k][0] + '</strong><br><span class="small muted">' + COVER[k][1] + '</span></span></label>').join('') +
+    '<div class="field" style="max-width:240px"><label for="lr-max">Voorschot: saldo mag maximaal zoveel uur negatief</label><input class="input" id="lr-max" inputmode="decimal" value="' + esc(String(L.advanceMax === undefined ? 40 : L.advanceMax)) + '"></div>' +
+    '<div><button class="btn primary" data-act="lr-save">Opslaan</button></div></section>';
 }
 // ---------- status van collega's (rechterbalk) ----------
 const PRES = { beschikbaar: ['Beschikbaar', '#23A55A'], niet_storen: ['Niet storen', '#F23F43'], afwezig: ['Afwezig', '#F0B232'], lunch: ['Lunch', '#3B82F6'] };
@@ -1939,7 +2005,7 @@ async function loadAbsences() {
   const [mine, pending, teamList] = await Promise.all([rpc('cd_absences', { p_scope: 'mine' }),
     boss ? rpc('cd_absences', { p_scope: 'pending' }) : Promise.resolve([]),
     team ? rpc('cd_absences', { p_scope: 'team', p_from: today(), p_to: addDays(today(), 60) }) : Promise.resolve(null)]);
-  S.abs = { mine, pending, team: teamList };
+  S.abs = { mine, pending, team: teamList, leave: await rpc('cd_leave_me').catch(() => null) };
   if (boss && !S.colleagues.length) await loadColleagues();
 }
 function absenceForm() {
@@ -1952,7 +2018,7 @@ function absenceForm() {
       '<span class="small muted">Voor iemand anders ingevoerd verlof is meteen goedgekeurd.</span></div>' : '') +
     '<div class="fields2" style="max-width:520px"><div class="field"><label for="abs-from">' + (ziek ? 'Ziek sinds' : 'Van') + '</label><input class="input" type="date" id="abs-from" data-abs="from" value="' + esc(E.from) + '"' + (ziek ? ' max="' + addDays(today(), 1) + '"' : '') + '></div>' +
     '<div class="field"><label for="abs-to">' + (ziek ? 'Tot en met <span class="muted" style="font-weight:400">(als je het al weet)</span>' : 'Tot en met') + '</label><input class="input" type="date" id="abs-to" data-abs="to" value="' + esc(E.to) + '" min="' + esc(E.from || '') + '"></div></div>' +
-    (!ziek && n ? '<p class="small muted" style="margin:0">' + n + (n === 1 ? ' werkdag' : ' werkdagen') + '</p>' : '') +
+    (!ziek && n ? leaveHoursField(E, n) : '') +
     '<div class="field"><label for="abs-note">Toelichting <span class="muted" style="font-weight:400">(optioneel)</span></label><input class="input" id="abs-note" data-abs="note" maxlength="300" value="' + esc(E.note) + '" placeholder="' + (ziek ? 'Bijv. griep, verwacht terug op maandag' : 'Bijv. vakantie Spanje') + '"></div>' +
     (ziek ? '<p class="small muted" style="margin:0">Je leidinggevende krijgt meteen een melding. Meld je weer beter zodra je kunt werken.</p>' : '<p class="small muted" style="margin:0">Je leidinggevende krijgt een melding en keurt het verlof goed of af.</p>') +
     '<div class="form-foot"><button class="btn ghost" data-act="abs-cancel">Annuleren</button><button class="btn ' + (ziek ? 'danger' : 'primary') + '" data-act="abs-save">' + (ziek ? 'Ziek melden' : 'Aanvragen') + '</button></div></section>';
@@ -1967,11 +2033,12 @@ function viewAbsence() {
       '<div class="row" style="align-items:flex-end"><div class="field"><label for="beter-date">Weer aan het werk op</label><input class="input" type="date" id="beter-date" value="' + today() + '" min="' + esc(sick.from) + '"></div>' +
       '<button class="btn primary" data-act="abs-beter" data-id="' + sick.id + '">Beter melden</button></div></section>';
   }
+  h += leaveSaldoCard();
   if (S.absForm) h += absenceForm();
   if (A.pending.length) {
     h += '<section class="stack" style="gap:10px;max-width:none"><div class="section-title"><h2>Aanvragen om te beoordelen</h2><span class="badge orange">' + A.pending.length + '</span></div>' +
       A.pending.map(a => '<div class="card abs-row"><div class="abs-main">' + avatar(a.memberId, a.memberName) + '<div><strong>' + esc(a.memberName) + '</strong> · ' + esc(a.kindLabel) +
-        '<div class="small muted">' + esc(spanLabel(a)) + ' · ' + a.workdays + (a.workdays === 1 ? ' werkdag' : ' werkdagen') + (a.note ? ' · ' + esc(a.note) : '') + '</div></div></div>' +
+        '<div class="small muted">' + esc(spanLabel(a)) + ' · ' + a.workdays + (a.workdays === 1 ? ' werkdag' : ' werkdagen') + (a.hours != null ? ' · ' + hrsTxt(a.hours) : '') + (a.note ? ' · ' + esc(a.note) : '') + '</div>' + leavePendingInfo(a) + '</div></div>' +
         (S.absReject === a.id
           ? '<div class="row" style="flex:1 1 320px"><input class="input" id="abs-reason" maxlength="300" placeholder="Reden van afwijzen"><button class="btn small ghost" data-act="abs-reject-cancel">Annuleren</button><button class="btn small danger" data-act="abs-reject" data-id="' + a.id + '">Afwijzen</button></div>'
           : '<div class="row"><button class="btn small" data-act="abs-reject-open" data-id="' + a.id + '">Afwijzen…</button><button class="btn small primary" data-act="abs-approve" data-id="' + a.id + '">Goedkeuren</button></div>') + '</div>').join('') + '</section>';
@@ -1989,7 +2056,7 @@ function viewAbsence() {
     const st = ABS_STATUS[a.status] || [a.status, ''];
     const canCancel = a.status === 'aangevraagd' || (a.status === 'goedgekeurd' && a.kind !== 'ziek' && a.from > today());
     return '<div class="doc"><span class="abs-chip big ' + a.kind + '">' + esc(a.kindLabel) + '</span><div class="doc-main"><strong>' + esc(spanLabel(a)) + '</strong>' +
-      '<span class="small muted">' + (a.to || a.kind !== 'ziek' ? a.workdays + (a.workdays === 1 ? ' werkdag' : ' werkdagen') : 'loopt nog') + (a.note ? ' · ' + esc(a.note) : '') +
+      '<span class="small muted">' + (a.to || a.kind !== 'ziek' ? a.workdays + (a.workdays === 1 ? ' werkdag' : ' werkdagen') + (a.hours != null ? ' · ' + hrsTxt(a.hours) : '') : 'loopt nog') + (a.cover ? ' · tekort ' + hrsTxt(a.coverHours) + ': ' + COVER[a.cover][0].toLowerCase() : '') + (a.note ? ' · ' + esc(a.note) : '') +
       (a.reviewedByName && a.status !== 'aangevraagd' && a.kind !== 'ziek' ? ' · ' + esc(st[0].toLowerCase()) + ' door ' + esc(a.reviewedByName) : '') + (a.rejectReason ? ': ' + esc(a.rejectReason) : '') + '</span></div>' +
       '<div class="doc-act"><span class="badge ' + st[1] + '">' + st[0] + '</span>' + (canCancel ? '<button class="btn small ghost" data-act="abs-cancel-item" data-id="' + a.id + '">Intrekken</button>' : '') + '</div></div>';
   }).join('') + '</div>';
@@ -2326,7 +2393,7 @@ $app.addEventListener('change', async e => {
   if (el.dataset.avp && el.dataset.rerender) { avpSet(el); render(); }
   if (el.dataset.brAuto !== undefined) { S.brEdit = S.brEdit || JSON.parse(JSON.stringify(breakRules())); S.brEdit.auto = el.checked; render(); }
   if (el.dataset.in === 'rocompare') { S.rosterCompare = el.checked; render(); }
-  if (el.dataset.abs && S.absForm) { S.absForm[el.dataset.abs] = el.value; if (el.dataset.abs === 'from' && S.absForm.to && S.absForm.to < el.value) S.absForm.to = el.value; if (['from', 'to', 'memberId'].includes(el.dataset.abs)) render(); }
+  if (el.dataset.abs && S.absForm) { S.absForm[el.dataset.abs] = el.value; if (el.dataset.abs === 'from' && S.absForm.to && S.absForm.to < el.value) S.absForm.to = el.value; if (['from', 'to', 'memberId', 'hours'].includes(el.dataset.abs)) render(); }
   if (el.dataset.h && S.hEdit) S.hEdit[el.dataset.h] = el.value;
   if (el.dataset.kbPin !== undefined && S.kbEdit) S.kbEdit.pinned = el.checked;
   if (el.dataset.foRole && S.folderEdit) { const id = el.dataset.foRole; S.folderEdit.roleIds = S.folderEdit.roleIds.filter(x => !same(x, id)); if (el.checked) S.folderEdit.roleIds.push(id); }
@@ -2624,7 +2691,7 @@ $app.addEventListener('click', async e => {
         const E = S.absForm;
         if (!E.from) { toast('Kies een begindatum.', true); return; }
         if (E.kind !== 'ziek' && !E.to) E.to = E.from;
-        const a = await rpc('cd_absence_save', { p: { kind: E.kind, from: E.from, to: E.to, note: E.note, memberId: E.memberId || null } });
+        const a = await rpc('cd_absence_save', { p: { kind: E.kind, from: E.from, to: E.to, note: E.note, memberId: E.memberId || null, hours: E.kind !== 'ziek' && E.hours ? String(E.hours) : null } });
         toast(a.kind === 'ziek' ? (E.memberId ? a.memberName + ' is ziek gemeld.' : 'Ziek gemeld. Beterschap!') : a.status === 'goedgekeurd' ? a.kindLabel + ' ingevoerd voor ' + a.memberName + '.' : 'Aangevraagd. Je krijgt een melding zodra het is beoordeeld.');
         S.absForm = null; break;
       }
@@ -2632,7 +2699,11 @@ $app.addEventListener('click', async e => {
         const d = document.getElementById('beter-date').value;
         await rpc('cd_absence_action', { p_id: num, p_action: 'beter', p_date: d }); toast('Fijn dat je weer beter bent!'); break;
       }
-      case 'abs-approve': await rpc('cd_absence_review', { p_id: num, p_approve: true }); toast('Goedgekeurd.'); break;
+      case 'abs-approve': {
+        const cv = document.getElementById('cover-' + num);
+        if (cv && !cv.value) { toast('Kies eerst hoe je het tekort aan verlofuren oplost.', true); cv.focus(); return; }
+        await rpc('cd_absence_review', { p_id: num, p_approve: true, p_cover: cv ? cv.value : null }); toast('Goedgekeurd.'); break;
+      }
       case 'abs-reject-open': S.absReject = num; render(); { const f = document.getElementById('abs-reason'); if (f) f.focus(); } return;
       case 'abs-reject-cancel': S.absReject = null; render(); return;
       case 'abs-reject': {
@@ -2828,7 +2899,23 @@ $app.addEventListener('click', async e => {
       case 'k-exit': try { localStorage.removeItem('crewdeck-kiosk'); } catch (err) { /* */ } K.error = null; location.hash = '#/login'; return;
 
       // mensen
-      case 'm-sel': S.mSel = raw; S.mNew = false; S.offboard = null; render(); return;
+      case 'm-sel': S.mSel = raw; S.mNew = false; S.offboard = null; S.leaveAcc = null; render(); if (S.me.isOwner || can('hours.leave_balance')) { await loadLeaveAcc(raw); render(); } return;
+      case 'la-year': S.leaveYear = Number(el.dataset.v); await loadLeaveAcc(raw); render(); return;
+      case 'la-save': {
+        const num2 = v => { const t = String(v || '').trim().replace(',', '.'); return t === '' ? null : Number(t); };
+        const lv = num2(document.getElementById('la-leave').value), tv = num2(document.getElementById('la-tvt').value);
+        if ((lv != null && !isFinite(lv)) || (tv != null && !isFinite(tv))) { toast('Vul alleen getallen in.', true); return; }
+        if (lv == null && tv != null) { toast('Vul ook de verlofuren in.', true); return; }
+        el.disabled = true;
+        await rpc('cd_leave_account_save', { p_member: raw, p_year: S.leaveYear || Number(today().slice(0, 4)), p_leave: lv, p_tvt: tv || 0 });
+        await loadLeaveAcc(raw); render(); toast(lv == null ? 'Saldo weggehaald.' : 'Verlofsaldo opgeslagen.'); return;
+      }
+      case 'lr-save': {
+        const p = Object.fromEntries(Object.keys(COVER).map(k => [k, document.getElementById('lr-' + k).checked]));
+        p.advanceMax = Number(String(document.getElementById('lr-max').value).replace(',', '.'));
+        el.disabled = true; const v = await rpc('cd_leave_settings_save', { p });
+        S.org.settings = Object.assign({}, S.org.settings, { leave: v }); render(); toast('Verlofregels opgeslagen.'); return;
+      }
       case 'm-new': S.mNew = true; S.mNewRole = null; render(); document.getElementById('m-name').focus(); return;
       case 'm-cancel': S.mNew = false; render(); return;
       case 'm-create': {

@@ -214,7 +214,8 @@ function payrollSettingsCard() {
     '<div class="field"><label for="py-format">Standaard exportformaat</label><select class="input" id="py-format" data-pk="format">' + PAY_FORMATS.map(x => '<option value="' + x[0] + '"' + ((P.format || 'csv') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select></div>' +
     '<div class="fields2">' + f('py-emp', 'employerNo', 'Aansluitnummer (Loket.nl)', '', 'Bijv. 395') + f('py-team', 'team', 'Ploeg (Loket.nl)', '', '1') + '</div>' +
     '<div class="fields2">' + f('py-cw', 'codeWorked', 'Looncomponent gewerkte uren', '', 'Bijv. 2') + f('py-cl', 'codeLeave', 'Looncomponent verlofuren', 'Leeg laten om niet mee te sturen.') + '</div>' +
-    '<div class="fields2">' + f('py-cs', 'codeSick', 'Looncomponent ziekte-uren', 'Leeg laten om niet mee te sturen.') + '</div>' +
+    '<div class="fields2">' + f('py-cs', 'codeSick', 'Looncomponent ziekte-uren', 'Leeg laten om niet mee te sturen.') + f('py-cb', 'codeBought', 'Looncomponent gekocht verlof (inhouding)', 'Leeg laten om niet mee te sturen.') + '</div>' +
+    '<div class="fields2">' + f('py-cu', 'codeUnpaid', 'Looncomponent onbetaald verlof', 'Leeg laten om niet mee te sturen.') + '</div>' +
     '<div><button class="btn dark" data-act="py-save">Opslaan</button></div></section>';
 }
 // urenoverzicht: per vestiging
@@ -252,8 +253,8 @@ function payrollRows(R) {
   return R.people.map(p => {
     const perDay = Number(p.contractHours) > 0 ? Number(p.contractHours) / 5 : 0;
     return { id: p.id, no: (M[p.id] || {}).personnelNo || '', name: p.name, loc: locName((M[p.id] || {}).locationId), contract: Number(p.contractHours) || 0,
-      worked: (p.approvedMin || 0) / 60, leaveDays: p.leaveDays || 0, leaveH: (p.leaveDays || 0) * perDay, sickDays: p.sickDays || 0, sickH: (p.sickDays || 0) * perDay };
-  }).filter(r => r.worked || r.leaveDays || r.sickDays);
+      worked: (p.approvedMin || 0) / 60, leaveDays: p.leaveDays || 0, leaveH: (p.leaveDays || 0) * perDay, sickDays: p.sickDays || 0, sickH: (p.sickDays || 0) * perDay, boughtH: Number(p.boughtH) || 0, unpaidH: Number(p.unpaidH) || 0 };
+  }).filter(r => r.worked || r.leaveDays || r.sickDays || r.boughtH || r.unpaidH);
 }
 const nl2 = n => (Math.round(n * 100) / 100).toFixed(2).replace('.', ',');
 function csvLine(cells, sep) {
@@ -279,16 +280,16 @@ async function payrollExport(R) {
   const rows = payrollRows(R);
   if (!rows.length) throw new Error('Er zijn in deze periode geen goedgekeurde uren, verlof of ziekte.');
   const base = 'salaris-' + R.from + '-tm-' + R.to + (S.locFilter ? '-' + locName(S.locFilter).toLowerCase().replace(/[^a-z0-9]+/g, '-') : '');
-  const head = ['Personeelsnummer', 'Naam', 'Vestiging', 'Contract (uur/week)', 'Gewerkt (uren)', 'Verlof (dagen)', 'Verlof (uren)', 'Ziek (dagen)', 'Ziek (uren)', 'Van', 'Tot en met'];
+  const head = ['Personeelsnummer', 'Naam', 'Vestiging', 'Contract (uur/week)', 'Gewerkt (uren)', 'Verlof (dagen)', 'Verlof (uren)', 'Ziek (dagen)', 'Ziek (uren)', 'Verlof gekocht (uren, inhouden)', 'Onbetaald verlof (uren)', 'Van', 'Tot en met'];
   if (fmt === 'csv') {
-    const lines = [csvLine(head)].concat(rows.map(r => csvLine([r.no, r.name, r.loc, nl2(r.contract), nl2(r.worked), r.leaveDays, nl2(r.leaveH), r.sickDays, nl2(r.sickH), R.from, R.to])));
+    const lines = [csvLine(head)].concat(rows.map(r => csvLine([r.no, r.name, r.loc, nl2(r.contract), nl2(r.worked), r.leaveDays, nl2(r.leaveH), r.sickDays, nl2(r.sickH), nl2(r.boughtH), nl2(r.unpaidH), R.from, R.to])));
     return saveFile(base + '.csv', lines.join('\r\n'), 'text/csv', true);
   }
   if (fmt === 'xlsx') {
     if (!window.XLSX) await loadScript('vendor/xlsx.mini.min.js');
     const n = v => Math.round(v * 100) / 100;
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(rows.map(r => [r.no, r.name, r.loc, n(r.contract), n(r.worked), r.leaveDays, n(r.leaveH), r.sickDays, n(r.sickH), R.from, R.to]))), 'Salaris');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(rows.map(r => [r.no, r.name, r.loc, n(r.contract), n(r.worked), r.leaveDays, n(r.leaveH), r.sickDays, n(r.sickH), n(r.boughtH), n(r.unpaidH), R.from, R.to]))), 'Salaris');
     const ids = new Set(rows.map(r => String(r.id)));
     const ent = (R.entries || []).filter(e => e.status === 'goedgekeurd' && ids.has(String(e.memberId)));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Naam', 'Datum', 'Begin', 'Eind', 'Pauze (min)', 'Uren', 'Notitie']].concat(ent.map(e => [e.memberName, e.date, e.start, e.end, e.breakMin, n((e.minutes || 0) / 60), e.note || '']))), 'Diensten');
@@ -299,7 +300,7 @@ async function payrollExport(R) {
   if (!P.codeWorked) throw new Error('Vul eerst de looncomponent voor gewerkte uren in bij Instellingen → Salarisadministratie.');
   const withNo = rows.filter(r => r.no);
   if (!withNo.length) throw new Error('Niemand heeft nog een personeelsnummer. Vul die eerst in bij Mensen.');
-  const comps = [[P.codeWorked, 'worked', 'Gewerkte uren'], [P.codeLeave, 'leaveH', 'Verlofuren'], [P.codeSick, 'sickH', 'Ziekte-uren']].filter(c => c[0]);
+  const comps = [[P.codeWorked, 'worked', 'Gewerkte uren'], [P.codeLeave, 'leaveH', 'Verlofuren'], [P.codeSick, 'sickH', 'Ziekte-uren'], [P.codeBought, 'boughtH', 'Gekocht verlof'], [P.codeUnpaid, 'unpaidH', 'Onbetaald verlof']].filter(c => c[0]);
   if (fmt === 'loket') {
     if (!P.employerNo) throw new Error('Vul eerst het aansluitnummer voor Loket.nl in bij Instellingen → Salarisadministratie.');
     const lines = [['aanslnr', 'persnr', 'ploeg'].concat(comps.map(c => c[0])).join(';')]

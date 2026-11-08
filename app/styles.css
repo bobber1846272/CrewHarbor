@@ -869,3 +869,11 @@ summary.pres-h { cursor: pointer; }
   .presence.open .pres-fab { display: none; }
   .pres-close { display: inline-flex; width: 36px; height: 36px; }
 }
+
+/* ---------- verlofsaldo ---------- */
+.leave-card { display: flex; flex-direction: column; gap: 10px; max-width: none; }
+.leave-card > div:first-child { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.leave-big { font-size: 28px; line-height: 1; }
+.leave-big.neg { color: #B42318; }
+.leave-bar { height: 8px; border-radius: 99px; background: var(--grey-bg); overflow: hidden; }
+.leave-bar span { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
