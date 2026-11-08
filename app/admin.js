@@ -168,7 +168,7 @@ function viewBilling() {
     '<p class="small muted" style="margin:0">Prijzen zijn per actieve medewerker per maand, exclusief btw. Wijzigingen staan meteen op de website; lopende abonnementen krijgen het nieuwe bedrag bij hun volgende wijziging.</p>' +
     (A.data.plans || []).concat(A.planNew ? [{ id: '', name: '', priceCents: 0, minCents: 0, features: [], highlights: [], sort: 9, public: true, isNew: true }] : []).map(p =>
       '<form class="card stack" data-form="plan" data-id="' + esc(p.id) + '" style="gap:12px;max-width:none" novalidate><div class="item-top"><h3 style="margin:0">' + (p.isNew ? 'Nieuw pakket' : esc(p.name)) + '</h3>' +
-        (p.popular ? '<span class="badge green">Meest gekozen</span>' : '') + (p.public === false ? '<span class="badge">Verborgen</span>' : '') + '</div>' +
+        (p.popular ? '<span class="badge green">Meest gekozen</span>' : '') + (p.isNew ? '' : p.public === false ? '<span class="badge orange">Verborgen</span>' : '<span class="badge green">Live</span>') + '</div>' +
       '<div class="fields4">' +
         '<div class="field"><label>Code</label><input class="input" name="id" value="' + esc(p.id) + '"' + (p.isNew ? '' : ' readonly') + ' autocapitalize="none"></div>' +
         '<div class="field"><label>Naam</label><input class="input" name="name" value="' + esc(p.name) + '"></div>' +
@@ -180,7 +180,7 @@ function viewBilling() {
       '</div><div class="field"><label>Korte omschrijving</label><input class="input" name="tagline" value="' + esc(p.tagline || '') + '"></div>' +
       '<div class="field"><label>Wat zit erin (één per regel, voor de website)</label><textarea class="input" name="highlights" rows="4">' + esc((p.highlights || []).join('\n')) + '</textarea></div>' +
       '<div class="row">' + FEAT.map(f => '<label class="check"><input type="checkbox" name="f-' + f[0] + '"' + ((p.features || []).includes(f[0]) ? ' checked' : '') + '> ' + f[1] + '</label>').join('') + '</div>' +
-      '<div class="row"><label class="check"><input type="checkbox" name="public"' + (p.public !== false ? ' checked' : '') + '> Op de website</label><label class="check"><input type="checkbox" name="popular"' + (p.popular ? ' checked' : '') + '> Meest gekozen</label></div>' +
+      '<div class="row"><label class="check"><input type="checkbox" name="public"' + (p.public !== false ? ' checked' : '') + '> Live (op de website en te kiezen door klanten). Uit = verborgen, alleen in Beheer</label><label class="check"><input type="checkbox" name="popular"' + (p.popular ? ' checked' : '') + '> Meest gekozen</label></div>' +
       '<div class="row"><button class="btn primary" type="submit">Opslaan</button>' + (p.isNew ? '<button class="btn ghost" type="button" data-act="plan-cancel">Annuleren</button>' : '') + '</div></form>').join('') + '</section>';
   return h;
 }
