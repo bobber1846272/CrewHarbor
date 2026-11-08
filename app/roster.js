@@ -74,7 +74,7 @@ function canGetShift(R, p, d, tpl) {
 }
 function candidates(R, d, tpl) {
   return R.people.map(p => canGetShift(R, p, d, tpl)).filter(Boolean)
-    .sort((a, b) => (b.kan - a.kan) || ((b.left == null ? -1 : b.left) - (a.left == null ? -1 : a.left)) || a.p.name.localeCompare(b.p.name));
+    .sort((a, b) => ((b.left > 0) - (a.left > 0)) || (b.kan - a.kan) || ((b.left == null ? -1 : b.left) - (a.left == null ? -1 : a.left)) || a.p.name.localeCompare(b.p.name));
 }
 
 // ---------- weekweergave voor planners ----------
@@ -87,6 +87,8 @@ function rosterToolbar(R) {
       return '<span class="shift t' + i + ' ro-drag" draggable="true" data-tpl-drag="' + t.id + '" title="Sleep naar een medewerker en dag">' + esc(t.name) + '<small>' + esc(t.start + '–' + t.end) + '</small></span>'; }).join('')
       : '<span class="small muted">Tip: maak vaste diensten (onderaan), dan kun je ze in het rooster slepen.</span>') + '</div>' +
     '<div class="ro-actions">' +
+      '<div class="seg small" role="group" aria-label="Contract">' + [['alle', 'Iedereen'], ['vast', 'Vaste uren'], ['flex', 'Flex']].map(o => { const n = o[0] === 'alle' ? R.people.length : R.people.filter(p => (p.contractType === 'vast') === (o[0] === 'vast')).length;
+        return '<button class="' + ((F.ct || 'alle') === o[0] ? 'on' : '') + '" aria-pressed="' + ((F.ct || 'alle') === o[0]) + '" data-act="rx-ct" data-v="' + o[0] + '">' + o[1] + ' <span class="muted">' + n + '</span></button>'; }).join('') + '</div>' +
       '<input class="input ro-search" data-in="roq" placeholder="Zoek medewerker" value="' + esc(F.q || '') + '" aria-label="Zoek medewerker">' +
       '<label class="check small"><input type="checkbox" data-in="roleft"' + (F.left ? ' checked' : '') + '> Alleen met uren over</label>' +
       '<button class="btn small" data-act="rx-open">Open plekken</button>' +
@@ -101,7 +103,10 @@ function rosterToolbar(R) {
 }
 function rosterPeople(R) {
   const F = S.roFilter || {}; const q = (F.q || '').trim().toLowerCase();
-  return R.people.filter(p => (!q || p.name.toLowerCase().includes(q)) && (!F.left || !contractMin(p) || weekMin(R, p.id) < contractMin(p)));
+  const ct = F.ct || 'alle';
+  return R.people.filter(p => (!q || p.name.toLowerCase().includes(q)) && (!F.left || !contractMin(p) || weekMin(R, p.id) < contractMin(p))
+      && (ct === 'alle' || (ct === 'vast' ? p.contractType === 'vast' : p.contractType !== 'vast')))
+    .slice().sort((a, b) => ((a.contractType === 'vast' ? 0 : 1) - (b.contractType === 'vast' ? 0 : 1)) || a.name.localeCompare(b.name));
 }
 function rosterWeek(R) {
   const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
@@ -118,10 +123,18 @@ function rosterWeek(R) {
     return x;
   };
   let h = '<div class="roster-scroll"><table class="roster ro2"><thead><tr><th class="ro-namecol">Medewerker</th>' + days.map(d => '<th class="' + (d === today() ? 'is-today' : '') + '">' + head(d) + '</th>').join('') + '<th>Totaal</th></tr></thead><tbody>';
+  let grp = null;
   h += people.map(p => {
+    const g = p.contractType === 'vast' ? 'vast' : 'flex';
+    let sep = '';
+    if (R.canPlan && g !== grp) {
+      grp = g; const list = people.filter(x => (x.contractType === 'vast' ? 'vast' : 'flex') === g);
+      const need = list.reduce((a, x) => a + Math.max(0, contractMin(x) - weekMin(R, x.id)), 0);
+      sep = '<tr class="ro-group"><th colspan="9"><span>' + (g === 'vast' ? 'Vaste uren' : 'Flex / 0-uren') + ' · ' + list.length + '</span>' + (g === 'vast' ? (need ? ' <span class="ro-group-note">nog ' + fmtHM(need) + ' uur in te plannen</span>' : ' <span class="ro-group-note ok">iedereen heeft zijn contracturen ✓</span>') : '') + '</th></tr>';
+    }
     const mine = R.shifts.filter(s => same(s.memberId, p.id));
     const tot = mine.reduce((a, s) => a + shiftMin(s), 0); const ch = contractMin(p);
-    return '<tr class="' + (same(p.id, S.me.id) ? 'me' : '') + '"><td class="pad ro-namecol"><div class="ro-name">' + avatar(p.id, p.name, 'sm2') + '<div><strong>' + esc(p.name) + '</strong><div class="small muted">' + esc(contractShort(p)) + '</div></div></div>' + leaveTag(p.leavingOn, true) + '</td>' +
+    return sep + '<tr class="' + (same(p.id, S.me.id) ? 'me' : '') + '"><td class="pad ro-namecol"><div class="ro-name">' + avatar(p.id, p.name, 'sm2') + '<div><strong>' + esc(p.name) + '</strong><div class="small muted">' + esc(contractShort(p)) + '</div></div></div>' + leaveTag(p.leavingOn, true) + '</td>' +
       days.map(d => {
         const gone = p.leavingOn && d > p.leavingOn;
         const dayShifts = mine.filter(s => s.date === d);
@@ -250,7 +263,7 @@ function proposalPanel(R) {
   let h = '<section class="card stack" style="gap:12px;max-width:none"><div class="item-top"><h2 style="margin:0">Voorstel</h2><button class="icon-btn small" data-act="rx-propose-x" aria-label="Sluiten">' + ICON.x + '</button></div>';
   if (!Object.keys(R.needs || {}).length && !Object.keys(R.opening || {}).length) return h + '<p class="small muted" style="margin:0">Stel eerst je <strong>Openingstijden</strong> of de <strong>Bezetting</strong> in. Dan kan CrewHarbor een voorstel maken.</p></section>';
   if (!P.length) return h + '<p style="margin:0">Er zijn geen open plekken om te vullen, of er is niemand beschikbaar.</p></section>';
-  h += '<p class="small muted" style="margin:0">CrewHarbor kiest eerst mensen die hebben aangegeven te kunnen, daarna wie nog de meeste contracturen over heeft. Vink uit wat je niet wilt.</p>' +
+  h += '<p class="small muted" style="margin:0">CrewHarbor geeft eerst mensen met een vast contract hun uren, daarna vult het op met wie heeft aangegeven te kunnen (flex). Vink uit wat je niet wilt.</p>' +
     '<div class="ro-prop">' + P.map((s, i) => '<label class="check"><input type="checkbox" data-prop="' + i + '"' + (s.off ? '' : ' checked') + '> <span><strong>' + esc(dayShort(s.date)) + '</strong> · ' + esc(s.memberName) + ' · ' + esc(s.start + '–' + s.end) + (s.tplName ? ' (' + esc(s.tplName) + ')' : '') + ' <span class="small muted">' + esc(s.why) + '</span></span></label>').join('') + '</div>' +
     '<div class="row"><button class="btn primary" data-act="rx-propose-apply">' + P.filter(s => !s.off).length + ' diensten inplannen</button><button class="btn ghost" data-act="rx-propose-x">Annuleren</button></div></section>';
   return h;
@@ -298,6 +311,7 @@ document.getElementById('app').addEventListener('click', async e => {
   try {
     switch (act) {
       case 'rx-menu': S.roMenu = v || null; render(); return;
+      case 'rx-ct': S.roFilter = Object.assign({}, S.roFilter, { ct: v }); render(); return;
       case 'rx-quick': {
         const [pid, d] = v.split('|'); const t = R.templates.find(x => same(x.id, id));
         el.disabled = true;
