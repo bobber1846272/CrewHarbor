@@ -1078,8 +1078,25 @@ function viewSettings() {
     if (hasFeature('phone')) h += viewPhoneLink();
   }
   if (S.me.isOwner) h += billingCard();
-  h += locationsCard() + payrollSettingsCard() + mailPrefsCard();
+  h += (can('org.manage') ? breakRulesCard() : '') + locationsCard() + payrollSettingsCard() + mailPrefsCard();
   return h + securityCards() + '</div>';
+}
+const BREAK_DEFAULT = { auto: true, adult: [{ fromMin: 330, breakMin: 30 }, { fromMin: 600, breakMin: 45 }], minor: [{ fromMin: 270, breakMin: 30 }, { fromMin: 600, breakMin: 45 }] };
+function breakRules() { return Object.assign({}, BREAK_DEFAULT, (S.org.settings || {}).breakRules || {}); }
+function breakRulesCard() {
+  const B = S.brEdit || JSON.parse(JSON.stringify(breakRules()));
+  const hrs = m => String(Math.round(m / 60 * 100) / 100).replace('.', ',');
+  const rows = k => (B[k] || []).map((r, i) => '<div class="br-row"><span>Meer dan</span><input class="input" inputmode="decimal" data-br="' + k + '|' + i + '|from" value="' + hrs(r.fromMin) + '" aria-label="Uren gewerkt"><span>uur gewerkt →</span>' +
+    '<input class="input" inputmode="numeric" data-br="' + k + '|' + i + '|break" value="' + r.breakMin + '" aria-label="Minuten pauze"><span>min pauze</span>' +
+    '<button class="icon-btn small" data-act="br-del" data-v="' + k + '|' + i + '" aria-label="Regel verwijderen">' + ICON.trash + '</button></div>').join('') +
+    '<button class="btn small ghost" data-act="br-add" data-v="' + k + '">' + ICON.plus + 'Regel toevoegen</button>';
+  return '<section class="card stack" style="gap:14px"><div class="item-top"><h2 style="margin:0">Pauzeregels</h2>' + (S.brEdit ? '<span class="badge orange">Niet opgeslagen</span>' : '') + '</div>' +
+    '<p class="small muted" style="margin:0">Standaard volgens de Arbeidstijdenwet. Bij uitklokken haalt CrewHarbor de pauze er automatisch af; bij te weinig pauze zie je een waarschuwing.</p>' +
+    '<label class="check"><input type="checkbox" data-br-auto' + (B.auto !== false ? ' checked' : '') + '> Pauze automatisch aftrekken bij uitklokken</label>' +
+    '<div class="stack" style="gap:8px"><strong>18 jaar en ouder</strong>' + rows('adult') + '</div>' +
+    '<div class="stack" style="gap:8px"><strong>16 en 17 jaar</strong> <span class="small muted">Zet bij de medewerker het vinkje "Jonger dan 18".</span>' + rows('minor') + '</div>' +
+    '<div class="row"><button class="btn primary" data-act="br-save"' + (S.brEdit ? '' : ' disabled') + '>Pauzeregels opslaan</button>' +
+    '<button class="btn ghost" data-act="br-reset">Standaard herstellen</button></div></section>';
 }
 
 // ======================================================================
@@ -1235,8 +1252,10 @@ function contractFields(u) {
     '<div class="fields2"><div class="field"><label for="m-ctype">Soort</label><select class="input" id="m-ctype" data-act-change="m-ctype">' +
       '<option value="vast"' + (!flex ? ' selected' : '') + '>Vast contract</option><option value="flex"' + (flex ? ' selected' : '') + '>Flex / 0-uren</option></select></div>' +
     '<div class="field"><label for="m-chours">Uren per week</label><input class="input" id="m-chours" inputmode="decimal" value="' + (flex ? '' : esc(String(Number(u.contractHours) || '').replace('.', ','))) + '"' + (flex ? ' disabled placeholder="Niet van toepassing"' : ' placeholder="Bijv. 32"') + '></div></div>' +
-    '<span class="small muted">Wordt gebruikt bij Mijn uren en het urenoverzicht om gewerkte uren naast het contract te zetten.</span></fieldset>';
+    '<span class="small muted">Wordt gebruikt bij Mijn uren en het urenoverzicht om gewerkte uren naast het contract te zetten.</span>' +
+    '<label class="check"><input type="checkbox" id="m-minor"' + (u.isMinor ? ' checked' : '') + '> Jonger dan 18 jaar <span class="small muted">(strengere pauzeregels)</span></label></fieldset>';
 }
+function breakWarn(e) { return e.requiredBreak > (e.breakMin || 0) ? '<span class="badge red" title="Wettelijk verplicht bij deze werktijd">Te weinig pauze · minimaal ' + e.requiredBreak + ' min</span>' : ''; }
 const H_STATUS = { open: ['Bezig', 'blue'], concept: ['Concept', ''], ingediend: ['Ingediend', 'orange'], goedgekeurd: ['Goedgekeurd', 'green'], afgekeurd: ['Afgekeurd', 'red'] };
 function hBadge(st) { const b = H_STATUS[st] || [st, '']; return '<span class="badge ' + b[1] + '">' + b[0] + '</span>'; }
 function weekNav(act, mon) {
@@ -1301,7 +1320,7 @@ function entryRow(e, self) {
   const editable = self && ['concept', 'afgekeurd'].includes(e.status);
   return '<div class="entry' + (e.status === 'afgekeurd' ? ' bad' : '') + '"><div class="entry-main">' +
     '<span class="entry-time">' + esc(e.start) + ' – ' + (e.end ? esc(e.end) : 'nu') + '</span>' +
-    (e.breakMin ? '<span class="small muted">' + e.breakMin + ' min pauze</span>' : '') +
+    (e.breakMin ? '<span class="small muted">' + e.breakMin + ' min pauze</span>' : '') + breakWarn(e) +
     (e.note ? '<span class="small entry-note">' + esc(e.note) + '</span>' : '') +
     (e.source === 'prikklok' ? '<span class="src-tag">Prikklok</span>' : e.source === 'handmatig' ? '<span class="src-tag soft">Handmatig</span>' : '') + '</div>' +
     '<div class="entry-side"><strong>' + (e.minutes == null ? fmtHM(runningSince(e)) : fmtHM(e.minutes)) + '</strong>' + hBadge(e.status) +
@@ -1601,7 +1620,7 @@ function viewApprove() {
       '<button class="btn small ghost" data-act="p-view" data-id="' + g.memberId + '" data-v="' + g.week + '">Hele week bekijken</button></div>' +
       '<div class="table-wrap" style="border:0;margin-top:8px"><table><thead><tr><th style="width:44px"><span class="sr-only">Meenemen</span></th><th>Dag</th><th>Tijd</th><th>Pauze</th><th>Uren</th><th>Notitie</th></tr></thead><tbody>' +
       g.entries.map(e => '<tr><td class="pad"><input type="checkbox" data-psel="' + e.id + '"' + (S.pOff[e.id] ? '' : ' checked') + ' aria-label="' + esc(dayShort(e.date)) + ' meenemen"></td>' +
-        '<td class="pad">' + esc(dayShort(e.date)) + '</td><td class="pad">' + esc(e.start + ' – ' + e.end) + '</td><td class="pad">' + (e.breakMin ? e.breakMin + ' min' : '–') + '</td>' +
+        '<td class="pad">' + esc(dayShort(e.date)) + '</td><td class="pad">' + esc(e.start + ' – ' + e.end) + '</td><td class="pad">' + (e.breakMin ? e.breakMin + ' min' : '–') + (e.requiredBreak > (e.breakMin || 0) ? '<br><span class="badge red">Min. ' + e.requiredBreak + ' min</span>' : '') + '</td>' +
         '<td class="pad"><strong>' + fmtHM(e.minutes) + '</strong></td><td class="pad small">' + esc(e.note || '') + '</td></tr>').join('') + '</tbody></table></div>' +
       (S.rejectFor === g.key
         ? '<div class="reject-box"><div class="field"><label for="rej-reason">Waarom keur je ' + (on.length === 1 ? 'deze regel' : 'deze ' + on.length + ' regels') + ' af?</label><input class="input" id="rej-reason" maxlength="300" placeholder="Bijv. pauze ontbreekt op dinsdag"></div>' +
@@ -2216,6 +2235,12 @@ $app.addEventListener('input', e => {
   if (el.dataset.off && S.offboard && !['reason', 'mode'].includes(el.dataset.off)) { S.offboard[el.dataset.off] = el.value; return; }
   if (el.dataset.abs && S.absForm) { S.absForm[el.dataset.abs] = el.value; return; }
   if (el.dataset.av) { S.avEdit = S.avEdit || { start: '', end: '', note: '' }; S.avEdit[el.dataset.av] = el.value; return; }
+  if (el.dataset.br) {
+    S.brEdit = S.brEdit || JSON.parse(JSON.stringify(breakRules()));
+    const [k, i, f] = el.dataset.br.split('|'); const v = Number(String(el.value).replace(',', '.'));
+    if (isFinite(v)) { if (f === 'from') S.brEdit[k][i].fromMin = Math.round(v * 60); else S.brEdit[k][i].breakMin = Math.round(v); }
+    const b = document.querySelector('[data-act="br-save"]'); if (b) b.disabled = false; return;
+  }
   if (el.dataset.avp) { avpSet(el); if (!el.dataset.rerender) { const b = document.querySelector('[data-act="avp-save"]'); if (b) b.disabled = false; } return; }
   if (el.dataset.tpl) { S.tplEdit = S.tplEdit || { name: '', start: '', end: '', note: '' }; S.tplEdit[el.dataset.tpl] = el.value; return; }
   if (el.dataset.in === 'kq') { K.q = el.value; renderKeepFocus(); return; }
@@ -2240,6 +2265,7 @@ $app.addEventListener('change', async e => {
   if (el.dataset.sh && S.shiftEdit) { S.shiftEdit[el.dataset.sh] = el.value; if (el.dataset.rerender) render(); }
   if (el.dataset.in === 'rowho') { S.rosterWho = el.value; render(); }
   if (el.dataset.avp && el.dataset.rerender) { avpSet(el); render(); }
+  if (el.dataset.brAuto !== undefined) { S.brEdit = S.brEdit || JSON.parse(JSON.stringify(breakRules())); S.brEdit.auto = el.checked; render(); }
   if (el.dataset.in === 'rocompare') { S.rosterCompare = el.checked; render(); }
   if (el.dataset.abs && S.absForm) { S.absForm[el.dataset.abs] = el.value; if (el.dataset.abs === 'from' && S.absForm.to && S.absForm.to < el.value) S.absForm.to = el.value; if (['from', 'to', 'memberId'].includes(el.dataset.abs)) render(); }
   if (el.dataset.h && S.hEdit) S.hEdit[el.dataset.h] = el.value;
@@ -2486,6 +2512,13 @@ $app.addEventListener('click', async e => {
         const P = S.avPatEdit || {};
         S.avPat = await rpc('cd_availability_pattern_set', { p: [1, 2, 3, 4, 5, 6, 7].map(wd => ({ weekday: wd, status: (P[wd] || {}).status || '', start: (P[wd] || {}).start || '', end: (P[wd] || {}).end || '', note: (P[wd] || {}).note || '' })) });
         S.avPatEdit = null; await loadAvailability(); render(); toast('Je vaste week is opgeslagen. Wie het rooster maakt, ziet dit meteen.'); return;
+      }
+      case 'br-add': { S.brEdit = S.brEdit || JSON.parse(JSON.stringify(breakRules())); const k = el.dataset.v; S.brEdit[k] = (S.brEdit[k] || []).concat([{ fromMin: 360, breakMin: 30 }]); render(); return; }
+      case 'br-del': { S.brEdit = S.brEdit || JSON.parse(JSON.stringify(breakRules())); const [k, i] = el.dataset.v.split('|'); S.brEdit[k].splice(Number(i), 1); render(); return; }
+      case 'br-reset': S.brEdit = JSON.parse(JSON.stringify(BREAK_DEFAULT)); render(); return;
+      case 'br-save': {
+        const r = await rpc('cd_break_rules_save', { p: S.brEdit || breakRules() });
+        S.org.settings = Object.assign({}, S.org.settings, { breakRules: r }); S.brEdit = null; render(); toast('Pauzeregels opgeslagen.'); return;
       }
       case 'sh-pick': if (S.shiftEdit) { S.shiftEdit.memberId = raw; render(); } return;
       case 'sh-tpl': {
@@ -2747,6 +2780,8 @@ $app.addEventListener('click', async e => {
           const hrs = ct.value === 'flex' ? 0 : Number(String(document.getElementById('m-chours').value).replace(',', '.'));
           if (ct.value === 'vast' && (!isFinite(hrs) || hrs < 0 || hrs > 80)) throw new Error('Vul bij een vast contract 0 tot 80 uur per week in.');
           if (!u || u.contractType !== ct.value || Number(u.contractHours) !== hrs) await rpc('cd_member_contract', { p_id: raw, p_type: ct.value, p_hours: hrs });
+          const mi = document.getElementById('m-minor');
+          if (mi && (!u || !!u.isMinor !== mi.checked)) await rpc('cd_member_minor', { p_id: raw, p_minor: mi.checked });
         }
         await saveMemberBiz(raw);
         toast('Opgeslagen.');

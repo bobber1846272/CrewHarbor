@@ -830,3 +830,7 @@ details summary { cursor: pointer; font-weight: 600; min-height: 32px; display: 
   .nav-links { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #2A4466 transparent; margin: 0 -6px; padding: 0 6px; }
   .nav-user { flex: none; margin-top: 0; padding-top: 14px; border-top: 1px solid #1E3858; }
 }
+
+/* pauzeregels */
+.br-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+.br-row .input { width: 76px; min-height: 38px; }
