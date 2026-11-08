@@ -62,6 +62,28 @@ function addonsBlock(B) {
     '<span class="small muted">+' + eur((pl.addonCents || {})[k] || 0) + ' per maand</span></span></label>').join('') + '</fieldset>' +
     (changed ? '<div><button class="btn dark" data-act="bz-addons">Extra\u2019s opslaan</button></div>' : '');
 }
+const INV_LABEL = { open: ['Open', 'orange'], vervallen: ['Te laat', 'red'], betaald: ['Betaald', 'green'], geannuleerd: ['Geannuleerd', ''] };
+function payMethodBlock(B) {
+  const want = S.payMethod || B.methodRequested || B.method || 'mollie';
+  const D = Object.assign({}, B.invoiceDetails || {}, S.invEdit || {});
+  if (!D.name && !S.invEdit) D.name = S.org.name;
+  if (!D.email && !S.invEdit) D.email = S.me.email || '';
+  const f = (k, label, ph, half) => '<div class="field"><label for="iv-' + k + '">' + label + '</label><input class="input" id="iv-' + k + '" data-iv="' + k + '" maxlength="120" value="' + esc(D[k] || '') + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + '></div>';
+  let h = '<h3 class="card-sub">Betaalwijze</h3>' +
+    (B.methodRequested ? '<div class="alert info"><span>Je hebt gevraagd om ' + (B.methodRequested === 'factuur' ? 'per factuur' : 'met automatische incasso') + ' te betalen. CrewHarbor zet dit zo snel mogelijk voor je om.</span></div>' : '') +
+    '<div class="seg" role="radiogroup">' + [['mollie', 'Automatische incasso'], ['factuur', 'Per factuur']].map(o => '<button role="radio" aria-checked="' + (want === o[0]) + '" class="' + (want === o[0] ? 'on' : '') + '" data-act="bz-method" data-v="' + o[0] + '">' + o[1] + (B.method === o[0] ? ' ✓' : '') + '</button>').join('') + '</div>';
+  if (want === 'factuur') {
+    h += '<p class="small muted" style="margin:0">Je krijgt elke maand een factuur met 14 dagen betaaltermijn. Vul de gegevens in die op de factuur moeten komen.</p>' +
+      '<div class="fields2">' + f('name', 'Bedrijfsnaam') + f('attn', 'Ter attentie van', 'Optioneel') + '</div>' +
+      '<div class="fields2">' + f('address', 'Adres', 'Straat en huisnummer') + f('postcode', 'Postcode') + '</div>' +
+      '<div class="fields2">' + f('city', 'Plaats') + f('email', 'E-mailadres voor facturen') + '</div>' +
+      '<div class="fields2">' + f('vat', 'Btw-nummer', 'Optioneel') + f('reference', 'Referentie of inkoopnummer', 'Optioneel') + '</div>' +
+      '<div><button class="btn dark" data-act="bz-method-save" data-v="factuur">' + (B.method === 'factuur' ? 'Factuurgegevens opslaan' : 'Per factuur betalen aanvragen') + '</button></div>';
+  } else if (B.method === 'factuur') {
+    h += '<div><button class="btn" data-act="bz-method-save" data-v="mollie">Terug naar automatische incasso</button></div>';
+  }
+  return h;
+}
 function billingCard() {
   const B = S.billing;
   if (!B) return '';
@@ -83,7 +105,10 @@ function billingCard() {
   }).join('') + '</fieldset>' + addonsBlock(B);
   const changed = B.plan && sel && !same(sel, B.plan.id);
   const running = B.hasSubscription && B.status === 'active';
-  if (running) {
+  if (B.method === 'factuur') {
+    h += (changed ? '<div><button class="btn dark" data-act="bz-plan">Pakket wijzigen</button></div>' : '') +
+      '<p class="small muted" style="margin:0">Je betaalt per factuur. Elke maand op de 1e krijg je een factuur per mail, die je ook hieronder kunt downloaden.</p>';
+  } else if (running) {
     h += '<div class="row">' + (changed ? '<button class="btn dark" data-act="bz-plan">Overstappen naar ' + esc(((B.plans || []).find(p => same(p.id, sel)) || {}).name || '') + '</button>' : '') +
       '<button class="btn ghost" data-act="bz-cancel">Abonnement opzeggen</button></div>' +
       '<p class="small muted" style="margin:0">Het bedrag wordt elke maand automatisch afgeschreven. Komen er medewerkers bij of gaan ze weg, dan past het bedrag zich aan bij de volgende betaling.</p>';
@@ -92,6 +117,13 @@ function billingCard() {
       '<p class="small muted" style="margin:0">Je betaalt de eerste maand via iDEAL of creditcard. Daarna schrijven we elke maand automatisch af. Opzeggen kan per maand.</p>';
   } else if (changed) {
     h += '<div><button class="btn" data-act="bz-plan">Pakket wijzigen</button></div>';
+  }
+  if (B.status !== 'free') h += payMethodBlock(B);
+  if (B.invoices && B.invoices.length) {
+    h += '<h3 class="card-sub" id="facturen">Facturen</h3><ul class="login-list">' + B.invoices.slice(0, 24).map(i => '<li' + (same(S.invFocus, i.id) ? ' class="focus"' : '') + '><span class="ll-top"><strong>' + esc(i.number) + ' · ' + eur(i.totalCents) + '</strong>' +
+      '<span class="badge ' + (INV_LABEL[i.status] || ['', ''])[1] + '">' + esc((INV_LABEL[i.status] || [i.status])[0]) + '</span></span>' +
+      '<span class="small muted">' + esc(dayLong(i.periodFrom).replace(/^\w+ /, '')) + ' · te betalen voor ' + esc(dayLong(i.dueOn).replace(/^\w+ /, '')) + '</span>' +
+      '<span><button class="btn small" data-act="bz-inv-pdf" data-id="' + i.id + '">' + ICON.download + 'PDF</button></span></li>').join('') + '</ul>';
   }
   if (B.payments && B.payments.length) {
     h += '<h3 class="card-sub">Betalingen</h3><ul class="login-list">' + B.payments.slice(0, 8).map(p => '<li><span class="ll-top"><strong>' + eur(p.amountCents) + '</strong>' +
@@ -522,6 +554,21 @@ document.getElementById('app').addEventListener('click', async e => {
         S.addonSel = null; await loadSession(); S.billing = await rpc('cd_billing'); await loadBusiness(); render();
         toast('Extra\u2019s opgeslagen. Nieuw bedrag: ' + eur(S.billing.amountCents) + ' per maand excl. btw.'); return;
       }
+      case 'bz-method': S.payMethod = el.dataset.v; render(); return;
+      case 'bz-method-save': {
+        const D = Object.assign({}, S.billing.invoiceDetails || {});
+        document.querySelectorAll('[data-iv]').forEach(x => { D[x.dataset.iv] = x.value.trim(); });
+        el.disabled = true;
+        S.billing = await rpc('cd_billing_method_request', { p_method: el.dataset.v, p_details: D });
+        S.payMethod = null; S.invEdit = null; render();
+        toast(S.billing.methodRequested ? 'Aangevraagd. Je hoort van ons zodra het is omgezet.' : 'Opgeslagen.'); return;
+      }
+      case 'bz-inv-pdf': {
+        el.disabled = true;
+        if (!window.CH_INVOICE) await loadScript('invoice.js?v=1');
+        await window.CH_INVOICE.download(await rpc('cd_invoice_get', { p_id: Number(id) }));
+        el.disabled = false; return;
+      }
       case 'bz-cancel': {
         if (!confirm('Je abonnement opzeggen? Er wordt daarna niets meer afgeschreven. Neem contact op met CrewHarbor als je je gegevens wilt laten verwijderen.')) return;
         el.disabled = true;
@@ -619,3 +666,7 @@ document.getElementById('app').addEventListener('input', e => {
   const el = e.target;
   if (el.dataset && el.dataset.wz != null && S.wiz) S.wiz.rows[Number(el.dataset.wz)][el.dataset.k] = el.value;
 }, true);
+document.getElementById('app').addEventListener('input', e => {
+  const el = e.target; if (!el.dataset || !el.dataset.iv) return;
+  S.invEdit = S.invEdit || {}; S.invEdit[el.dataset.iv] = el.value;
+});

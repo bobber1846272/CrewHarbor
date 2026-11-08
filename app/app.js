@@ -2660,7 +2660,8 @@ $app.addEventListener('click', async e => {
       // meldingen
       case 'notif-open': {
         const n = S.notif.items.find(x => same(x.id, raw)); if (!n || !n.link) return;
-        if (n.link.startsWith('rooster|')) { S.rosterView = 'week'; S.rosterWeek = n.link.split('|')[1]; go('rooster'); }
+        if (n.link.startsWith('instellingen|factuur|')) { S.setTab = 'abonnement'; S.invFocus = Number(n.link.split('|')[2]); go('instellingen'); }
+        else if (n.link.startsWith('rooster|')) { S.rosterView = 'week'; S.rosterWeek = n.link.split('|')[1]; go('rooster'); }
         else if (n.link === 'verlof') go('verlof');
         return;
       }

@@ -74,6 +74,7 @@ async function svc(action, body) {
 }
 async function load() {
   A.data = await rpc('cd_admin_overview');
+  [A.inv, A.sup] = await Promise.all([rpc('cd_admin_invoices').catch(() => A.inv || null), rpc('cd_admin_support').catch(() => A.sup || null)]);
 }
 async function logout(msg) {
   try { await sb.auth.signOut({ scope: 'local' }); } catch (e) { /* */ }
@@ -137,8 +138,8 @@ function viewSetup() {
 function viewPanel() {
   const d = A.data;
   const open = d.requests.filter(r => r.status === 'nieuw').length;
-  const tabs = [['aanvragen', 'Aanvragen', open], ['bedrijven', 'Bedrijven', d.orgs.length], ['beheerders', 'Beheerders', 0], ['betalen', 'Pakketten', 0], ['mail', 'Mail', 0], ['logboek', 'Logboek', 0]];
-  const body = { aanvragen: viewRequests, bedrijven: viewOrgs, beheerders: viewAdmins, betalen: viewBilling, mail: viewMail, logboek: viewLog }[A.tab]();
+  const tabs = [['aanvragen', 'Aanvragen', open], ['bedrijven', 'Bedrijven', d.orgs.length], ['facturen', 'Facturen', A.inv ? A.inv.invoices.filter(i => i.status === 'open' || i.status === 'vervallen').length : 0], ['support', 'Support', A.sup ? A.sup.filter(x => x.status === 'nieuw').length : 0], ['beheerders', 'Beheerders', 0], ['betalen', 'Pakketten', 0], ['mail', 'Mail', 0], ['logboek', 'Logboek', 0]];
+  const body = { aanvragen: viewRequests, bedrijven: viewOrgs, facturen: viewInvoices, support: viewSupport, beheerders: viewAdmins, betalen: viewBilling, mail: viewMail, logboek: viewLog }[A.tab]();
   return '<div class="adm">' +
     '<header class="adm-top"><div class="adm-brand"><span class="logo">' + LOGO(28) + '</span><span class="adm-sub">Beheer</span></div>' +
       '<div class="adm-me"><span>' + esc(d.me.name) + '</span><button class="btn small ghost" data-act="logout">Uitloggen</button></div></header>' +
@@ -221,6 +222,59 @@ function orgAddons(o) {
     '<div class="row">' + extra.map(f => '<label class="check"><input type="checkbox" name="x-' + f[0] + '"' + ((o.addons || []).includes(f[0]) ? ' checked' : '') + '> ' + f[1] +
       ' <span class="small muted">+' + eur((pl.addonCents || {})[f[0]] || 0) + '/mnd</span></label>').join('') + '</div>' +
     '<div class="row"><button class="btn small" type="submit">Extra\u2019s opslaan</button></div></form>';
+}
+const INV_ST = { open: ['Open', 'orange'], vervallen: ['Te laat', 'red'], betaald: ['Betaald', 'green'], geannuleerd: ['Geannuleerd', ''] };
+function viewInvoices() {
+  const I = A.inv; if (!I) return '<div class="empty">Laden…</div>';
+  const C = I.company || {};
+  const ok = C.name && C.kvk && C.iban;
+  const fld = (k, label, ph) => '<div class="field"><label for="co-' + k + '">' + label + '</label><input class="input" id="co-' + k + '" name="' + k + '" value="' + esc(C[k] || '') + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + '></div>';
+  let h = '<details class="card"' + (ok ? '' : ' open') + '><summary class="item-top" style="cursor:pointer"><h2 style="margin:0">Jouw bedrijfsgegevens</h2>' + (ok ? '<span class="badge green">Ingevuld</span>' : '<span class="badge orange">Nog invullen</span>') + '</summary>' +
+    '<p class="small muted">Deze gegevens komen op elke factuur. Zonder naam, KvK-nummer en IBAN kan CrewHarbor geen facturen maken. Support-telefoon en -mail komen op de supportpagina van de website.</p>' +
+    '<form class="stack" data-form="company" style="gap:12px;max-width:none" novalidate>' +
+    '<div class="fields2">' + fld('name', 'Bedrijfsnaam', 'CrewHarbor') + fld('email', 'E-mail op facturen', 'facturen@crewharbor.nl') + '</div>' +
+    '<div class="fields2">' + fld('address', 'Adres') + fld('postcode', 'Postcode') + '</div>' +
+    '<div class="fields2">' + fld('city', 'Plaats') + fld('country', 'Land', 'Nederland') + '</div>' +
+    '<div class="fields2">' + fld('kvk', 'KvK-nummer') + fld('vat', 'Btw-nummer', 'NL…B01') + '</div>' +
+    '<div class="fields2">' + fld('iban', 'IBAN', 'NL00 BANK 0123 4567 89') + fld('bic', 'BIC', 'Optioneel') + '</div>' +
+    '<div class="fields2">' + fld('phone', 'Telefoon op facturen', 'Optioneel') + fld('website', 'Website', 'crewharbor.nl') + '</div>' +
+    '<div class="fields2"><div class="field"><label for="co-payDays">Betaaltermijn (dagen)</label><input class="input" id="co-payDays" name="payDays" inputmode="numeric" value="' + esc(C.payDays || 14) + '"></div>' + fld('footer', 'Extra regel onderaan de factuur', 'Optioneel') + '</div>' +
+    '<h3 style="margin:8px 0 0;font-size:16px">Support (website)</h3>' +
+    '<div class="fields2">' + fld('supportEmail', 'Support-e-mail', 'support@crewharbor.nl') + fld('supportPhone', 'Support-telefoon', 'Leeg = niet tonen') + '</div>' +
+    fld('supportHours', 'Wanneer bereikbaar', 'Bijv. ma t/m vr 9:00–17:00') +
+    '<div class="row"><button class="btn primary" type="submit">Opslaan</button></div></form></details>';
+  // bedrijven die per factuur (willen) betalen
+  h += '<section class="card"><h2>Betalen per factuur</h2>' + (I.invoiceOrgs.length ? '<div class="stack" style="gap:10px;max-width:none">' + I.invoiceOrgs.map(o => {
+    const d = o.details || {};
+    return '<div class="box"><div class="item-top"><strong>' + esc(o.name) + '</strong>' + (o.requested ? '<span class="badge orange">Vraagt: ' + (o.requested === 'factuur' ? 'per factuur' : 'automatische incasso') + '</span>' : '<span class="badge green">Per factuur</span>') + '</div>' +
+      '<p class="small muted" style="margin:0">' + esc([d.name, d.address, [d.postcode, d.city].filter(Boolean).join(' '), d.email, d.vat ? 'btw ' + d.vat : '', d.reference ? 'ref. ' + d.reference : ''].filter(Boolean).join(' · ')) + ' · ' + eur(o.amountCents) + ' per maand excl. btw</p>' +
+      '<div class="row" style="margin-top:8px">' + (o.requested ? '<button class="btn small primary" data-act="inv-method" data-id="' + o.id + '" data-v="' + o.requested + '">Goedkeuren</button>' : '') +
+      (o.method === 'factuur' ? '<input class="input" type="month" id="im-' + o.id + '" style="max-width:170px" value="' + new Date().toISOString().slice(0, 7) + '" aria-label="Maand"><button class="btn small" data-act="inv-make" data-id="' + o.id + '">Factuur maken</button>' +
+        '<button class="btn small ghost" data-act="inv-method" data-id="' + o.id + '" data-v="mollie">Terug naar incasso</button>' : '') + '</div></div>';
+  }).join('') + '</div>' : '<p class="small muted" style="margin:0">Nog geen bedrijven die per factuur betalen. Een eigenaar vraagt het aan bij Instellingen → Abonnement; jij keurt het hier goed. Je kunt een bedrijf ook zelf omzetten bij Bedrijven.</p>') + '</section>';
+  const f = A.invFilter || 'open';
+  const list = I.invoices.filter(i => f === 'alle' || (f === 'open' ? ['open', 'vervallen'].includes(i.status) : i.status === f));
+  const openSum = I.invoices.filter(i => ['open', 'vervallen'].includes(i.status)).reduce((n, i) => n + i.totalCents, 0);
+  h += '<section class="card"><div class="item-top"><h2 style="margin:0">Facturen</h2><span class="small muted">Openstaand: <strong>' + eur(openSum) + '</strong></span></div>' +
+    '<div class="seg" style="margin:10px 0">' + [['open', 'Openstaand'], ['betaald', 'Betaald'], ['alle', 'Alle']].map(x => '<button class="' + (f === x[0] ? 'on' : '') + '" data-act="inv-filter" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' +
+    (list.length ? '<div class="table-wrap"><table class="adm-table"><thead><tr><th>Nummer</th><th>Bedrijf</th><th>Periode</th><th>Bedrag</th><th>Vervalt</th><th>Status</th><th></th></tr></thead><tbody>' + list.map(i => {
+      const st = INV_ST[i.status] || [i.status, ''];
+      return '<tr><td><strong>' + esc(i.number) + '</strong></td><td>' + esc(i.orgName || (i.customer || {}).name || '–') + '</td><td>' + esc(fmt(i.periodFrom).replace(/ \d+:\d+$/, '')) + '</td><td>' + eur(i.totalCents) + '</td><td>' + esc(fmt(i.dueOn).replace(/ \d+:\d+$/, '')) + '</td>' +
+        '<td><span class="badge ' + st[1] + '">' + st[0] + '</span>' + (i.sentAt ? '<div class="small muted">gemaild ' + esc(ago(i.sentAt)) + '</div>' : '') + '</td>' +
+        '<td><div class="row" style="flex-wrap:nowrap"><button class="btn small" data-act="inv-pdf" data-id="' + i.id + '">PDF</button>' +
+        (i.status === 'betaald' ? '<button class="btn small ghost" data-act="inv-open" data-id="' + i.id + '">Toch open</button>' : i.status !== 'geannuleerd' ? '<button class="btn small primary" data-act="inv-paid" data-id="' + i.id + '">Betaald</button><button class="btn small ghost" data-act="inv-mail" data-id="' + i.id + '">' + (i.status === 'vervallen' ? 'Herinnering' : 'Mailen') + '</button><button class="btn small ghost" data-act="inv-cancel" data-id="' + i.id + '">Annuleren</button>' : '') + '</div></td></tr>';
+    }).join('') + '</tbody></table></div>' : '<div class="empty">Geen facturen in deze lijst.</div>') + '</section>';
+  return h;
+}
+function viewSupport() {
+  const L = A.sup; if (!L) return '<div class="empty">Laden…</div>';
+  if (!L.length) return '<section class="card"><h2>Support</h2><p class="small muted" style="margin:0">Nog geen berichten via het supportformulier op de website.</p></section>';
+  return '<section class="card"><h2>Support</h2><div class="stack" style="gap:10px;max-width:none">' + L.map(m => '<div class="box' + (m.status === 'nieuw' ? '' : ' muted-box') + '"><div class="item-top"><strong>' + esc(m.topic || 'Vraag') + ' · ' + esc(m.name) + (m.company ? ' (' + esc(m.company) + ')' : '') + '</strong>' +
+    '<span class="badge ' + (m.status === 'nieuw' ? 'orange' : 'green') + '">' + (m.status === 'nieuw' ? 'Nieuw' : 'Afgehandeld') + '</span></div>' +
+    '<p class="small muted" style="margin:0"><a href="mailto:' + esc(m.email) + '?subject=' + encodeURIComponent('Re: ' + (m.topic || 'je vraag aan CrewHarbor')) + '">' + esc(m.email) + '</a>' + (m.phone ? ' · ' + esc(m.phone) : '') + ' · ' + esc(fmt(m.createdAt, true)) + '</p>' +
+    '<p style="margin:8px 0;white-space:pre-wrap">' + esc(m.message) + '</p><div class="row">' +
+    (m.status === 'nieuw' ? '<button class="btn small primary" data-act="sup-done" data-id="' + m.id + '">Afgehandeld</button>' : '<button class="btn small ghost" data-act="sup-new" data-id="' + m.id + '">Weer open</button>') +
+    '<button class="btn small ghost" data-act="sup-del" data-id="' + m.id + '">Verwijderen</button></div></div>').join('') + '</div></section>';
 }
 function viewMail() {
   const m = A.mail;
@@ -430,7 +484,37 @@ $app.addEventListener('click', async e => {
         A.tab = id; A.orgSel = null; A.editOrg = null; A.blockFor = null; A.codeFor = null; A.delFor = null; A.mfaResetFor = null; render();
         if (id === 'mail') { A.mail = await svc('admin-mail-get'); render(); }
         if (id === 'betalen') { A.mollie = await svc('admin-mollie-get'); render(); }
+        if (id === 'facturen') { A.inv = await rpc('cd_admin_invoices'); render(); }
+        if (id === 'support') { A.sup = await rpc('cd_admin_support'); render(); }
         break;
+      case 'inv-pdf': {
+        const inv = A.inv.invoices.find(i => String(i.id) === String(id));
+        if (!window.CH_INVOICE) await new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'invoice.js?v=1'; sc.onload = ok; sc.onerror = () => bad(new Error('Laden mislukt.')); document.head.appendChild(sc); });
+        await window.CH_INVOICE.open(inv); break;
+      }
+      case 'inv-paid': case 'inv-open': case 'inv-cancel': {
+        if (act === 'inv-cancel' && !confirm('Deze factuur annuleren? Het nummer blijft bestaan (verplicht voor je administratie); maak zo nodig een nieuwe.')) break;
+        await rpc('cd_admin_invoice_status', { p_id: Number(id), p_status: act === 'inv-paid' ? 'betaald' : act === 'inv-open' ? 'open' : 'geannuleerd' });
+        A.inv = await rpc('cd_admin_invoices'); render(); toast(act === 'inv-paid' ? 'Gemarkeerd als betaald.' : 'Bijgewerkt.'); break;
+      }
+      case 'inv-mail': {
+        if (!confirm('De eigenaar van dit bedrijf een mail sturen over deze factuur?')) break;
+        await rpc('cd_admin_invoice_mail', { p_id: Number(id) }); A.inv = await rpc('cd_admin_invoices'); render(); toast('Mail staat klaar en gaat binnen een paar minuten weg.'); break;
+      }
+      case 'inv-make': {
+        const m = document.getElementById('im-' + id); const month = m && m.value ? m.value + '-01' : null;
+        await rpc('cd_admin_invoice_make', { p_org: id, p_month: month }); A.inv = await rpc('cd_admin_invoices'); render(); toast('Factuur gemaakt en naar de klant gemaild.'); break;
+      }
+      case 'inv-method': {
+        const to = b.dataset.v;
+        if (!confirm(to === 'factuur' ? 'Dit bedrijf laten betalen per factuur? De status wordt "Betaalt" en elke 1e van de maand komt er automatisch een factuur.' : 'Terug naar automatische incasso? De klant moet dan zelf een betaling instellen.')) break;
+        A.inv = await rpc('cd_admin_org_method', { p_org: id, p_method: to }); await load(); render(); toast('Betaalwijze aangepast.'); break;
+      }
+      case 'inv-filter': A.invFilter = b.dataset.v; render(); break;
+      case 'sup-done': case 'sup-new': case 'sup-del': {
+        if (act === 'sup-del' && !confirm('Dit bericht verwijderen?')) break;
+        A.sup = await rpc('cd_admin_support_status', { p_id: Number(id), p_status: act === 'sup-done' ? 'afgehandeld' : act === 'sup-new' ? 'nieuw' : 'verwijderen' }); render(); break;
+      }
       case 'plan-toggle': A.planOpen = A.planOpen || {}; A.planOpen[id] = !b.parentElement.open; break;
       case 'plan-new': A.planNew = true; render(); break;
       case 'plan-cancel': A.planNew = false; render(); break;
@@ -505,6 +589,10 @@ $app.addEventListener('submit', async e => {
   const kind = f.dataset.form, id = f.dataset.id;
   const btn = f.querySelector('button[type=submit]'); if (btn) btn.disabled = true;
   try {
+    if (kind === 'company') {
+      const p = {}; [...f.elements].forEach(x => { if (x.name) p[x.name] = x.value.trim(); });
+      A.inv.company = await rpc('cd_admin_company_save', { p }); render(); toast('Bedrijfsgegevens opgeslagen.'); return;
+    }
     if (kind === 'login' || kind === 'setup') {
       const d = kind === 'login'
         ? await svc('admin-login', { name: v('name'), password: f.elements.password.value })
