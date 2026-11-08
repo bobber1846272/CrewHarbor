@@ -118,7 +118,9 @@ function rosterWeek(R) {
       const o = openFor(R, d), G = gaps(R, d);
       if (!o && Object.keys(R.opening || {}).length) x += '<span class="ro-gap closed">Dicht</span>';
       else if (o) x += G.length ? '<span class="ro-gap" title="' + esc('Nog niemand (genoeg) ingepland: ' + G.map(gapTxt).join(', ')) + '">Gat ' + esc(gapTxt(G[0])) + (G.length > 1 ? ' +' + (G.length - 1) : '') + '</span>' : '<span class="ro-gap ok" title="Open ' + hhmm(o.from) + '–' + hhmm(o.to) + '">✓ ' + hhmm(o.from) + '–' + hhmm(o.to) + '</span>';
-      if (c.need) x += '<span class="ro-cov ' + (c.have >= c.need ? 'ok' : c.have ? 'half' : 'bad') + '" title="' + esc(c.items.map(i => (i.tpl ? i.tpl.name : 'Mensen') + ': ' + i.have + '/' + i.need).join(' · ')) + '">' + c.have + '/' + c.need + '</span>';
+      if (c.need) x += '<span class="ro-covs">' + c.items.map(it => { const cls = it.have >= it.need ? 'ok' : it.have ? 'half' : 'bad';
+        const lab = it.tpl ? it.tpl.start.replace(/:00$/, '') + '–' + it.tpl.end.replace(/:00$/, '') : 'Mensen';
+        return '<span class="ro-cov2 ' + cls + '" title="' + esc((it.tpl ? it.tpl.name + ' ' + it.tpl.start + '–' + it.tpl.end : 'Mensen') + ': ' + Math.min(it.have, it.need) + ' van ' + it.need + ' ingepland' + (it.have > it.need ? ' (+' + (it.have - it.need) + ' extra)' : '')) + '"><span>' + esc(lab) + '</span><b>' + Math.min(it.have, it.need) + '/' + it.need + '</b></span>'; }).join('') + '</span>';
     }
     return x;
   };
