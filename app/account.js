@@ -148,7 +148,11 @@ function loginRows(list, withName) {
 function accountCard() {
   const me = S.me, legacy = !!me.legacy;
   const mfaRequired = !!(settings().requireMfa && me.isManager);
-  let h = '<section class="card stack" style="gap:14px"><h2>Mijn account</h2><dl class="kv"><dt>Naam</dt><dd>' + esc(me.name) + '</dd><dt>Rol</dt><dd>' + esc(S.roleName) + '</dd>' +
+  const hasPhoto = !!(S.photos && S.photos[me.id]);
+  let h = '<section class="card stack" style="gap:14px"><h2>Profiel</h2>' +
+    '<div class="photo-row">' + avatar(me.id, me.name, 'xl') + '<div class="stack" style="gap:6px"><div class="row"><label class="btn" for="ac-photo">' + ICON.upload + (hasPhoto ? 'Andere foto' : 'Profielfoto kiezen') + '</label>' +
+    (hasPhoto ? '<button class="btn ghost" data-act="ac-photo-del">Foto weghalen</button>' : '') + '</div><input type="file" id="ac-photo" accept="image/*" hidden><span class="small muted">Je collega\'s zien deze foto bij je naam.</span></div></div>' +
+    '<dl class="kv"><dt>Naam</dt><dd>' + esc(me.name) + '</dd><dt>Rol</dt><dd>' + esc(S.roleName) + '</dd>' +
     '<dt>E-mailadres</dt><dd>' + (legacy ? '<span class="muted">Nog niet gekoppeld</span>' : esc(me.email || '')) + '</dd></dl>';
   if (legacy) {
     h += '<div class="alert warn">' + ICON.warn + '<span><strong>Koppel je e-mailadres.</strong> Inloggen met een bedrijfscode en code verdwijnt. Met je e-mailadres en een wachtwoord log je veiliger in, en kun je zelf een nieuw wachtwoord aanvragen.</span></div>';
@@ -158,6 +162,7 @@ function accountCard() {
       '<p class="small muted" style="margin:0">Je krijgt een mail op dat adres. Pas als je op de link klikt, wordt het gewijzigd.</p>' +
       '<div class="row"><button class="btn dark" data-act="ac-email-save">Bevestigingsmail sturen</button><button class="btn ghost" data-act="ac-email-cancel">Annuleren</button></div>'
     : '<div><button class="btn' + (legacy ? ' dark' : '') + '" data-act="ac-email-open">' + (legacy ? 'E-mailadres koppelen' : 'E-mailadres wijzigen') + '</button></div>';
+  h += '</section><section class="card stack" style="gap:14px"><h2>Inloggen en beveiliging</h2>';
   if (legacy) {
     h += '<div class="field"><label for="s-code">Nieuwe code</label><input class="input code-input" id="s-code" type="password" inputmode="numeric" autocomplete="new-password" placeholder="6 tot 12 cijfers"></div>' +
       '<div class="field"><label for="s-code2">Herhaal nieuwe code</label><input class="input code-input" id="s-code2" type="password" inputmode="numeric" autocomplete="new-password"></div>' +
@@ -175,12 +180,12 @@ function accountCard() {
       : '<p class="small" style="margin:0"><span class="badge">Uit</span> Zet het aan voor een extra slot op je account. Je hebt alleen een authenticator-app op je telefoon nodig.</p>' +
         (legacy ? '<p class="small muted" style="margin:0">Koppel eerst je e-mailadres.</p>' : '<div><button class="btn dark" data-act="ac-mfa-on">Aanzetten</button></div>'));
   {
-    h += '<h3 class="card-sub">Pincode voor de prikklok</h3><p class="small muted" style="margin:0">Normaal klok je in met de wisselende code uit de app. Je eigen pincode werkt alleen als de eigenaar dat tijdelijk heeft toegestaan. ' + (me.hasPin ? 'Je hebt een pincode ingesteld.' : 'Je hebt nog geen pincode.') + '</p>' +
+    h += '</section><section class="card stack" style="gap:14px"><h2>Pincode voor de prikklok</h2><p class="small muted" style="margin:0">Normaal klok je in met de wisselende code uit de app. Je eigen pincode werkt alleen als de eigenaar dat tijdelijk heeft toegestaan. ' + (me.hasPin ? 'Je hebt een pincode ingesteld.' : 'Je hebt nog geen pincode.') + '</p>' +
       '<div class="field"><label for="ac-pin">' + (me.hasPin ? 'Nieuwe pincode' : 'Pincode') + '</label><input class="input code-input" id="ac-pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="8 cijfers"></div>' +
       '<div class="row"><button class="btn" data-act="ac-pin-save">Pincode opslaan</button>' + (me.hasPin ? '<button class="btn ghost" data-act="ac-pin-clear">Pincode weghalen</button>' : '') + '</div>';
   }
-  h += '<h3 class="card-sub">Laatste keren ingelogd</h3>' + loginRows(S.myLogins, false) +
-    '<h3 class="card-sub">Mijn gegevens</h3><p class="small muted" style="margin:0">Download alles wat CrewHarbor over jou bewaart: je account, uren, verlof, rooster, taken en logregels.</p>' +
+  h += '</section><section class="card stack" style="gap:14px"><h2>Mijn gegevens</h2><h3 class="card-sub">Laatste keren ingelogd</h3>' + loginRows(S.myLogins, false) +
+    '<h3 class="card-sub">Downloaden</h3><p class="small muted" style="margin:0">Download alles wat CrewHarbor over jou bewaart: je account, uren, verlof, rooster, taken en logregels.</p>' +
     '<div><button class="btn" data-act="ac-export-me">' + ICON.download + 'Mijn gegevens downloaden</button></div></section>';
   return h;
 }
@@ -287,6 +292,7 @@ document.getElementById('app').addEventListener('click', async e => {
         await rpc('cd_clock_pin_set', { p_pin: pin });
         await loadSession(); render(); toast(pin ? 'Je pincode is opgeslagen.' : 'Je pincode is weggehaald.'); return;
       }
+      case 'ac-photo-del': if (!confirm('Je profielfoto weghalen?')) return; el.disabled = true; await rpc('cd_avatar_set', { p_data: '' }); await loadSession(); await loadPhotos(true); render(); toast('Foto weggehaald.'); return;
       case 'ac-export-me': el.disabled = true; saveJson('crewharbor-mijn-gegevens.json', await rpc('cd_export_me')); el.disabled = false; return;
       case 'ac-export-org': el.disabled = true; saveJson('crewharbor-' + S.org.slug + '-' + new Date().toISOString().slice(0, 10) + '.json', await rpc('cd_export_org')); el.disabled = false; return;
       case 'sec-save': case 'ret-save': {
@@ -387,3 +393,21 @@ document.getElementById('app').addEventListener('submit', async e => {
     const c = document.querySelector('input[type=password]') || document.querySelector('.login-card input'); if (c) c.focus();
   } finally { if (btn && btn.isConnected) btn.disabled = false; }
 }, true);
+
+// ---------- profielfoto: verkleinen in de browser, dan opslaan ----------
+async function setPhoto(file) {
+  if (!/^image\//.test(file.type)) { toast('Kies een afbeelding (jpg of png).', true); return; }
+  if (file.size > 15 * 1024 * 1024) { toast('Deze foto is te groot. Kies er een van maximaal 15 MB.', true); return; }
+  try {
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error('Deze foto kan niet worden geopend.')); i.src = url; });
+    const size = 160, c = document.createElement('canvas'); c.width = size; c.height = size;
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    c.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+    URL.revokeObjectURL(url);
+    let q = 0.82, data = c.toDataURL('image/jpeg', q);
+    while (data.length > 38000 && q > 0.4) { q -= 0.1; data = c.toDataURL('image/jpeg', q); }
+    await rpc('cd_avatar_set', { p_data: data });
+    await loadSession(); await loadPhotos(true); render(); toast('Je profielfoto is opgeslagen.');
+  } catch (err) { toast(err.message, true); }
+}
