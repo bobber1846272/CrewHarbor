@@ -765,3 +765,14 @@ details summary { cursor: pointer; font-weight: 600; min-height: 32px; display: 
 .plan-card .plan-chev { display: inline-block; font-size: 20px; line-height: 1; transition: transform .15s ease; color: var(--muted, #4A5F6E); }
 .plan-card[open] .plan-chev { transform: rotate(90deg); }
 .plan-card .plan-badges { margin-left: auto; display: flex; gap: 6px; }
+
+/* compacter, rustiger menu */
+.nav-links { gap: 2px; }
+.nav-links a { min-height: 38px; font-size: 14px; }
+.nav-home { margin-bottom: 6px; }
+.nav-group { border-radius: 10px; }
+.nav-group.open { background: rgba(255, 255, 255, .03); }
+.nav-group-btn { min-height: 34px; }
+.nav-group-items { padding: 0 0 6px; }
+.nav-group-items a { padding-left: 14px; }
+.nav-group-btn .nav-count { background: var(--accent); }

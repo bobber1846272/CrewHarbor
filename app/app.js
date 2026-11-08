@@ -466,7 +466,8 @@ function viewRegister() {
 function navGroups() {
   const G = [
     { id: 'werk', label: 'Werk', items: [['meldingen', 'Meldingen', S.notif ? S.notif.unread : 0], ['terugbellen', 'Terugbellen', S.counts.mine], ['taken', 'Taken', S.counts.tasks]] },
-    { id: 'uren', label: 'Uren', items: [['uren', 'Mijn uren', 0, S.running ? 'live' : ''], ['rooster', 'Rooster'], ['beschikbaar', 'Beschikbaarheid'], ['verlof', 'Verlof & ziek', S.absPending],
+    { id: 'planning', label: 'Planning', items: [['rooster', 'Rooster'], ['beschikbaar', 'Beschikbaarheid'], ['verlof', 'Verlof & ziek', S.absPending]] },
+    { id: 'uren', label: 'Uren', items: [['uren', 'Mijn uren', 0, S.running ? 'live' : ''],
       can('hours.approve') ? ['goedkeuren', 'Goedkeuren', S.pendingCount] : null, can('hours.view_all') ? ['urenoverzicht', 'Urenoverzicht'] : null, can('hours.kiosk') ? ['prikklok', 'Prikklok'] : null] },
     { id: 'kennis', label: 'Kennis', items: [['kennisbank', 'Kennisbank'], ['documenten', 'Documenten']] },
     { id: 'leiding', label: 'Teamleiding', items: [can('team.board') ? ['team', 'Teambord'] : null, can('reports.view') ? ['cijfers', 'Cijfers'] : null, can('phone.view') ? ['telefonie', 'Telefonie'] : null, can('audit.view') ? ['logboek', 'Logboek'] : null] },
@@ -478,13 +479,13 @@ function navGroups() {
 }
 function viewNav(r) {
   const cur = r === 'verzoek' ? 'terugbellen' : r === 'taak' ? 'taken' : r;
-  const closed = prefs.navClosed || {};
+  const opened = prefs.navOpen || {};
   const link = ([to, label, count, flag]) => '<a href="#/' + to + '" class="' + (cur === to ? 'active' : '') + '"' + (cur === to ? ' aria-current="page"' : '') + '>' +
     '<span class="nav-label">' + NI[to] + '<span>' + esc(label) + '</span></span>' +
     (flag === 'live' ? '<span class="live-dot" title="Je bent ingeklokt"></span>' : count ? '<span class="nav-count">' + count + '</span>' : '') + '</a>';
   const groups = navGroups().map(g => {
     const hasActive = g.items.some(i => i[0] === cur);
-    const open = hasActive || !closed[g.id];
+    const open = hasActive || !!opened[g.id];
     const sum = g.items.reduce((a, i) => a + (i[2] || 0), 0);
     return '<div class="nav-group' + (open ? ' open' : '') + '">' +
       '<button class="nav-group-btn" data-act="nav-group" data-v="' + g.id + '" aria-expanded="' + open + '" aria-controls="ng-' + g.id + '"' + (hasActive ? ' data-locked="1"' : '') + '>' +
@@ -2237,7 +2238,12 @@ $app.addEventListener('click', async e => {
         if (el.dataset.locked) return;
         const g = el.closest('.nav-group'); const open = g.classList.toggle('open');
         el.setAttribute('aria-expanded', String(open));
-        prefs.navClosed = prefs.navClosed || {}; if (open) delete prefs.navClosed[el.dataset.v]; else prefs.navClosed[el.dataset.v] = true; savePrefs();
+        // maar één groep tegelijk open (de groep van de huidige pagina blijft altijd open)
+        if (open) g.parentElement.querySelectorAll('.nav-group.open').forEach(o => {
+          const b = o.querySelector('.nav-group-btn'); if (o === g || b.dataset.locked) return;
+          o.classList.remove('open'); b.setAttribute('aria-expanded', 'false');
+        });
+        prefs.navOpen = open ? { [el.dataset.v]: true } : {}; delete prefs.navClosed; savePrefs();
         return;
       }
       case 'menu': { const nav = el.closest('.nav'); const open = nav.classList.toggle('open'); el.setAttribute('aria-expanded', String(open)); el.textContent = open ? 'Sluiten' : 'Menu'; return; }
