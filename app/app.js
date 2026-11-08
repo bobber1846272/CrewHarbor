@@ -1128,6 +1128,7 @@ function leaveAccountBox(u) {
   if (!(S.me.isOwner || can('hours.leave_balance')) || u.contractType !== 'vast') return '';
   const A = S.leaveAcc && same(S.leaveAcc.memberId, u.id) ? S.leaveAcc : null;
   const y = S.leaveYear || Number(today().slice(0, 4));
+  if (!A && S.leaveLoading !== u.id) { S.leaveLoading = u.id; loadLeaveAcc(u.id).then(() => { S.leaveLoading = null; if (S.leaveAcc && same(S.mSel, u.id)) render(); }); }
   if (!A) return '<fieldset class="box" style="margin:0"><legend class="legend" style="padding:0 4px">Verlofsaldo</legend><p class="small muted" style="margin:0">Laden…</p></fieldset>';
   const d = A.data;
   return '<fieldset class="box" style="margin:0"><legend class="legend" style="padding:0 4px">Verlofsaldo</legend>' +
@@ -2899,7 +2900,7 @@ $app.addEventListener('click', async e => {
       case 'k-exit': try { localStorage.removeItem('crewdeck-kiosk'); } catch (err) { /* */ } K.error = null; location.hash = '#/login'; return;
 
       // mensen
-      case 'm-sel': S.mSel = raw; S.mNew = false; S.offboard = null; S.leaveAcc = null; render(); if (S.me.isOwner || can('hours.leave_balance')) { await loadLeaveAcc(raw); render(); } return;
+      case 'm-sel': S.mSel = raw; S.mNew = false; S.offboard = null; S.leaveAcc = null; render(); return;
       case 'la-year': S.leaveYear = Number(el.dataset.v); await loadLeaveAcc(raw); render(); return;
       case 'la-save': {
         const num2 = v => { const t = String(v || '').trim().replace(',', '.'); return t === '' ? null : Number(t); };
