@@ -493,3 +493,41 @@ textarea.input { resize: vertical; }
 .cmp-sec .cmp-wrap { border-radius: 24px; box-shadow: 0 20px 60px rgba(13,35,64,.08); }
 .cmp-sec .btn.outline, .cmp-sec .btn.primary { border-radius: 99px; }
 @media (max-width: 640px) { .sub .hx { padding: 120px 0 64px; } }
+
+/* statuspagina */
+.st-banner { display: inline-flex; align-items: center; gap: 12px; margin-top: 30px; padding: 14px 24px; border-radius: 99px; font-size: 18px; font-weight: 700; background: rgba(95,211,154,.14); border: 1px solid rgba(95,211,154,.4); color: #fff; }
+.st-banner.part, .st-banner.maint { background: rgba(245,166,35,.15); border-color: rgba(245,166,35,.45); }
+.st-banner.down { background: rgba(240,82,82,.16); border-color: rgba(240,82,82,.5); }
+.st-hx .hx-lead.small { font-size: 14px; margin-top: 14px; }
+.st-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; background: #1F9D5B; box-shadow: 0 0 0 5px rgba(31,157,91,.18); }
+.st-dot.part { background: #D98E04; box-shadow: 0 0 0 5px rgba(217,142,4,.18); } .st-dot.down { background: #D92D20; box-shadow: 0 0 0 5px rgba(217,45,32,.18); }
+.st-dot.maint { background: #2E6FD8; box-shadow: 0 0 0 5px rgba(46,111,216,.18); } .st-dot.checking { background: #9FB3C4; box-shadow: none; animation: bob 1s infinite; }
+.st-wrap { max-width: 900px; }
+.st-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+.st-head h2, .st-h2 { font-size: 28px; letter-spacing: -.02em; }
+.st-h2 { margin: 48px 0 16px; }
+.st-list { border: 1px solid var(--line); border-radius: 22px; overflow: hidden; background: #fff; }
+.st-row { padding: 20px 22px; border-top: 1px solid var(--line); display: grid; gap: 12px; }
+.st-row:first-child { border-top: 0; }
+.st-top { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.st-top > div:first-child { display: grid; }
+.st-now { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; color: #1F7A4D; }
+.st-now.part, .st-now.maint { color: #9A6100; } .st-now.down { color: #B42318; } .st-now.maint { color: #2E5DB0; }
+.st-now small { font-weight: 500; color: var(--muted); font-size: 12.5px; }
+.st-bars { display: grid; grid-template-columns: repeat(90, 1fr); gap: 2px; height: 34px; }
+.st-bars i, .st-legend i { border-radius: 3px; background: #2BB673; }
+.st-bars i.part, .st-legend i.part { background: #F5A623; } .st-bars i.down, .st-legend i.down { background: #E5484D; } .st-bars i.maint, .st-legend i.maint { background: #3E7BE0; }
+.st-bars i:hover { filter: brightness(.85); }
+.st-foot { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.st-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 14px; font-size: 13px; color: var(--muted); }
+.st-legend span { display: inline-flex; align-items: center; gap: 6px; } .st-legend i { width: 12px; height: 12px; display: inline-block; }
+.st-inc { display: grid; gap: 12px; }
+.st-card { padding: 20px 22px; border-radius: 18px; border: 1px solid var(--line); background: #fff; display: grid; gap: 6px; }
+.st-card.open { border-color: #F5A623; box-shadow: 0 10px 30px rgba(245,166,35,.12); }
+.st-card-top { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.st-badge { font-size: 12.5px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: #DCFAE6; color: #085D3A; }
+.st-badge.part { background: #FEF0C7; color: #93370D; } .st-badge.down { background: #FEE4E2; color: #B42318; } .st-badge.maint { background: #E0EAFF; color: #1E40AF; }
+.st-tl { list-style: none; margin: 8px 0 0; padding: 0 0 0 16px; border-left: 2px solid var(--line); display: grid; gap: 10px; }
+.st-tl p { margin: 2px 0 0; font-size: 15px; }
+.st-none { padding: 18px 22px; border-radius: 18px; background: #F1FAF4; color: #1F7A4D; font-weight: 600; }
+@media (max-width: 640px) { .st-bars { grid-template-columns: repeat(45, 1fr); } .st-bars i:nth-child(-n+45) { display: none; } .st-foot span:first-child::after { content: ""; } .st-head { flex-wrap: wrap; } }

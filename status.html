@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0D2340">
+<title>Status · CrewHarbor</title>
+<meta name="description" content="Werkt CrewHarbor? Bekijk live de status van de website, de app en de database, en eventuele storingen.">
+<link rel="icon" href="app/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..750&display=swap">
+<link rel="stylesheet" href="site.css?v=10">
+</head>
+<body class="v3 sub">
+<a class="skip" href="#main">Naar de inhoud</a>
+<header class="top" id="top">
+  <div class="wrap top-in">
+    <a class="brand" href="./" aria-label="CrewHarbor, naar het begin"><span id="logo"></span></a>
+    <nav class="nav" id="nav" aria-label="Hoofdmenu">
+      <a href="./#functies">Functies</a>
+      <a href="./#hoe">Zo werkt het</a>
+      <a href="./#prijzen">Prijzen</a>
+      <a href="./#veilig">Veiligheid</a>
+      <a href="./#vragen">Vragen</a>
+      <a href="support.html">Support</a>
+    </nav>
+    <div class="top-act">
+      <a class="btn light hide-s" href="app/">Inloggen</a>
+      <a class="btn glow" href="./#aanvragen">Gratis proberen</a>
+      <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hx sub-hx st-hx" aria-labelledby="st-h">
+    <div class="hx-glow" aria-hidden="true"></div>
+    <div class="wrap hx-in">
+      <span class="pill-badge"><i></i> Live gecontroleerd</span>
+      <h1 id="st-h">Status van<br><span class="grad">CrewHarbor.</span></h1>
+      <div class="st-banner" id="st-banner" role="status" aria-live="polite"><span class="st-dot checking"></span><span>Bezig met controleren…</span></div>
+      <p class="hx-lead small" id="st-checked"></p>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="st-c">
+    <div class="wrap st-wrap">
+      <div class="st-head"><h2 id="st-c">Onderdelen</h2><button class="btn outline" id="st-again" type="button">Opnieuw controleren</button></div>
+      <div class="st-list" id="st-list"></div>
+      <p class="st-legend"><span><i class="ok"></i>Geen storing</span><span><i class="part"></i>Verstoring</span><span><i class="down"></i>Storing</span><span><i class="maint"></i>Onderhoud</span><span class="muted">Balkjes: afgelopen 90 dagen</span></p>
+      <h2 class="st-h2">Meldingen</h2>
+      <div id="st-inc" class="st-inc"><p class="muted">Laden…</p></div>
+      <p class="fine">Merk je een probleem dat hier niet staat? Laat het ons weten via de <a href="support.html#contact">supportpagina</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot v3f">
+  <div class="wrap">
+    <div class="foot-cols">
+      <div class="foot-brand"><span id="logo2"></span><p>De vaste haven voor je team.<br>Een product van <strong>Spark Apps</strong>.</p></div>
+      <nav aria-label="Product"><b>Product</b><a href="./#functies">Functies</a><a href="./#prijzen">Prijzen</a><a href="prijzen.html">Pakketten vergelijken</a><a href="app/">Inloggen</a></nav>
+      <nav aria-label="Hulp"><b>Hulp</b><a href="support.html">Support</a><a href="status.html" aria-current="page">Status</a><a href="./#vragen">Veelgestelde vragen</a><a href="mailto:support@crewharbor.nl">support@crewharbor.nl</a></nav>
+      <nav aria-label="Juridisch"><b>Juridisch</b><a href="app/privacy.html">Privacyverklaring</a><a href="app/verwerkersovereenkomst.html">Verwerkersovereenkomst</a></nav>
+    </div>
+    <div class="foot-word" aria-hidden="true">crewharbor</div>
+  </div>
+</footer>
+
+<script src="app/config.js"></script>
+<script src="app/logo.js"></script>
+<script src="status.js?v=1"></script>
+<script src="nav.js?v=1"></script>
+</body>
+</html>

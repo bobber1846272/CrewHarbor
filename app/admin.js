@@ -74,7 +74,7 @@ async function svc(action, body) {
 }
 async function load() {
   A.data = await rpc('cd_admin_overview');
-  [A.inv, A.sup] = await Promise.all([rpc('cd_admin_invoices').catch(() => A.inv || null), rpc('cd_admin_support').catch(() => A.sup || null)]);
+  [A.inv, A.sup, A.st] = await Promise.all([rpc('cd_admin_invoices').catch(() => A.inv || null), rpc('cd_admin_support').catch(() => A.sup || null), rpc('cd_status').catch(() => A.st || null)]);
 }
 async function logout(msg) {
   try { await sb.auth.signOut({ scope: 'local' }); } catch (e) { /* */ }
@@ -138,8 +138,8 @@ function viewSetup() {
 function viewPanel() {
   const d = A.data;
   const open = d.requests.filter(r => r.status === 'nieuw').length;
-  const tabs = [['aanvragen', 'Aanvragen', open], ['bedrijven', 'Bedrijven', d.orgs.length], ['facturen', 'Facturen', A.inv ? A.inv.invoices.filter(i => i.status === 'open' || i.status === 'vervallen').length : 0], ['support', 'Support', A.sup ? A.sup.filter(x => x.status === 'nieuw').length : 0], ['beheerders', 'Beheerders', 0], ['betalen', 'Pakketten', 0], ['mail', 'Mail', 0], ['logboek', 'Logboek', 0]];
-  const body = { aanvragen: viewRequests, bedrijven: viewOrgs, facturen: viewInvoices, support: viewSupport, beheerders: viewAdmins, betalen: viewBilling, mail: viewMail, logboek: viewLog }[A.tab]();
+  const tabs = [['aanvragen', 'Aanvragen', open], ['bedrijven', 'Bedrijven', d.orgs.length], ['facturen', 'Facturen', A.inv ? A.inv.invoices.filter(i => i.status === 'open' || i.status === 'vervallen').length : 0], ['support', 'Support', A.sup ? A.sup.filter(x => x.status === 'nieuw').length : 0], ['status', 'Status', A.st ? A.st.incidents.filter(i => !i.resolvedAt).length : 0], ['beheerders', 'Beheerders', 0], ['betalen', 'Pakketten', 0], ['mail', 'Mail', 0], ['logboek', 'Logboek', 0]];
+  const body = { aanvragen: viewRequests, bedrijven: viewOrgs, facturen: viewInvoices, support: viewSupport, status: viewStatus, beheerders: viewAdmins, betalen: viewBilling, mail: viewMail, logboek: viewLog }[A.tab]();
   return '<div class="adm">' +
     '<header class="adm-top"><div class="adm-brand"><span class="logo">' + LOGO(28) + '</span><span class="adm-sub">Beheer</span></div>' +
       '<div class="adm-me"><span>' + esc(d.me.name) + '</span><button class="btn small ghost" data-act="logout">Uitloggen</button></div></header>' +
@@ -283,6 +283,30 @@ function viewSupport() {
     '<p style="margin:8px 0;white-space:pre-wrap">' + esc(m.message) + '</p><div class="row">' +
     (m.status === 'nieuw' ? '<button class="btn small primary" data-act="sup-done" data-id="' + m.id + '">Afgehandeld</button>' : '<button class="btn small ghost" data-act="sup-new" data-id="' + m.id + '">Weer open</button>') +
     '<button class="btn small ghost" data-act="sup-del" data-id="' + m.id + '">Verwijderen</button></div></div>').join('') + '</div></section>';
+}
+const ST_COMP = [['website', 'Website'], ['app', 'App en inloggen'], ['api', 'Database en gegevens'], ['prikklok', 'Prikklok'], ['mail', 'Mail']];
+const ST_LEVEL = { verstoring: ['Verstoring', 'orange'], storing: ['Storing', 'red'], onderhoud: ['Onderhoud', 'blue'] };
+const stTime = t => new Date(t).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+function viewStatus() {
+  const L = A.st; if (!L) return '<div class="empty">Laden…</div>';
+  const open = L.incidents.filter(i => !i.resolvedAt), done = L.incidents.filter(i => i.resolvedAt);
+  const comps = sel => ST_COMP.map(c => '<label class="check small"><input type="checkbox" name="comp" value="' + c[0] + '"' + ((sel || []).includes(c[0]) ? ' checked' : '') + '> ' + c[1] + '</label>').join('');
+  const card = i => '<div class="box"><div class="item-top"><strong>' + esc(i.title) + '</strong><span class="badge ' + (ST_LEVEL[i.level] || ['', ''])[1] + '">' + (ST_LEVEL[i.level] || [i.level])[0] + (i.resolvedAt ? ' · opgelost' : '') + '</span></div>' +
+    '<p class="small muted" style="margin:0">' + esc(stTime(i.startedAt)) + (i.resolvedAt ? ' – ' + esc(stTime(i.resolvedAt)) : ' · nog bezig') + ' · ' + esc(i.components.map(c => (ST_COMP.find(x => x[0] === c) || [c, c])[1]).join(', ') || 'geen onderdeel gekozen') + '</p>' +
+    (i.updates.length ? '<ul class="st-upd">' + i.updates.slice().reverse().map(u => '<li><span class="small muted">' + esc(stTime(u.at)) + '</span> ' + esc(u.text) + '</li>').join('') + '</ul>' : '') +
+    (i.resolvedAt ? '<div class="row"><button class="btn small ghost" data-act="st-reopen" data-id="' + i.id + '">Weer openen</button><button class="btn small ghost" data-act="st-del" data-id="' + i.id + '">Verwijderen</button></div>'
+      : '<form class="stack" data-form="st-upd" data-id="' + i.id + '" style="gap:8px;max-width:none" novalidate><textarea class="input" name="update" rows="2" maxlength="1000" placeholder="Update, bijv. We hebben de oorzaak gevonden en werken aan een oplossing."></textarea>' +
+        '<div class="row"><button class="btn small" type="submit" name="act" value="upd">Update plaatsen</button><button class="btn small primary" type="submit" name="act" value="resolve">Opgelost</button><button class="btn small ghost" type="button" data-act="st-del" data-id="' + i.id + '">Verwijderen</button></div></form>') + '</div>';
+  return '<section class="card"><div class="item-top"><h2 style="margin:0">Statuspagina</h2><a class="btn small ghost" href="../status.html" target="_blank" rel="noopener">Bekijk statuspagina ↗</a></div>' +
+    '<p class="small muted">Klanten zien hier of alles werkt. De pagina controleert zelf live of de website, de app en de database bereikbaar zijn. Storingen en onderhoud meld je hieronder.</p>' +
+    (open.length ? '<h3>Nu bezig</h3><div class="stack" style="gap:10px;max-width:none">' + open.map(card).join('') + '</div>' : '<p><span class="badge green">Geen storingen</span></p>') +
+    '<details class="box" style="margin-top:14px"' + (open.length ? '' : ' open') + '><summary><strong>+ Storing of onderhoud melden</strong></summary><form class="stack" data-form="st-new" style="gap:10px;max-width:none;margin-top:10px" novalidate>' +
+      '<div class="fields2"><div class="field"><label for="st-title">Titel</label><input class="input" id="st-title" name="title" maxlength="120" placeholder="Bijv. Inloggen gaat traag"></div>' +
+      '<div class="field"><label for="st-level">Soort</label><select class="input" id="st-level" name="level"><option value="verstoring">Verstoring (werkt deels)</option><option value="storing">Storing (werkt niet)</option><option value="onderhoud">Gepland onderhoud</option></select></div></div>' +
+      '<div class="field"><span class="small"><strong>Welke onderdelen?</strong></span><div class="row" style="gap:14px">' + comps([]) + '</div></div>' +
+      '<div class="field"><label for="st-msg">Eerste bericht</label><textarea class="input" id="st-msg" name="update" rows="2" maxlength="1000" placeholder="Bijv. We onderzoeken het probleem."></textarea></div>' +
+      '<div><button class="btn primary" type="submit">Melden</button></div></form></details>' +
+    (done.length ? '<h3 style="margin-top:18px">Afgelopen 90 dagen</h3><div class="stack" style="gap:10px;max-width:none">' + done.map(card).join('') + '</div>' : '') + '</section>';
 }
 function viewMail() {
   const m = A.mail;
@@ -494,6 +518,7 @@ $app.addEventListener('click', async e => {
         if (id === 'betalen') { A.mollie = await svc('admin-mollie-get'); render(); }
         if (id === 'facturen') { A.inv = await rpc('cd_admin_invoices'); render(); }
         if (id === 'support') { A.sup = await rpc('cd_admin_support'); render(); }
+        if (id === 'status') { A.st = await rpc('cd_status'); render(); }
         break;
       case 'inv-pdf': {
         const inv = A.inv.invoices.find(i => String(i.id) === String(id));
@@ -519,6 +544,8 @@ $app.addEventListener('click', async e => {
         A.inv = await rpc('cd_admin_org_method', { p_org: id, p_method: to }); await load(); render(); toast('Betaalwijze aangepast.'); break;
       }
       case 'inv-filter': A.invFilter = b.dataset.v; render(); break;
+      case 'st-del': if (!confirm('Deze melding verwijderen van de statuspagina?')) return; A.st = await rpc('cd_admin_status_delete', { p_id: Number(id) }); render(); break;
+      case 'st-reopen': A.st = await rpc('cd_admin_status_save', { p_id: Number(id), p: { reopen: true, update: 'Het probleem is terug. We kijken ernaar.' } }); render(); break;
       case 'sup-done': case 'sup-new': case 'sup-del': {
         if (act === 'sup-del' && !confirm('Dit bericht verwijderen?')) break;
         A.sup = await rpc('cd_admin_support_status', { p_id: Number(id), p_status: act === 'sup-done' ? 'afgehandeld' : act === 'sup-new' ? 'nieuw' : 'verwijderen' }); render(); break;
@@ -602,6 +629,18 @@ $app.addEventListener('submit', async e => {
   const kind = f.dataset.form, id = f.dataset.id;
   const btn = f.querySelector('button[type=submit]'); if (btn) btn.disabled = true;
   try {
+    if (kind === 'st-new') {
+      const comps = [...f.querySelectorAll('input[name=comp]:checked')].map(x => x.value);
+      if (!v('title')) { toast('Geef de storing een titel.', true); if (btn) btn.disabled = false; return; }
+      A.st = await rpc('cd_admin_status_save', { p_id: null, p: { title: v('title'), level: v('level'), components: comps, update: v('update') } });
+      toast('Gemeld. Het staat nu op de statuspagina.'); render(); return;
+    }
+    if (kind === 'st-upd') {
+      const resolve = e.submitter && e.submitter.value === 'resolve';
+      if (!resolve && !v('update')) { toast('Schrijf eerst een update.', true); if (btn) btn.disabled = false; return; }
+      A.st = await rpc('cd_admin_status_save', { p_id: Number(id), p: { update: v('update') || (resolve ? 'Het probleem is opgelost.' : ''), resolve } });
+      toast(resolve ? 'Op opgelost gezet.' : 'Update geplaatst.'); render(); return;
+    }
     if (kind === 'company') {
       const p = {}; [...f.elements].forEach(x => { if (x.name) p[x.name] = x.value.trim(); });
       A.inv.company = await rpc('cd_admin_company_save', { p }); render(); toast('Bedrijfsgegevens opgeslagen.'); return;

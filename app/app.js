@@ -202,6 +202,7 @@ const NI = (() => {
     documenten: i('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
     team: i('<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/>'),
     cijfers: i('<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/>'),
+    dashboard: i('<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>'),
     logboek: i('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>'),
     mensen: i('<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 4a4 4 0 0 1 0 8M22 21a6 6 0 0 0-4-5.6"/>'),
     rollen: i('<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/>'),
@@ -243,13 +244,14 @@ function updateTitle() {
 
 // ---------- routes ----------
 const ROUTES = ['overzicht', 'terugbellen', 'verzoek', 'taken', 'taak', 'uren', 'rooster', 'goedkeuren', 'urenoverzicht', 'prikklok', 'klok', 'verlof', 'beschikbaar', 'meldingen', 'kennisbank', 'documenten',
-  'team', 'cijfers', 'telefonie', 'logboek', 'mensen', 'rollen', 'instellingen', 'login', 'registreren', 'vergeten', 'wachtwoord', 'email'];
+  'team', 'dashboard', 'cijfers', 'telefonie', 'logboek', 'mensen', 'rollen', 'instellingen', 'login', 'registreren', 'vergeten', 'wachtwoord', 'email'];
 const ROUTE_PERM = { team: 'team.board', cijfers: 'reports.view', telefonie: 'phone.view', logboek: 'audit.view', instellingen: null, goedkeuren: 'hours.approve', urenoverzicht: 'hours.view_all', prikklok: 'hours.kiosk',
   mensen: ['members.manage', 'roles.manage'], rollen: ['members.manage', 'roles.manage'] };
 function route() { const h = location.hash.replace(/^#\/?/, '').split('?')[0]; return ROUTES.includes(h) ? h : (S.me ? 'overzicht' : (kioskToken() ? 'klok' : 'login')); }
 function go(r) { if (location.hash === '#/' + r) onRoute(); else location.hash = '#/' + r; }
 window.addEventListener('hashchange', onRoute);
 function allowed(r) {
+  if (r === 'dashboard') return !!(S.me && (S.me.isOwner || can('reports.view')));
   if (r === 'telefonie' && typeof hasFeature === 'function' && !hasFeature('phone')) return false;
   const p = ROUTE_PERM[r];
   if (!p) return true;
@@ -310,12 +312,14 @@ async function loadRoute() {
   if (r === 'terugbellen') jobs.push(loadCallbacks(), loadColleagues());
   if (r === 'taken') jobs.push(loadTasks());
   if (r === 'team') jobs.push(rpc('cd_team_board').then(d => { S.team = d; }));
+  if (r === 'dashboard' && typeof loadDashboard === 'function') jobs.push(loadDashboard());
   if (r === 'cijfers') jobs.push(rpc('cd_stats', { p_days: S.statDays }).then(d => { S.stats = d; }));
   if (r === 'logboek') jobs.push(loadLog(), loadColleagues());
   if (r === 'mensen' || r === 'rollen') jobs.push(loadPeople());
   if (r === 'mensen') jobs.push(rpc('cd_units').then(d => { S.units = d; }).catch(() => { S.units = null; }));
   if (r === 'uren') jobs.push(loadHours());
   if (r === 'rooster') jobs.push(loadRoster());
+  if (r === 'rooster' && typeof loadSwaps === 'function') jobs.push(loadSwaps());
   if (r === 'goedkeuren') jobs.push(rpc('cd_hours_pending').then(d => { S.pending = d; }));
   if (r === 'urenoverzicht') jobs.push(loadReport());
   if (r === 'telefonie') jobs.push(loadPhone());
@@ -390,7 +394,7 @@ function render() {
   if (typeof needWizard === 'function' && needWizard()) { document.title = 'Welkom · CrewHarbor'; $app.innerHTML = viewWizard(); return; }
   if (APP && typeof viewMobile === 'function') { $app.innerHTML = viewMobile(); updateTitle(); return; }
   const views = { overzicht: viewHome, terugbellen: viewCallbacks, verzoek: viewCallbackForm, taken: viewTasks, taak: viewTaskForm, team: viewTeam,
-    cijfers: viewStats, logboek: viewLog, mensen: viewMembers, rollen: viewRoles, instellingen: viewSettings,
+    dashboard: typeof viewDashboard === 'function' ? viewDashboard : viewHome, cijfers: viewStats, logboek: viewLog, mensen: viewMembers, rollen: viewRoles, instellingen: viewSettings,
     uren: viewHours, rooster: viewRoster, prikklok: viewKioskAdmin, verlof: viewAbsence, beschikbaar: viewAvailability, meldingen: viewNotifications, goedkeuren: viewApprove, urenoverzicht: viewReport, telefonie: viewPhone, kennisbank: viewKb, documenten: viewDocs };
   // scrollpositie bewaren bij opnieuw tekenen van dezelfde pagina (bijv. na slepen in het rooster)
   const keep = S.lastRoute === r ? ['.roster-scroll', '.nav', '.pres-panel', '.tl', '.month-grid'].map(q => { const el = document.querySelector(q); return el ? [q, el.scrollTop, el.scrollLeft] : null; }).filter(Boolean) : [];
@@ -483,11 +487,11 @@ function selfOn(k) { return !S.me || !S.me.isOwner || !!(S.me.uiPrefs || {})[k];
 function navGroups() {
   const G = [
     { id: 'werk', label: 'Werk', items: [['meldingen', 'Meldingen', S.notif ? S.notif.unread : 0], ['terugbellen', 'Terugbellen', S.counts.mine], ['taken', 'Taken', S.counts.tasks]] },
-    { id: 'planning', label: 'Planning', items: [['rooster', 'Rooster'], selfOn('selfAvail') ? ['beschikbaar', 'Beschikbaarheid'] : null, selfOn('selfLeave') || can('hours.approve') ? ['verlof', selfOn('selfLeave') ? 'Verlof & ziek' : 'Verlof', S.absPending] : null] },
+    { id: 'planning', label: 'Planning', items: [['rooster', 'Rooster', S.swaps && S.swaps.pending ? S.swaps.pending.length : 0], selfOn('selfAvail') ? ['beschikbaar', 'Beschikbaarheid'] : null, selfOn('selfLeave') || can('hours.approve') ? ['verlof', selfOn('selfLeave') ? 'Verlof & ziek' : 'Verlof', S.absPending] : null] },
     { id: 'uren', label: 'Uren', items: [selfOn('selfHours') ? ['uren', 'Mijn uren', 0, S.running ? 'live' : ''] : null,
       can('hours.approve') ? ['goedkeuren', 'Goedkeuren', S.pendingCount] : null, can('hours.view_all') ? ['urenoverzicht', 'Urenoverzicht'] : null, can('hours.kiosk') ? ['prikklok', 'Prikklok'] : null] },
     { id: 'kennis', label: 'Kennis', items: [['kennisbank', 'Kennisbank'], ['documenten', 'Documenten']] },
-    { id: 'leiding', label: 'Teamleiding', items: [can('team.board') ? ['team', 'Teambord'] : null, can('reports.view') ? ['cijfers', 'Cijfers'] : null, can('phone.view') ? ['telefonie', 'Telefonie'] : null, can('audit.view') ? ['logboek', 'Logboek'] : null] },
+    { id: 'leiding', label: 'Teamleiding', items: [S.me && (S.me.isOwner || can('reports.view')) ? ['dashboard', 'Dashboard'] : null, can('team.board') ? ['team', 'Teambord'] : null, can('reports.view') ? ['cijfers', 'Cijfers'] : null, can('phone.view') ? ['telefonie', 'Telefonie'] : null, can('audit.view') ? ['logboek', 'Logboek'] : null] },
     { id: 'beheer', label: 'Beheer', items: [can('members.manage') || can('roles.manage') ? ['mensen', 'Mensen'] : null,
       can('members.manage') || can('roles.manage') ? ['rollen', 'Rollen & rechten'] : null, ['instellingen', 'Instellingen']] }
   ];
@@ -1686,14 +1690,16 @@ function viewRoster() {
     if (R.canSeeWorked && !mineView && !dayView) h += '<label class="check compare-toggle"><input type="checkbox" data-in="rocompare"' + (S.rosterCompare ? ' checked' : '') + '> Vergelijk met gewerkt</label>';
   }
   h += (mineView ? '' : locFilterSelect()) + '</div>';
-  if (mineView) return h + rosterMine(R);
+  const swM = typeof swapOfferModal === 'function' ? (S.swOffer ? modal(swapOfferModal(R), 'sw-offer-x') : '') + (S.swReview && R.canPlan ? modal(swapReviewModal(R), 'sw-review-x') : '') : '';
+  if (R.canPlan && !mineView && typeof swapPendingBar === 'function') h += swapPendingBar();
+  if (mineView) return h + rosterMine(R) + swM;
   if (!month && !R.canPlan) h += publishBanner(R);
   const RV = roView(R);
   h += rosterPanels(RV);
   if (S.shiftEdit) h += modal(shiftForm(R), 'sh-cancel');
   if (!R.people.length) return h + '<div class="empty">Nog geen actieve medewerkers.</div>';
-  if (dayView) return h + deptBar(RV) + rosterDayView(RV) + (R.canPlan && S.tplModal ? modal(templatesModal(R), 'tpl-x') : '');
-  return h + (month ? '' : rosterToolbar(RV)) + (month ? rosterMonth(R) : rosterWeek(RV)) + (month ? '' : rosterLegend(R)) + (R.canPlan && S.tplModal ? modal(templatesModal(R), 'tpl-x') : '');
+  if (dayView) return h + deptBar(RV) + rosterDayView(RV) + (R.canPlan && S.tplModal ? modal(templatesModal(R), 'tpl-x') : '') + swM;
+  return h + (month ? '' : rosterToolbar(RV)) + (month ? rosterMonth(R) : rosterWeek(RV)) + (month ? '' : rosterLegend(R)) + (R.canPlan && S.tplModal ? modal(templatesModal(R), 'tpl-x') : '') + swM;
 }
 function tplOf(R, s) {
   const T = R.templates || []; const sameT = t => t.start === s.start && t.end === s.end;
@@ -1717,10 +1723,11 @@ function rosterMine(R) {
     const names = [...new Set(others.map(s => s.memberName.split(' ')[0]))];
     return '<div class="my-day' + (d === today() ? ' today' : '') + (d < today() ? ' past' : '') + (list.length ? ' has' : '') + '"><div class="my-day-date"><strong>' + esc(DAYS_FULL[pd(d).getDay()]) + '</strong><span>' + pd(d).getDate() + ' ' + esc(MONTHS[pd(d).getMonth()]) + '</span>' + (d === today() ? '<span class="badge green">Vandaag</span>' : '') + '</div>' +
       '<div class="my-day-main">' + (ab ? absChip(ab) : '') +
-      (list.length ? list.map(s => { const tp = tplOf(R, s); return '<div class="my-shift' + (tp ? ' t' + tp.i : '') + '"><strong>' + esc(s.start + ' – ' + s.end) + '</strong><span>' + fmtHM(spanMin(s.start, s.end)) + ' uur' + (tp ? ' · ' + esc(tp.t.name) : '') + (s.note ? ' · ' + esc(s.note) : '') + '</span></div>'; }).join('')
+      (list.length ? list.map(s => { const tp = tplOf(R, s); return '<div class="my-shift' + (tp ? ' t' + tp.i : '') + '"><strong>' + esc(s.start + ' – ' + s.end) + '</strong><span>' + fmtHM(spanMin(s.start, s.end)) + ' uur' + (tp ? ' · ' + esc(tp.t.name) : '') + (s.note ? ' · ' + esc(s.note) : '') + '</span>' + (typeof swapBtn === 'function' ? swapBtn(s) : '') + '</div>'; }).join('')
         : ab ? '' : '<span class="muted">Vrij</span>') +
       (list.length && names.length ? '<div class="small muted">Ook aan het werk: ' + esc(names.slice(0, 6).join(', ')) + (names.length > 6 ? ' en ' + (names.length - 6) + ' anderen' : '') + '</div>' : '') + '</div></div>';
   }).join('') + '</div>';
+  if (typeof swapsSection === 'function') h += swapsSection(R);
   return h;
 }
 function weekPub(R, wk) { return (R.published || []).find(x => x.week === wk); }
@@ -2936,6 +2943,7 @@ $app.addEventListener('click', async e => {
         const n = S.notif.items.find(x => same(x.id, raw)); if (!n || !n.link) return;
         if (n.link.startsWith('instellingen|factuur|')) { S.setTab = 'abonnement'; S.invFocus = Number(n.link.split('|')[2]); go('instellingen'); }
         else if (n.link.startsWith('rooster|')) { S.rosterView = 'week'; S.rosterWeek = n.link.split('|')[1]; go('rooster'); }
+        else if (n.link === 'ruilen') { if (can('hours.plan')) { S.rosterView = 'week'; S.swReview = true; } else S.rosterView = 'mijn'; go('rooster'); }
         else if (n.link === 'verlof') go('verlof');
         return;
       }
