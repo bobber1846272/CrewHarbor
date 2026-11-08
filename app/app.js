@@ -477,12 +477,14 @@ function viewRegister() {
   return '<div class="login">' + brandPanel('Begin vandaag met CrewHarbor.', 'In één minuut staat je bedrijf klaar. Daarna voeg je je team toe.') + '<section class="login-main">' + form + '</section></div>';
 }
 
+// eigenaar: eigen uren, beschikbaarheid en verlof staan standaard uit (aan te zetten bij Instellingen → Mijn account)
+function selfOn(k) { return !S.me || !S.me.isOwner || !!(S.me.uiPrefs || {})[k]; }
 // ----- navigatie (groepen die je kunt in- en uitklappen) -----
 function navGroups() {
   const G = [
     { id: 'werk', label: 'Werk', items: [['meldingen', 'Meldingen', S.notif ? S.notif.unread : 0], ['terugbellen', 'Terugbellen', S.counts.mine], ['taken', 'Taken', S.counts.tasks]] },
-    { id: 'planning', label: 'Planning', items: [['rooster', 'Rooster'], ['beschikbaar', 'Beschikbaarheid'], ['verlof', 'Verlof & ziek', S.absPending]] },
-    { id: 'uren', label: 'Uren', items: [['uren', 'Mijn uren', 0, S.running ? 'live' : ''],
+    { id: 'planning', label: 'Planning', items: [['rooster', 'Rooster'], selfOn('selfAvail') ? ['beschikbaar', 'Beschikbaarheid'] : null, selfOn('selfLeave') || can('hours.approve') ? ['verlof', selfOn('selfLeave') ? 'Verlof & ziek' : 'Verlof', S.absPending] : null] },
+    { id: 'uren', label: 'Uren', items: [selfOn('selfHours') ? ['uren', 'Mijn uren', 0, S.running ? 'live' : ''] : null,
       can('hours.approve') ? ['goedkeuren', 'Goedkeuren', S.pendingCount] : null, can('hours.view_all') ? ['urenoverzicht', 'Urenoverzicht'] : null, can('hours.kiosk') ? ['prikklok', 'Prikklok'] : null] },
     { id: 'kennis', label: 'Kennis', items: [['kennisbank', 'Kennisbank'], ['documenten', 'Documenten']] },
     { id: 'leiding', label: 'Teamleiding', items: [can('team.board') ? ['team', 'Teambord'] : null, can('reports.view') ? ['cijfers', 'Cijfers'] : null, can('phone.view') ? ['telefonie', 'Telefonie'] : null, can('audit.view') ? ['logboek', 'Logboek'] : null] },
@@ -535,7 +537,7 @@ function viewHome() {
     stat('Mijn open taken', S.counts.tasks) + stat('In de open pool', S.counts.pool, 'var(--blue)') + '</div>';
   const row = (href, title, badge) => '<a class="mini-row" href="' + href + '"><span>' + esc(title) + '</span>' + badge + '</a>';
   html += '<div class="cards">';
-  html += homeHoursCard();
+  if (selfOn('selfHours')) html += homeHoursCard();
   html += '<section class="card"><h2>Eerst terugbellen</h2>' + (S.myCbs.length ? '<div class="mini-list">' +
     S.myCbs.slice(0, 5).map(c => row('#/terugbellen', cbTitle(c), dueBadge(c.dueAt, 'bel'))).join('') + '</div>' : '<p class="muted small">Geen open verzoeken. Lekker bezig!</p>') +
     '<p style="margin:12px 0 0"><a class="more" href="#/terugbellen">Alle verzoeken</a></p></section>';
@@ -1117,7 +1119,7 @@ function viewSettings() {
   const grid = '<div class="cards set-cards">';
   let h = '<header class="page-head"><div><h1>Instellingen</h1><p>' + (tabs.length > 1 ? 'Kies hieronder wat je wilt regelen.' : 'Je eigen account.') + '</p></div></header>' + codeAlert() + linkAlert();
   if (tabs.length > 1) h += '<div class="set-tabs" role="tablist">' + tabs.map(t => '<button role="tab" class="' + (t[0] === tab ? 'on' : '') + '" aria-selected="' + (t[0] === tab) + '" data-act="set-tab" data-v="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
-  if (tab === 'account') return h + grid + accountCard() + mailPrefsCard() + '</div>';
+  if (tab === 'account') return h + grid + accountCard() + (typeof selfPrefsCard === 'function' ? selfPrefsCard() : '') + mailPrefsCard() + '</div>';
   if (tab === 'bedrijf') return h + grid + companyCard() + locationsCard() + (hasFeature('phone') ? viewPhoneLink() : '') + '</div>';
   if (tab === 'uren') return h + grid + breakRulesCard() + leaveRulesCard() + payrollSettingsCard() + '</div>';
   if (tab === 'beveiliging') return h + grid + securityCards() + (S.me.isOwner ? pinWindowCard() : '') + '</div>';
@@ -2114,14 +2116,16 @@ function absenceForm() {
 function viewAbsence() {
   const A = S.abs; if (!A) return '';
   const sick = A.mine.find(a => a.kind === 'ziek' && a.status === 'goedgekeurd' && !a.to);
-  let h = '<header class="page-head"><div><h1>Verlof &amp; ziek</h1><p>Vraag verlof aan, meld je ziek en zie wie er de komende tijd weg is.</p></div>' +
-    '<div class="actions">' + (sick ? '' : '<button class="btn" data-act="abs-new" data-v="ziek">Ziek melden</button>') + '<button class="btn primary" data-act="abs-new" data-v="verlof">' + ICON.plus + 'Verlof aanvragen</button></div></header>';
-  if (sick) {
+  const own = selfOn('selfLeave');
+  let h = own ? '<header class="page-head"><div><h1>Verlof &amp; ziek</h1><p>Vraag verlof aan, meld je ziek en zie wie er de komende tijd weg is.</p></div>' +
+    '<div class="actions">' + (sick ? '' : '<button class="btn" data-act="abs-new" data-v="ziek">Ziek melden</button>') + '<button class="btn primary" data-act="abs-new" data-v="verlof">' + ICON.plus + 'Verlof aanvragen</button></div></header>'
+    : '<header class="page-head"><div><h1>Verlof</h1><p>Beoordeel aanvragen van je team en zie wie er de komende tijd weg is.</p></div></header>';
+  if (sick && own) {
     h += '<section class="card sick-card"><div><strong>Je bent ziek gemeld sinds ' + esc(dayLong(sick.from).toLowerCase()) + '</strong><p class="small muted" style="margin:2px 0 0">Beterschap! Meld je beter zodra je weer kunt werken.</p></div>' +
       '<div class="row" style="align-items:flex-end"><div class="field"><label for="beter-date">Weer aan het werk op</label><input class="input" type="date" id="beter-date" value="' + today() + '" min="' + esc(sick.from) + '"></div>' +
       '<button class="btn primary" data-act="abs-beter" data-id="' + sick.id + '">Beter melden</button></div></section>';
   }
-  h += leaveSaldoCard();
+  if (own) h += leaveSaldoCard();
   if (S.absForm) h += absenceForm();
   if (A.pending.length) {
     h += '<section class="stack" style="gap:10px;max-width:none"><div class="section-title"><h2>Aanvragen om te beoordelen</h2><span class="badge orange">' + A.pending.length + '</span></div>' +
@@ -2138,6 +2142,7 @@ function viewAbsence() {
       '<section class="card"><h2>Vandaag afwezig</h2>' + (now.length ? '<div class="mini-list">' + now.map(a => '<div class="mini-row"><span>' + esc(a.memberName) + '</span>' + absChip(a) + '</div>').join('') + '</div>' : '<p class="small muted" style="margin:0">Iedereen is er.</p>') + '</section>' +
       '<section class="card"><h2>Komende 2 maanden</h2>' + (soon.length ? '<div class="mini-list">' + soon.map(a => '<div class="mini-row"><span>' + esc(a.memberName) + ' <span class="small muted">· ' + esc(spanLabel(a)) + '</span></span>' + absChip(a) + '</div>').join('') + '</div>' : '<p class="small muted" style="margin:0">Geen verlof gepland.</p>') + '</section></div>';
   }
+  if (!own) return h + (A.pending.length || A.team ? '' : '<div class="empty">Er zijn nu geen aanvragen.</div>');
   h += '<section class="stack" style="gap:8px;max-width:none"><div class="section-title"><h2>Mijn verlof en ziekte</h2></div>';
   if (!A.mine.length) h += '<div class="empty">Nog niets aangevraagd of gemeld.</div>';
   else h += '<div class="doc-list">' + A.mine.map(a => {

@@ -216,6 +216,14 @@ async function saveMemberBiz(id, isNew) {
 // ======================================================================
 // Meldingen per mail (eigen voorkeuren)
 // ======================================================================
+// eigenaar: functies voor jezelf (staan standaard uit; je bent je eigen baas)
+function selfPrefsCard() {
+  if (!S.me || !S.me.isOwner) return '';
+  const P = S.me.uiPrefs || {};
+  const opts = [['selfHours', 'Mijn uren', 'Je eigen uren bijhouden en in- en uitklokken'], ['selfAvail', 'Beschikbaarheid', 'Doorgeven wanneer je zelf kunt werken'], ['selfLeave', 'Eigen verlof en ziek', 'Zelf verlof aanvragen en je ziek melden. Aanvragen van je team beoordelen kan altijd.']];
+  return '<section class="card stack" style="gap:12px"><h2>Voor jezelf</h2><p class="small muted" style="margin:0">Als eigenaar ben je je eigen baas. Deze onderdelen staan daarom uit. Zet ze aan als je ze toch wilt gebruiken.</p>' +
+    opts.map(o => '<label class="check"><input type="checkbox" data-biz="selfpref" data-k="' + o[0] + '"' + (P[o[0]] ? ' checked' : '') + '> <span><strong>' + o[1] + '</strong><br><span class="small muted">' + o[2] + '</span></span></label>').join('') + '</section>';
+}
 function mailPrefsCard() {
   const P = (S.me && S.me.mailPrefs) || {};
   const opts = [['rooster', 'Rooster', 'Nieuw rooster, en diensten die erbij komen, veranderen of vervallen'], ['verlof', 'Verlof en ziekte', 'Aanvragen, goedkeuringen en ziekmeldingen']];
@@ -653,6 +661,13 @@ document.getElementById('app').addEventListener('change', async e => {
     S.addonSel = [...cur]; render(); return;
   }
   if (el.dataset.biz === 'pyfmt') { S.payFmt = el.value; render(); return; }
+  if (el.dataset.biz === 'selfpref') {
+    try {
+      const v = await rpc('cd_ui_prefs_save', { p: { [el.dataset.k]: el.checked } });
+      S.me.uiPrefs = v; toast(el.checked ? 'Aangezet. Je vindt het weer in het menu.' : 'Uitgezet. Het staat niet meer in je menu.'); render();
+    } catch (err) { toast(err.message, true); el.checked = !el.checked; }
+    return;
+  }
   if (el.dataset.biz === 'mailpref') {
     try {
       const v = await rpc('cd_mail_prefs_save', { p: { [el.dataset.k]: el.checked } });

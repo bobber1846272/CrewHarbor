@@ -26,7 +26,7 @@ function viewMobile() {
   const views = { code: mCode, taken: mTasks, bellen: mCalls, uren: mHours, account: mAccount };
   return '<div class="m-app"><header class="m-top">' + LOGO(26) + '<span class="m-org">' + esc(S.org.name) + '</span></header>' +
     '<main class="m-main" id="m-main">' + (views[M.tab] || mCode)() + '</main>' +
-    '<nav class="m-tabs" aria-label="Menu">' + MTABS.map(t => '<button class="' + (M.tab === t[0] ? 'on' : '') + '" data-mact="tab" data-v="' + t[0] + '"' + (M.tab === t[0] ? ' aria-current="page"' : '') + '>' +
+    '<nav class="m-tabs" aria-label="Menu">' + MTABS.filter(t => t[0] !== 'uren' || selfOn('selfHours')).map(t => '<button class="' + (M.tab === t[0] ? 'on' : '') + '" data-mact="tab" data-v="' + t[0] + '"' + (M.tab === t[0] ? ' aria-current="page"' : '') + '>' +
       t[2] + '<span>' + t[1] + '</span>' + (badges[t[0]] ? '<i>' + badges[t[0]] + '</i>' : '') + '</button>').join('') + '</nav></div>';
 }
 
