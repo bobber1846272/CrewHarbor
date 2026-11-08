@@ -1097,6 +1097,124 @@ function viewSettings() {
   if (tab === 'abonnement') return h + grid + billingCard() + '</div>';
   return h;
 }
+// ---------- verlofsaldo ----------
+const COVER = { onbetaald: ['Onbetaald verlof', 'De uren die tekort zijn worden niet doorbetaald.'], voorschot: ['Voorschot', 'Het saldo mag tijdelijk negatief worden en wordt later ingehaald.'],
+  kopen: ['Verlof kopen', 'De uren worden ingehouden op het salaris en staan in de salarisexport.'], overuren: ['Overuren gebruiken', 'Tijd voor tijd: de uren gaan van het overurensaldo af.'] };
+const hrsTxt = v => { const n = Math.round(Number(v || 0) * 100) / 100; return String(n).replace('.', ',') + ' uur'; };
+function leaveHoursField(E, n) {
+  const L = S.abs && S.abs.leave; const self = !E.memberId;
+  const dayH = self && L ? Number(L.dayHours) : 8;
+  const def = Math.round(n * dayH * 100) / 100;
+  const hrs = E.hours !== undefined && E.hours !== '' ? Number(String(E.hours).replace(',', '.')) : def;
+  let h = '<div class="fields2" style="max-width:520px;align-items:end"><div class="field"><label for="abs-hours">Aantal uur</label><input class="input" id="abs-hours" data-abs="hours" inputmode="decimal" value="' + esc(E.hours !== undefined ? E.hours : '') + '" placeholder="' + esc(String(def).replace('.', ',')) + '"></div>' +
+    '<p class="small muted" style="margin:0 0 12px">' + n + (n === 1 ? ' werkdag' : ' werkdagen') + (self ? ' × ' + hrsTxt(dayH) : '') + '. Pas het aan voor bijvoorbeeld een halve dag.</p></div>';
+  if (self && E.kind === 'verlof' && L) {
+    const y = (E.from || today()).slice(0, 4); const st = L.status && String(L.status.year) === y ? L.status : L.next && String(L.next.year) === y ? L.next : null;
+    if (st && st.tracked) {
+      const left = Number(st.left) - Number(st.pending || 0);
+      h += hrs > left
+        ? '<div class="alert warn">Je hebt in ' + y + ' nog ' + hrsTxt(Math.max(left, 0)) + ' verlof over' + (st.pending ? ' (na je andere aanvragen)' : '') + '. Je komt <strong>&nbsp;' + hrsTxt(hrs - Math.max(left, 0)) + '&nbsp;</strong> tekort. Je leidinggevende kiest hoe dat wordt opgelost.</div>'
+        : '<p class="small" style="margin:0">Na deze aanvraag heb je in ' + y + ' nog <strong>' + hrsTxt(left - hrs) + '</strong> verlof over.</p>';
+    }
+  }
+  return h;
+}
+function leaveSaldoCard() {
+  const L = S.abs && S.abs.leave; if (!L || !L.status || !L.status.tracked) return '';
+  const st = L.status; const pct = st.entitled > 0 ? Math.max(0, Math.min(100, st.used / st.entitled * 100)) : 100;
+  return '<section class="card leave-card"><div><span class="small muted">Verlofsaldo ' + st.year + '</span><strong class="leave-big' + (st.left < 0 ? ' neg' : '') + '">' + hrsTxt(st.left) + '</strong><span class="small muted">over van ' + hrsTxt(st.entitled) + '</span></div>' +
+    '<div class="leave-bar"><span style="width:' + pct + '%"></span></div>' +
+    '<div class="small muted">' + hrsTxt(st.used) + ' opgenomen' + (st.pending ? ' · ' + hrsTxt(st.pending) + ' aangevraagd' : '') + (Number(st.tvt) ? ' · overuren: ' + hrsTxt(st.tvtLeft) + ' over' : '') + '</div></section>';
+}
+function leavePendingInfo(a) {
+  const b = a.balance; if (a.kind !== 'verlof' || !b || !b.tracked || a.hours == null) return '';
+  const avail = Math.max(Number(b.left), 0); const short = Number(a.hours) - avail;
+  const L = S.abs && S.abs.leave; const opts = Object.keys(COVER).filter(k => L && L.settings && L.settings[k]);
+  let h = '<div class="small" style="margin-top:4px">Saldo ' + b.year + ': <strong>' + hrsTxt(b.left) + '</strong> over · deze aanvraag: <strong>' + hrsTxt(a.hours) + '</strong>' + (Number(b.tvt) ? ' · overuren: ' + hrsTxt(b.tvtLeft) : '') + '</div>';
+  if (short > 0) {
+    h += '<div class="alert warn" style="margin-top:8px;flex-direction:column;align-items:stretch;gap:6px"><strong>Tekort: ' + hrsTxt(short) + '</strong>' +
+      (opts.length ? '<label class="small" for="cover-' + a.id + '">Hoe los je het tekort op?</label><select class="input" id="cover-' + a.id + '"><option value="">— Kies —</option>' +
+        opts.map(k => '<option value="' + k + '"' + (k === 'overuren' && Number(b.tvtLeft) < short ? ' disabled' : '') + '>' + COVER[k][0] + (k === 'voorschot' ? ' (max. ' + hrsTxt(L.settings.advanceMax) + ' negatief)' : '') + (k === 'overuren' ? ' (' + hrsTxt(b.tvtLeft) + ' beschikbaar)' : '') + '</option>').join('') + '</select>'
+        : '<span class="small">Er staan geen oplossingen aan bij Instellingen → Verlofregels. Wijs de aanvraag af of zet daar een optie aan.</span>') + '</div>';
+  }
+  return h;
+}
+function leaveAccountBox(u) {
+  if (!(S.me.isOwner || can('hours.leave_balance')) || u.contractType !== 'vast') return '';
+  const A = S.leaveAcc && same(S.leaveAcc.memberId, u.id) ? S.leaveAcc : null;
+  const y = S.leaveYear || Number(today().slice(0, 4));
+  if (!A && S.leaveLoading !== u.id) { S.leaveLoading = u.id; loadLeaveAcc(u.id).then(() => { S.leaveLoading = null; if (S.leaveAcc && same(S.mSel, u.id)) render(); }); }
+  if (!A) return '<fieldset class="box" style="margin:0"><legend class="legend" style="padding:0 4px">Verlofsaldo</legend><p class="small muted" style="margin:0">Laden…</p></fieldset>';
+  const d = A.data;
+  return '<fieldset class="box" style="margin:0"><legend class="legend" style="padding:0 4px">Verlofsaldo</legend>' +
+    '<div class="seg"><button class="' + (y === Number(today().slice(0, 4)) ? 'on' : '') + '" data-act="la-year" data-id="' + u.id + '" data-v="' + today().slice(0, 4) + '">' + today().slice(0, 4) + '</button><button class="' + (y === Number(today().slice(0, 4)) + 1 ? 'on' : '') + '" data-act="la-year" data-id="' + u.id + '" data-v="' + (Number(today().slice(0, 4)) + 1) + '">' + (Number(today().slice(0, 4)) + 1) + '</button></div>' +
+    '<div class="fields2"><div class="field"><label for="la-leave">Verlofuren in ' + y + '</label><input class="input" id="la-leave" inputmode="decimal" placeholder="Bijv. 160" value="' + (d.tracked ? esc(String(d.entitled).replace('.', ',')) : '') + '"></div>' +
+    '<div class="field"><label for="la-tvt">Overuren (tijd voor tijd)</label><input class="input" id="la-tvt" inputmode="decimal" placeholder="0" value="' + (d.tracked && Number(d.tvt) ? esc(String(d.tvt).replace('.', ',')) : '') + '"></div></div>' +
+    (d.tracked ? '<p class="small muted" style="margin:0">Opgenomen: ' + hrsTxt(d.used) + ' · over: <strong>' + hrsTxt(d.left) + '</strong>' + (d.pending ? ' · aangevraagd: ' + hrsTxt(d.pending) : '') + (Number(d.tvt) ? ' · overuren over: ' + hrsTxt(d.tvtLeft) : '') + '</p>' : '<p class="small muted" style="margin:0">Nog geen saldo voor ' + y + '. Leeg laten = geen saldo bijhouden.</p>') +
+    '<div class="row"><button class="btn small" data-act="la-save" data-id="' + u.id + '">Saldo opslaan</button></div></fieldset>';
+}
+async function loadLeaveAcc(id) {
+  const y = S.leaveYear || Number(today().slice(0, 4));
+  try { S.leaveAcc = { memberId: id, data: await rpc('cd_leave_account', { p_member: id, p_year: y }) }; } catch (e) { S.leaveAcc = null; }
+}
+function leaveRulesCard() {
+  const L = (S.org.settings || {}).leave || {}; const v = k => L[k] === undefined ? true : !!L[k];
+  return '<section class="card stack" style="gap:12px"><h2>Verlofregels</h2><p class="small muted" style="margin:0">Wat mag er gebeuren als iemand meer verlof aanvraagt dan er op zijn saldo staat? Wie het verlof goedkeurt, kiest dan uit de opties die hier aan staan.</p>' +
+    Object.keys(COVER).map(k => '<label class="check"><input type="checkbox" id="lr-' + k + '"' + (v(k) ? ' checked' : '') + '> <span><strong>' + COVER[k][0] + '</strong><br><span class="small muted">' + COVER[k][1] + '</span></span></label>').join('') +
+    '<div class="field" style="max-width:240px"><label for="lr-max">Voorschot: saldo mag maximaal zoveel uur negatief</label><input class="input" id="lr-max" inputmode="decimal" value="' + esc(String(L.advanceMax === undefined ? 40 : L.advanceMax)) + '"></div>' +
+    '<div><button class="btn primary" data-act="lr-save">Opslaan</button></div></section>';
+}
+// ---------- status van collega's (rechterbalk) ----------
+const PRES = { beschikbaar: ['Beschikbaar', '#23A55A'], niet_storen: ['Niet storen', '#F23F43'], afwezig: ['Afwezig', '#F0B232'], lunch: ['Lunch', '#3B82F6'] };
+const PRES_ORDER = ['beschikbaar', 'lunch', 'afwezig', 'niet_storen'];
+async function loadPresence() {
+  if (!S.me || (typeof isMobileApp === 'function' && isMobileApp())) return;
+  try { S.presence = await rpc('cd_presence'); } catch (e) { S.presence = null; }
+}
+function presRow(p, inside) {
+  const st = PRES[p.status] || PRES.beschikbaar;
+  const col = inside ? st[1] : '#9AA4B2';
+  const since = p.since ? (p.sinceDate ? dayShort(p.sinceDate) + ' ' : '') + p.since : '';
+  return '<li class="pres-row' + (inside ? '' : ' off') + '"><span class="pres-av">' + avatar(p.id, p.name) + '<i style="background:' + col + '" aria-hidden="true"></i></span>' +
+    '<span class="pres-txt"><strong>' + esc(p.name) + (same(p.id, S.me.id) ? ' <span class="muted">(jij)</span>' : '') + '</strong>' +
+    '<span>' + (inside ? esc(st[0]) + (since ? ' · in sinds ' + esc(since) : '') : 'Niet ingeklokt') + '</span></span></li>';
+}
+function viewPresence() {
+  const P = S.presence; if (!P) return '';
+  const open = !!S.presOpen;
+  const inside = P.people.filter(p => p.in).sort((a, b) => PRES_ORDER.indexOf(a.status) - PRES_ORDER.indexOf(b.status) || a.name.localeCompare(b.name));
+  const out = P.people.filter(p => !p.in);
+  const me = PRES[P.me] || PRES.beschikbaar;
+  let h = '<aside class="presence' + (open ? ' open' : '') + '" id="presence" aria-label="Status van collega\'s">' +
+    '<button class="pres-fab" data-act="pres-toggle" aria-expanded="' + open + '" title="Collega\'s">' + NI.mensen + '<b>' + inside.length + '</b></button>' +
+    '<div class="pres-panel"><div class="pres-me"><span class="pres-av">' + avatar(S.me.id, S.me.name) + '<i style="background:' + me[1] + '"></i></span>' +
+    '<div class="field" style="flex:1;min-width:0;gap:2px"><label for="pres-me" class="small muted">Jouw status</label><select class="input" id="pres-me">' +
+    PRES_ORDER.map(k => '<option value="' + k + '"' + (k === P.me ? ' selected' : '') + '>' + PRES[k][0] + '</option>').join('') + '</select></div>' +
+    '<button class="icon-btn pres-close" data-act="pres-toggle" aria-label="Sluiten">' + ICON.x + '</button></div>';
+  h += '<h3 class="pres-h">Ingeklokt — ' + inside.length + '</h3>' + (inside.length ? '<ul class="pres-list">' + inside.map(p => presRow(p, true)).join('') + '</ul>' : '<p class="small muted pres-empty">Nu is er niemand ingeklokt.</p>');
+  if (out.length) h += '<details class="pres-out"' + (S.presOutOpen ? ' open' : '') + '><summary class="pres-h" data-act="pres-out">Niet ingeklokt — ' + out.length + '</summary><ul class="pres-list">' + out.map(p => presRow(p, false)).join('') + '</ul></details>';
+  return h + '</div></aside>';
+}
+// ---------- danger zone: eigen pincode bij de prikklok ----------
+function pinD(v) { const x = new Date(v + 'T12:00'); return x.getDate() + ' ' + MONTHS[x.getMonth()]; }
+function pinDT(v) { const [d, t] = v.split('T'); const x = new Date(d + 'T12:00'); return x.getDate() + ' ' + MONTHS[x.getMonth()] + ' ' + t; }
+function pinWindowCard() {
+  const D = S.pinWin; if (!D) return '';
+  const P = S.pinNew || (S.pinNew = { mode: 'dagen', from: today(), to: today(), t1: '08:00', t2: '17:00' });
+  const active = D.windows.find(w => w.active);
+  let h = '<section class="card stack danger-zone" style="gap:14px;grid-column:1/-1"><div><span class="dz-tag">Danger zone</span><h2 style="margin-top:6px">Inklokken met eigen pincode</h2>' +
+    '<p class="small" style="margin:4px 0 0">Normaal klokt iedereen in met de wisselende code uit de CrewHarbor-app (8 cijfers, elke 20 seconden nieuw). Een eigen pincode is minder veilig: een collega kan hem afkijken en voor iemand anders inklokken. Zet dit alleen aan als het echt nodig is, bijvoorbeeld als de app een paar dagen niet werkt.</p></div>' +
+    (active ? '<div class="alert warn"><strong>Staat nu aan</strong>&nbsp;tot ' + esc(pinDT(active.to)) + '. Op de prikklok staat een melding.</div>' : '<p class="small muted" style="margin:0">Staat nu uit. ' + D.pins + ' ' + (D.pins === 1 ? 'medewerker heeft' : 'medewerkers hebben') + ' een eigen pincode ingesteld.</p>');
+  if (D.windows.length) h += '<div class="doc-list">' + D.windows.map(w => '<div class="doc"><div class="doc-main"><strong>' + esc(pinDT(w.from)) + ' tot ' + esc(pinDT(w.to)) + '</strong><span class="small muted">' + (w.active ? 'Nu actief' : 'Gepland') + (w.by ? ' · door ' + esc(w.by) : '') + '</span></div>' +
+    '<div class="doc-act"><button class="btn small danger" data-act="pinw-del" data-id="' + w.id + '">' + (w.active ? 'Nu uitzetten' : 'Weghalen') + '</button></div></div>').join('') + '</div>';
+  h += '<fieldset class="dz-form"><legend class="legend">Periode toevoegen</legend>' +
+    '<div class="seg" role="radiogroup"><button class="' + (P.mode === 'dagen' ? 'on' : '') + '" data-act="pinw-mode" data-v="dagen" role="radio" aria-checked="' + (P.mode === 'dagen') + '">Hele dagen</button><button class="' + (P.mode === 'tijd' ? 'on' : '') + '" data-act="pinw-mode" data-v="tijd" role="radio" aria-checked="' + (P.mode === 'tijd') + '">Eén dag, tussen tijden</button></div>' +
+    (P.mode === 'dagen'
+      ? '<div class="fields4"><div class="field"><label for="pw-from">Van</label><input class="input" type="date" id="pw-from" data-pw="from" min="' + today() + '" value="' + esc(P.from) + '"></div><div class="field"><label for="pw-to">Tot en met</label><input class="input" type="date" id="pw-to" data-pw="to" min="' + today() + '" value="' + esc(P.to) + '"></div></div>'
+      : '<div class="fields4"><div class="field"><label for="pw-from">Datum</label><input class="input" type="date" id="pw-from" data-pw="from" min="' + today() + '" value="' + esc(P.from) + '"></div><div class="field"><label for="pw-t1">Van</label><input class="input" type="time" id="pw-t1" data-pw="t1" value="' + esc(P.t1) + '"></div><div class="field"><label for="pw-t2">Tot</label><input class="input" type="time" id="pw-t2" data-pw="t2" value="' + esc(P.t2) + '"></div></div>') +
+    '<div><button class="btn danger" data-act="pinw-add">Eigen pincode toestaan</button></div></fieldset></section>';
+  return h;
+}
 const BREAK_DEFAULT = { auto: true, adult: [{ fromMin: 330, breakMin: 30 }, { fromMin: 600, breakMin: 45 }], minor: [{ fromMin: 270, breakMin: 30 }, { fromMin: 600, breakMin: 45 }] };
 function breakRules() { return Object.assign({}, BREAK_DEFAULT, (S.org.settings || {}).breakRules || {}); }
 function breakRulesCard() {
