@@ -1702,7 +1702,8 @@ function weekPub(R, wk) { return (R.published || []).find(x => x.week === wk); }
 function pubPill(R) {
   const pub = weekPub(R, R.weekStart);
   if (pub) return '<span class="pub-pill on" title="' + esc('Vastgezet' + (pub.byName ? ' door ' + pub.byName : '') + ' · ' + fmtDate(pub.at) + '. Iedereen ziet deze week; wijzigingen worden gemeld.') + '">✓ Verstuurd</span><button class="link-btn small" data-act="ro-unpublish">Terug naar concept</button>';
-  return '<span class="pub-pill" title="Alleen planners zien deze week">Concept</span><button class="btn small primary" data-act="ro-publish"' + (R.shifts.length ? '' : ' disabled') + ' title="Zet het rooster vast; iedereen met een dienst krijgt een melding">Versturen</button>';
+  return '<span class="pub-pill" title="Alleen planners zien deze week">Concept</span><button class="btn small primary" data-act="ro-publish"' + (R.shifts.length ? '' : ' disabled') + ' title="Zet het rooster vast; iedereen met een dienst krijgt een melding">Versturen</button>' +
+    (R.shifts.length ? '<button class="link-btn small danger-link" data-act="ro-concept-del" title="Alle diensten van dit concept verwijderen">Concept verwijderen</button>' : '');
 }
 function publishBanner(R) {
   const pub = weekPub(R, R.weekStart);
@@ -2819,6 +2820,18 @@ $app.addEventListener('click', async e => {
         if (!confirm('Week ' + weekNo(wk) + ' vastzetten? Iedereen met een dienst krijgt een melding en ziet het rooster.')) return;
         const d = await rpc('cd_roster_publish', { p_week: wk });
         toast('Rooster vastgezet. ' + d.notified + (d.notified === 1 ? ' medewerker' : ' medewerkers') + ' op de hoogte gebracht.'); break;
+      }
+      case 'ro-concept-del': {
+        const wk = S.roster.weekStart; const V = typeof roView === 'function' ? roView(rosterFiltered(S.roster)) : rosterFiltered(S.roster);
+        const list = (V.shifts || []).filter(x => x.date >= wk && x.date < addDays(wk, 7));
+        if (!list.length) { toast('Er staan geen diensten in dit concept.'); return; }
+        const dn = (S.roFilter || {}).dept && typeof deptOf === 'function' && deptOf(S.roFilter.dept);
+        if (!confirm('Concept van week ' + weekNo(wk) + ' verwijderen?\n\n' + list.length + (list.length === 1 ? ' dienst wordt' : ' diensten worden') + ' verwijderd' + (dn ? ' (alleen afdeling ' + dn.name + ')' : '') + '. Met Ctrl+Z zet je ze terug.')) return;
+        const specs = list.map(x => specOf(x)); const st = { ids: list.map(x => x.id) };
+        const n = await rpc('cd_roster_concept_delete', { p_week: wk, p_ids: st.ids });
+        roPush({ label: 'Concept verwijderd', undo: async () => { st.ids = []; for (const sp of specs) { try { st.ids.push((await roCreate(sp)).id); } catch (e) { /* */ } } },
+          redo: async () => { await rpc('cd_roster_concept_delete', { p_week: wk, p_ids: st.ids }); } });
+        toast(n + (n === 1 ? ' dienst' : ' diensten') + ' verwijderd · Ctrl+Z = terug'); break;
       }
       case 'ro-unpublish': if (!confirm('Deze week terugzetten naar concept? Medewerkers zien hun diensten dan niet meer tot je hem opnieuw vastzet.')) return;
         await rpc('cd_roster_unpublish', { p_week: S.roster.weekStart }); toast('Week staat weer op concept.'); break;

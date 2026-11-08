@@ -1128,3 +1128,6 @@ table.ro2 tr.ro-group th { text-align: left; background: #F2F6F7; padding: 8px 1
 .nd-tag { font-size: 12.5px; padding: 2px 10px; }
 .nd-foot { align-items: center; }
 @media (max-width: 600px) { .needs-ed { padding: 18px; } .nd-row { min-width: 150px; } .nd-day { min-width: 62px; } .nd-in { width: 48px !important; } }
+
+.danger-link { color: #B3261E !important; }
+.danger-link:hover { text-decoration: underline; }
