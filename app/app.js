@@ -1169,7 +1169,7 @@ function leavePendingInfo(a) {
   return h;
 }
 function leaveAccountBox(u) {
-  if (!(S.me.isOwner || can('hours.leave_balance')) || u.contractType !== 'vast') return '';
+  if (!(S.me.isOwner || can('hours.leave_balance'))) return '';
   const A = S.leaveAcc && same(S.leaveAcc.memberId, u.id) ? S.leaveAcc : null;
   const y = S.leaveYear || Number(today().slice(0, 4));
   if (!A && S.leaveLoading !== u.id) { S.leaveLoading = u.id; loadLeaveAcc(u.id).then(() => { S.leaveLoading = null; if (S.leaveAcc && same(S.mSel, u.id)) render(); }); }
@@ -1177,8 +1177,9 @@ function leaveAccountBox(u) {
   const d = A.data;
   return '<fieldset class="box" style="margin:0"><legend class="legend" style="padding:0 4px">Verlofsaldo</legend>' +
     '<div class="seg"><button class="' + (y === Number(today().slice(0, 4)) ? 'on' : '') + '" data-act="la-year" data-id="' + u.id + '" data-v="' + today().slice(0, 4) + '">' + today().slice(0, 4) + '</button><button class="' + (y === Number(today().slice(0, 4)) + 1 ? 'on' : '') + '" data-act="la-year" data-id="' + u.id + '" data-v="' + (Number(today().slice(0, 4)) + 1) + '">' + (Number(today().slice(0, 4)) + 1) + '</button></div>' +
-    '<div class="fields2"><div class="field"><label for="la-leave">Verlofuren in ' + y + '</label><input class="input" id="la-leave" inputmode="decimal" placeholder="Bijv. 160" value="' + (d.tracked ? esc(String(d.entitled).replace('.', ',')) : '') + '"></div>' +
-    '<div class="field"><label for="la-tvt">Overuren (tijd voor tijd)</label><input class="input" id="la-tvt" inputmode="decimal" placeholder="0" value="' + (d.tracked && Number(d.tvt) ? esc(String(d.tvt).replace('.', ',')) : '') + '"></div></div>' +
+    '<div class="fields2"><div class="field"><label for="la-leave">Verlofuren in ' + y + '</label><input class="input" id="la-leave" inputmode="decimal" placeholder="Bijv. 160" value="' + (d.tracked && !d.auto ? esc(String(d.entitled).replace('.', ',')) : '') + '"></div>' +
+    '<div class="field"><label for="la-tvt">Overuren (tijd voor tijd)</label><input class="input" id="la-tvt" inputmode="decimal" placeholder="0" value="' + (d.tracked && !d.auto && Number(d.tvt) ? esc(String(d.tvt).replace('.', ',')) : '') + '"></div></div>' +
+    (d.auto ? '<p class="small" style="margin:0;color:var(--accent)">' + (d.auto.basis === 'vast' ? 'Automatisch: ' + String(d.auto.weeks).replace('.', ',') + ' × ' + hrsTxt(d.auto.weekHours) + ' per week = <strong>' + hrsTxt(d.auto.entitled) + '</strong>' + (d.auto.partial ? ' (naar rato, gaat uit dienst)' : '') : 'Automatisch, flex: ' + hrsTxt(d.auto.worked) + ' gewerkt × ' + String(d.auto.weeks).replace('.', ',') + '/52 = <strong>' + hrsTxt(d.auto.entitled) + '</strong> opgebouwd') + '. Vul zelf een getal in om dit te overschrijven.</p>' : '') +
     (d.tracked ? '<p class="small muted" style="margin:0">Opgenomen: ' + hrsTxt(d.used) + ' · over: <strong>' + hrsTxt(d.left) + '</strong>' + (d.pending ? ' · aangevraagd: ' + hrsTxt(d.pending) : '') + (Number(d.tvt) ? ' · overuren over: ' + hrsTxt(d.tvtLeft) : '') + '</p>' : '<p class="small muted" style="margin:0">Nog geen saldo voor ' + y + '. Leeg laten = geen saldo bijhouden.</p>') +
     '<div class="row"><button class="btn small" data-act="la-save" data-id="' + u.id + '">Saldo opslaan</button></div></fieldset>';
 }
@@ -1188,7 +1189,16 @@ async function loadLeaveAcc(id) {
 }
 function leaveRulesCard() {
   const L = (S.org.settings || {}).leave || {}; const v = k => L[k] === undefined ? true : !!L[k];
-  return '<section class="card stack" style="gap:12px"><h2>Verlofregels</h2><p class="small muted" style="margin:0">Wat mag er gebeuren als iemand meer verlof aanvraagt dan er op zijn saldo staat? Wie het verlof goedkeurt, kiest dan uit de opties die hier aan staan.</p>' +
+  const auto = L.auto === undefined ? true : !!L.auto, wk = Number(L.weeks) || 4;
+  const fmtNum = n => String(Math.round(n * 100) / 100).replace('.', ',');
+  const ex = h => '<tr><td>' + h + ' uur per week</td><td><strong>' + fmtNum(wk * h) + ' uur</strong></td><td class="muted">' + fmtNum(wk * h / 8) + ' dagen</td></tr>';
+  return '<section class="card stack" style="gap:12px"><h2>Standaard verlof</h2><p class="small muted" style="margin:0">Het verlofsaldo wordt automatisch berekend uit de contracturen. Wettelijk minimum in Nederland: <strong>4 × de uren per week</strong>. Een eigen saldo bij Mensen gaat altijd voor.</p>' +
+    '<label class="check"><input type="checkbox" id="lr-auto"' + (auto ? ' checked' : '') + '> <span><strong>Verlof automatisch berekenen</strong></span></label>' +
+    '<div class="field" style="max-width:300px"><label for="lr-weeks">Weken verlof per jaar</label><select class="input" id="lr-weeks">' + [4, 4.5, 5, 5.5, 6].map(n => '<option value="' + n + '"' + (n === wk ? ' selected' : '') + '>' + String(n).replace('.', ',') + ' weken' + (n === 4 ? ' (wettelijk minimum)' : ' (' + String(n * 5).replace('.', ',') + ' dagen bij fulltime)') + '</option>').join('') + '</select></div>' +
+    '<table class="lv-table"><thead><tr><th>Contract</th><th>Verlof per jaar</th><th>In dagen van 8 uur</th></tr></thead><tbody>' + ex(40) + ex(36) + ex(32) + ex(24) + '</tbody></table>' +
+    '<p class="small muted" style="margin:0">Anders: uren per week × ' + String(wk).replace('.', ',') + '. Flex en 0-uren: per gewerkt uur ' + String((wk / 52).toFixed(4)).replace('.', ',') + ' uur verlof (' + String(wk).replace('.', ',') + ' weken ÷ 52), op basis van goedgekeurde uren.</p>' +
+    '<div><button class="btn primary" data-act="lr-save">Opslaan</button></div></section>' +
+    '<section class="card stack" style="gap:12px"><h2>Verlofregels</h2><p class="small muted" style="margin:0">Wat mag er gebeuren als iemand meer verlof aanvraagt dan er op zijn saldo staat? Wie het verlof goedkeurt, kiest dan uit de opties die hier aan staan.</p>' +
     Object.keys(COVER).map(k => '<label class="check"><input type="checkbox" id="lr-' + k + '"' + (v(k) ? ' checked' : '') + '> <span><strong>' + COVER[k][0] + '</strong><br><span class="small muted">' + COVER[k][1] + '</span></span></label>').join('') +
     '<div class="field" style="max-width:240px"><label for="lr-max">Voorschot: saldo mag maximaal zoveel uur negatief</label><input class="input" id="lr-max" inputmode="decimal" value="' + esc(String(L.advanceMax === undefined ? 40 : L.advanceMax)) + '"></div>' +
     '<div><button class="btn primary" data-act="lr-save">Opslaan</button></div></section>';
@@ -3094,6 +3104,7 @@ $app.addEventListener('click', async e => {
       case 'lr-save': {
         const p = Object.fromEntries(Object.keys(COVER).map(k => [k, document.getElementById('lr-' + k).checked]));
         p.advanceMax = Number(String(document.getElementById('lr-max').value).replace(',', '.'));
+        p.auto = document.getElementById('lr-auto').checked; p.weeks = Number(document.getElementById('lr-weeks').value) || 4;
         el.disabled = true; const v = await rpc('cd_leave_settings_save', { p });
         S.org.settings = Object.assign({}, S.org.settings, { leave: v }); render(); toast('Verlofregels opgeslagen.'); return;
       }
