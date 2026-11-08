@@ -1589,10 +1589,9 @@ function shiftWarnings(R, E) {
 function viewRoster() {
   const R = rosterFiltered(S.roster); if (!R) return '';
   const view = S.rosterView || (R.canPlan ? 'week' : 'mijn');
-  const month = view === 'maand', mineView = view === 'mijn';
-  let h = '<header class="page-head"><div><h1>Rooster</h1><p>' + (mineView ? 'Jouw diensten van deze week.' : R.canPlan && !month ? 'Klik op <strong>+</strong> om iemand in te plannen. Klik op een dienst om hem te wijzigen.' : 'Wie wanneer werkt.') + '</p></div>' +
-    '<div class="actions">' + (R.canPlan && view === 'week' ? '<button class="btn" data-act="ro-copy">Vorige week kopiëren</button>' : '') + '</div></header>';
-  h += '<div class="roster-bar"><div class="seg" role="group" aria-label="Weergave">' + [['mijn', 'Mijn week'], ['week', 'Iedereen'], ['maand', 'Maand']].map(v =>
+  const month = view === 'maand', mineView = view === 'mijn', dayView = view === 'dag';
+  let h = '<header class="page-head"><div><h1>Rooster</h1><p>' + (mineView ? 'Jouw diensten van deze week.' : R.canPlan && !month ? 'Klik op <strong>+</strong> of sleep een vaste dienst naar een vakje. Sleep een dienst om hem te verplaatsen (met Ctrl ingedrukt: kopiëren).' : 'Wie wanneer werkt.') + '</p></div></header>';
+  h += '<div class="roster-bar"><div class="seg" role="group" aria-label="Weergave">' + [['mijn', 'Mijn week'], ['week', 'Iedereen'], ['dag', 'Dag'], ['maand', 'Maand']].map(v =>
     '<button data-act="ro-view" data-v="' + v[0] + '" class="' + (view === v[0] ? 'on' : '') + '" aria-pressed="' + (view === v[0]) + '">' + v[1] + '</button>').join('') + '</div>';
   if (month) {
     const cur = monthStart(today());
@@ -1602,15 +1601,17 @@ function viewRoster() {
     h += '<label class="sr-only" for="ro-who">Toon</label><select class="input" id="ro-who" data-in="rowho" style="max-width:240px"><option value="">Iedereen</option>' +
       R.people.map(p => '<option value="' + p.id + '"' + (same(S.rosterWho, p.id) ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select>';
   } else {
-    h += weekNav('ro-week', R.weekStart);
-    if (R.canSeeWorked && !mineView) h += '<label class="check compare-toggle"><input type="checkbox" data-in="rocompare"' + (S.rosterCompare ? ' checked' : '') + '> Vergelijk met gewerkt</label>';
+    if (!dayView) h += weekNav('ro-week', R.weekStart);
+    if (R.canSeeWorked && !mineView && !dayView) h += '<label class="check compare-toggle"><input type="checkbox" data-in="rocompare"' + (S.rosterCompare ? ' checked' : '') + '> Vergelijk met gewerkt</label>';
   }
   h += (mineView ? '' : locFilterSelect()) + '</div>';
   if (mineView) return h + rosterMine(R);
   if (!month) h += publishBanner(R);
+  h += rosterPanels(R);
   if (S.shiftEdit) h += shiftForm(R);
   if (!R.people.length) return h + '<div class="empty">Nog geen actieve medewerkers.</div>';
-  return h + (month ? rosterMonth(R) : rosterWeek(R)) + (month ? '' : rosterLegend(R)) + (R.canPlan ? templatesCard(R) : '');
+  if (dayView) return h + rosterDayView(R) + (R.canPlan ? templatesCard(R) : '');
+  return h + (month ? '' : rosterToolbar(R)) + (month ? rosterMonth(R) : rosterWeek(R)) + (month ? '' : rosterLegend(R)) + (R.canPlan ? templatesCard(R) : '');
 }
 function tplOf(R, s) { const i = (R.templates || []).findIndex(t => t.start === s.start && t.end === s.end); return i < 0 ? null : { i: i % 6, t: R.templates[i] }; }
 function rosterMine(R) {
@@ -1676,39 +1677,6 @@ function workedCell(R, p, d, shifts) {
   if (late > 5) notes.push(late + ' min te laat');
   if (!w.open && early > 5) notes.push(early + ' min eerder weg');
   return '<span class="wk ' + (notes.length ? 'warn' : 'ok') + '">' + esc(w.start + '–' + (w.end || 'nu')) + (w.minutes ? ' · ' + fmtHM(w.minutes) : '') + (notes.length ? '<small>' + esc(notes.join(', ')) + '</small>' : '') + '</span>';
-}
-function rosterWeek(R) {
-  const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
-  const dayCount = d => { if (!R.canPlan) return ''; let k = 0, n = 0;
-    R.people.forEach(p => { if (blockedAbs(R, p.id, d)) { n++; return; } const a = (R.availability || []).find(x => same(x.memberId, p.id) && x.date === d); if (a) { if (a.status === 'kan') k++; else n++; } });
-    return k || n ? '<div class="day-count"><span class="kan">' + k + ' kan</span><span class="niet">' + n + ' niet</span></div>' : ''; };
-  return '<div class="table-wrap"><table class="roster"><thead><tr><th>Medewerker</th>' + days.map(d => '<th class="' + (d === today() ? 'is-today' : '') + '">' + esc(dayShort(d)) + dayCount(d) + '</th>').join('') + '<th>Totaal</th></tr></thead><tbody>' +
-    R.people.map(p => {
-      const mine = R.shifts.filter(s => same(s.memberId, p.id));
-      const tot = mine.reduce((a, s) => a + spanMin(s.start, s.end), 0);
-      const ch = p.contractType === 'vast' ? Number(p.contractHours) * 60 : 0;
-      return '<tr class="' + (same(p.id, S.me.id) ? 'me' : '') + '"><td class="pad"><div class="ro-name">' + avatar(p.id, p.name, 'sm2') + '<div><strong>' + esc(p.name) + '</strong><div class="small muted">' + esc(contractShort(p)) + '</div></div></div>' + leaveTag(p.leavingOn, true) + '</td>' +
-        days.map(d => {
-          const gone = p.leavingOn && d > p.leavingOn;
-          const dayShifts = mine.filter(s => s.date === d);
-          const ab = absFor(R.absences, p.id, d);
-          const av = R.canPlan ? (R.availability || []).find(x => same(x.memberId, p.id) && x.date === d) : null;
-          return '<td class="rc' + (d === today() ? ' is-today' : '') + (gone ? ' gone' : '') + (ab && ab.status === 'goedgekeurd' ? ' absent' : '') + '">' +
-            (ab ? absChip(ab) : '') + (av && !dayShifts.length ? '<span class="av-tag ' + av.status + (av.source === 'vast' ? ' vast' : '') + '" title="' + esc((av.source === 'vast' ? 'Vaste beschikbaarheid' : 'Doorgegeven voor deze dag') + (av.note ? ': ' + av.note : '')) + '"><span class="av-dot ' + av.status + '"></span>' + (av.status === 'kan' ? (av.start ? esc(av.start + '–' + av.end) : 'Kan') : 'Kan niet') + '</span>' : '') +
-            dayShifts.map(s => shiftChip(R, s, false)).join('') + (S.rosterCompare ? workedCell(R, p, d, dayShifts) : '') +
-            (gone ? '<span class="gone-txt">Uit dienst</span>' : ab && ab.status === 'goedgekeurd' ? '' : R.canPlan ? '<button class="cell-add" data-act="sh-new" data-id="' + p.id + '" data-v="' + d + '" aria-label="Dienst inplannen voor ' + esc(p.name) + ' op ' + esc(dayShort(d)) + '">+</button>' : '') + '</td>';
-        }).join('') +
-        '<td class="pad"><strong>' + fmtHM(tot) + '</strong>' + (ch ? '<div class="small muted">van ' + fmtHM(ch) + '</div><div class="ro-bar' + (tot > ch ? ' over' : '') + '"><span style="width:' + Math.min(100, tot / ch * 100) + '%"></span></div>' : '') +
-          (S.rosterCompare ? '<div class="small" style="margin-top:4px">Gewerkt <strong>' + fmtHM((R.worked || []).filter(w => same(w.memberId, p.id)).reduce((a, w) => a + (w.minutes || 0), 0)) + '</strong></div>' : '') + '</td></tr>';
-    }).join('') + '</tbody></table></div>';
-}
-function shiftChip(R, s, withName) {
-  const tp = tplOf(R, s);
-  const label = (withName ? '<b>' + esc(s.memberName.split(' ')[0]) + '</b> ' : '') + esc(s.start + '–' + s.end);
-  const note = s.note || tp ? '<small>' + esc([tp ? tp.t.name : '', s.note || ''].filter(Boolean).join(' · ')) + '</small>' : '';
-  const cls = 'shift' + (tp ? ' t' + tp.i : '');
-  return R.canPlan ? '<button class="' + cls + '" data-act="sh-edit" data-id="' + s.id + '" title="' + esc(s.memberName + (s.note ? ' · ' + s.note : '')) + '">' + label + note + '</button>'
-    : '<span class="' + cls + '" title="' + esc(s.memberName) + '">' + label + note + '</span>';
 }
 function rosterMonth(R) {
   const m = S.rosterMonth, last = monthEnd(m);
@@ -2649,7 +2617,8 @@ $app.addEventListener('click', async e => {
 
       // rooster
       case 'ro-week': S.rosterWeek = el.dataset.v; S.shiftEdit = null; break;
-      case 'ro-view': S.rosterView = el.dataset.v; S.shiftEdit = null;
+      case 'ro-view': S.rosterView = el.dataset.v; S.shiftEdit = null; S.roMenu = null;
+        if (S.rosterView === 'dag') { S.rosterDay = S.rosterDay && mondayOf(S.rosterDay) === S.rosterWeek ? S.rosterDay : (mondayOf(today()) === S.rosterWeek ? today() : S.rosterWeek); }
         if (S.rosterView === 'maand' && !S.rosterMonth) S.rosterMonth = monthStart(S.rosterWeek || today());
         break;
       case 'ro-month': S.rosterMonth = el.dataset.v; S.shiftEdit = null; break;
@@ -2673,7 +2642,13 @@ $app.addEventListener('click', async e => {
         if (E.id || S.rosterView === 'maand') S.shiftEdit = null; else S.shiftEdit = Object.assign({}, E, { date: addDays(E.date, 1) <= addDays(S.rosterWeek, 6) ? addDays(E.date, 1) : E.date });
         break;
       }
-      case 'sh-del': if (!confirm('Deze dienst verwijderen?')) return; await rpc('cd_shift_delete', { p_id: num }); S.shiftEdit = null; toast('Dienst verwijderd.'); break;
+      case 'sh-del': {
+        const old = S.roster.shifts.find(x => same(x.id, num));
+        await rpc('cd_shift_delete', { p_id: num }); S.shiftEdit = null;
+        if (old) roUndo('Dienst verwijderd: ' + old.memberName + ' ' + dayShort(old.date) + ' ' + old.start + '–' + old.end, async () => { await roCreate(old.memberId, old.date, old.start, old.end, old.note || '', old.locationId); });
+        else toast('Dienst verwijderd.');
+        break;
+      }
 
       case 'avp-cancel': S.avPatEdit = null; render(); return;
       case 'avp-save': {
@@ -3040,7 +3015,7 @@ $app.addEventListener('click', async e => {
 
 // ---------- automatisch verversen (elke 20 seconden) ----------
 setInterval(async () => {
-  if (!S.me || dragId != null) return;
+  if (!S.me || dragId != null || (typeof roDrag !== 'undefined' && roDrag)) return;
   if (typeof isMobileApp === 'function' && isMobileApp()) {
     const ae = document.activeElement;
     if (!(ae && /INPUT|TEXTAREA/.test(ae.tagName)) && !document.hidden) { try { await loadMobile(); render(); } catch (e) { /* stil */ } }
@@ -3050,7 +3025,7 @@ setInterval(async () => {
   const r = route(); const a = document.activeElement;
   const typing = a && /INPUT|TEXTAREA|SELECT/.test(a.tagName);
   try {
-    const editing = S.hEdit || S.shiftEdit || S.rejectFor;
+    const editing = S.hEdit || S.shiftEdit || S.rejectFor || S.roNeedsEdit || S.roProposal || S.roMenu;
     if (['overzicht', 'terugbellen', 'taken', 'team', 'uren', 'goedkeuren', 'rooster', 'verlof'].includes(r) && !typing && !editing && !S.absForm && !S.absReject && !document.hidden) {
       const y = window.scrollY; await loadRoute(); render(); window.scrollTo(0, y);
     } else {

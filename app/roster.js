@@ -1,0 +1,350 @@
+/* CrewHarbor · rooster voor planners: slepen, snel inplannen, bezetting, open plekken, voorstel, standaardweek, dagweergave, ongedaan maken */
+'use strict';
+
+// ---------- hulpjes ----------
+const isoDow = d => pd(d).getDay() || 7;
+const toMin = t => { const [h, m] = String(t || '0:0').split(':').map(Number); return h * 60 + m; };
+const shiftMin = s => spanMin(s.start, s.end);
+function needsFor(R, d) { return (R.needs || {})[String(isoDow(d))] || {}; }
+function coverage(R, d) {
+  const N = needsFor(R, d); const dayShifts = R.shifts.filter(s => s.date === d);
+  let need = 0, have = 0; const items = [];
+  Object.keys(N).forEach(k => {
+    const n = Number(N[k]) || 0; if (!n) return;
+    let h;
+    if (k === 'dag') h = new Set(dayShifts.map(s => String(s.memberId))).size;
+    else { const t = (R.templates || []).find(x => String(x.id) === k); if (!t) return; h = dayShifts.filter(s => s.start === t.start && s.end === t.end).length; }
+    need += n; have += Math.min(h, n);
+    items.push({ key: k, tpl: k === 'dag' ? null : (R.templates || []).find(x => String(x.id) === k), need: n, have: h });
+  });
+  return { need, have, items };
+}
+function weekMin(R, pid, exceptId) { return R.shifts.filter(s => same(s.memberId, pid) && !same(s.id, exceptId)).reduce((a, s) => a + shiftMin(s), 0); }
+function contractMin(p) { return p && p.contractType === 'vast' ? Number(p.contractHours) * 60 : 0; }
+function availOf(R, pid, d) { return (R.availability || []).find(a => same(a.memberId, pid) && a.date === d); }
+function shiftIssues(R, s) {
+  const out = [];
+  const p = R.people.find(x => same(x.id, s.memberId));
+  const other = R.shifts.filter(x => same(x.memberId, s.memberId) && x.date === s.date && !same(x.id, s.id));
+  if (other.some(o => toMin(o.start) < toMin(s.end) && toMin(s.start) < toMin(o.end))) out.push('Dubbel ingepland: overlapt met een andere dienst');
+  const av = availOf(R, s.memberId, s.date);
+  if (av && av.status === 'kan_niet') out.push('Heeft aangegeven niet te kunnen');
+  else if (av && av.status === 'kan' && av.start && (s.start < av.start || s.end > av.end)) out.push('Kan alleen ' + av.start + '–' + av.end);
+  const ab = absFor(R.absences, s.memberId, s.date);
+  if (ab && ab.status === 'aangevraagd') out.push('Heeft verlof aangevraagd');
+  const ch = contractMin(p);
+  if (ch && weekMin(R, s.memberId) > ch) out.push('Boven contracturen deze week (' + fmtHM(weekMin(R, s.memberId)) + ' van ' + fmtHM(ch) + ')');
+  return out;
+}
+async function roReload() { S.quiet = true; try { await loadRoster(); } finally { S.quiet = false; } render(); }
+function roUndo(label, run) { S.roUndo = { label, run, at: Date.now() }; }
+async function roCreate(memberId, date, start, end, note, locationId) {
+  const s = await rpc('cd_shift_save', { p_id: null, p: { memberId, date, start, end, note: note || '' } });
+  if (locationId && LOCS().length) { try { await rpc('cd_shift_location', { p_id: s.id, p_location: locationId }); } catch (e) { /* */ } }
+  return s;
+}
+function canGetShift(R, p, d, tpl) {
+  if (p.leavingOn && d > p.leavingOn) return null;
+  if (blockedAbs(R, p.id, d)) return null;
+  if (R.shifts.some(s => same(s.memberId, p.id) && s.date === d)) return null;
+  const av = availOf(R, p.id, d);
+  if (av && av.status === 'kan_niet') return null;
+  if (tpl && av && av.status === 'kan' && av.start && (tpl.start < av.start || tpl.end > av.end)) return null;
+  const left = contractMin(p) ? contractMin(p) - weekMin(R, p.id) : null;
+  return { p, kan: !!(av && av.status === 'kan'), left };
+}
+function candidates(R, d, tpl) {
+  return R.people.map(p => canGetShift(R, p, d, tpl)).filter(Boolean)
+    .sort((a, b) => (b.kan - a.kan) || ((b.left == null ? -1 : b.left) - (a.left == null ? -1 : a.left)) || a.p.name.localeCompare(b.p.name));
+}
+
+// ---------- weekweergave voor planners ----------
+function rosterToolbar(R) {
+  if (!R.canPlan) return '';
+  const tpls = R.templates || [];
+  const F = S.roFilter || {};
+  return '<div class="ro-tools">' +
+    '<div class="ro-palette">' + (tpls.length ? '<span class="small muted">Sleep naar een vakje:</span>' + tpls.map(t => { const i = tpls.indexOf(t) % 6;
+      return '<span class="shift t' + i + ' ro-drag" draggable="true" data-tpl-drag="' + t.id + '" title="Sleep naar een medewerker en dag">' + esc(t.name) + '<small>' + esc(t.start + '–' + t.end) + '</small></span>'; }).join('')
+      : '<span class="small muted">Tip: maak vaste diensten (onderaan), dan kun je ze in het rooster slepen.</span>') + '</div>' +
+    '<div class="ro-actions">' +
+      '<input class="input ro-search" data-in="roq" placeholder="Zoek medewerker" value="' + esc(F.q || '') + '" aria-label="Zoek medewerker">' +
+      '<label class="check small"><input type="checkbox" data-in="roleft"' + (F.left ? ' checked' : '') + '> Alleen met uren over</label>' +
+      '<button class="btn small" data-act="rx-open">Open plekken</button>' +
+      '<button class="btn small" data-act="rx-propose">Voorstel maken</button>' +
+      '<button class="btn small" data-act="rx-needs">Bezetting instellen</button>' +
+      '<details class="ro-more"><summary class="btn small">Meer ▾</summary><div class="ro-menu">' +
+        '<button class="link-btn" data-act="rx-std-apply"' + (R.standardCount ? '' : ' disabled') + '>Standaardweek invullen' + (R.standardCount ? ' (' + R.standardCount + ' diensten)' : '') + '</button>' +
+        '<button class="link-btn" data-act="rx-std-save">Deze week opslaan als standaardweek</button>' +
+        '<button class="link-btn" data-act="ro-copy">Vorige week kopiëren</button></div></details>' +
+    '</div></div>';
+}
+function rosterPeople(R) {
+  const F = S.roFilter || {}; const q = (F.q || '').trim().toLowerCase();
+  return R.people.filter(p => (!q || p.name.toLowerCase().includes(q)) && (!F.left || !contractMin(p) || weekMin(R, p.id) < contractMin(p)));
+}
+function rosterWeek(R) {
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
+  const people = R.canPlan ? rosterPeople(R) : R.people;
+  const head = d => {
+    let x = '<button class="ro-dayhead" data-act="rx-day" data-v="' + d + '" title="Dagweergave">' + esc(dayShort(d)) + '</button>';
+    if (R.canPlan) {
+      const c = coverage(R, d);
+      if (c.need) x += '<span class="ro-cov ' + (c.have >= c.need ? 'ok' : c.have ? 'half' : 'bad') + '" title="' + esc(c.items.map(i => (i.tpl ? i.tpl.name : 'Mensen') + ': ' + i.have + '/' + i.need).join(' · ')) + '">' + c.have + '/' + c.need + '</span>';
+    }
+    return x;
+  };
+  let h = '<div class="roster-scroll"><table class="roster ro2"><thead><tr><th class="ro-namecol">Medewerker</th>' + days.map(d => '<th class="' + (d === today() ? 'is-today' : '') + '">' + head(d) + '</th>').join('') + '<th>Totaal</th></tr></thead><tbody>';
+  h += people.map(p => {
+    const mine = R.shifts.filter(s => same(s.memberId, p.id));
+    const tot = mine.reduce((a, s) => a + shiftMin(s), 0); const ch = contractMin(p);
+    return '<tr class="' + (same(p.id, S.me.id) ? 'me' : '') + '"><td class="pad ro-namecol"><div class="ro-name">' + avatar(p.id, p.name, 'sm2') + '<div><strong>' + esc(p.name) + '</strong><div class="small muted">' + esc(contractShort(p)) + '</div></div></div>' + leaveTag(p.leavingOn, true) + '</td>' +
+      days.map(d => {
+        const gone = p.leavingOn && d > p.leavingOn;
+        const dayShifts = mine.filter(s => s.date === d);
+        const ab = absFor(R.absences, p.id, d);
+        const av = R.canPlan ? availOf(R, p.id, d) : null;
+        const blocked = ab && ab.status === 'goedgekeurd';
+        const cls = 'rc' + (d === today() ? ' is-today' : '') + (gone ? ' gone' : '') + (blocked ? ' absent' : '') + (av && !blocked ? ' av-' + av.status : '');
+        const key = p.id + '|' + d;
+        return '<td class="' + cls + '"' + (R.canPlan && !gone && !blocked ? ' data-cell="' + key + '"' : '') + '>' +
+          (ab ? absChip(ab) : '') + (av && !dayShifts.length ? '<span class="av-tag ' + av.status + (av.source === 'vast' ? ' vast' : '') + '" title="' + esc((av.source === 'vast' ? 'Vaste beschikbaarheid' : 'Doorgegeven voor deze dag') + (av.note ? ': ' + av.note : '')) + '"><span class="av-dot ' + av.status + '"></span>' + (av.status === 'kan' ? (av.start ? esc(av.start + '–' + av.end) : 'Kan') : 'Kan niet') + '</span>' : '') +
+          dayShifts.map(s => shiftChip(R, s, false)).join('') + (S.rosterCompare ? workedCell(R, p, d, dayShifts) : '') +
+          (gone ? '<span class="gone-txt">Uit dienst</span>' : blocked ? '' : R.canPlan ? (S.roMenu === key ? quickMenu(R, p, d) : '<button class="cell-add" data-act="rx-menu" data-v="' + key + '" aria-label="Dienst inplannen voor ' + esc(p.name) + ' op ' + esc(dayShort(d)) + '">+</button>') : '') + '</td>';
+      }).join('') +
+      '<td class="pad"><strong>' + fmtHM(tot) + '</strong>' + (ch ? '<div class="small muted">van ' + fmtHM(ch) + '</div><div class="ro-bar' + (tot > ch ? ' over' : '') + '"><span style="width:' + Math.min(100, tot / ch * 100) + '%"></span></div>' : '') +
+        (S.rosterCompare ? '<div class="small" style="margin-top:4px">Gewerkt <strong>' + fmtHM((R.worked || []).filter(w => same(w.memberId, p.id)).reduce((a, w) => a + (w.minutes || 0), 0)) + '</strong></div>' : '') + '</td></tr>';
+  }).join('');
+  if (!people.length) h += '<tr><td colspan="9" class="pad muted">Niemand gevonden met dit filter.</td></tr>';
+  // totalen per dag
+  const dayTot = d => { const l = R.shifts.filter(s => s.date === d); return { min: l.reduce((a, s) => a + shiftMin(s), 0), n: new Set(l.map(s => String(s.memberId))).size }; };
+  const wk = R.shifts.reduce((a, s) => a + shiftMin(s), 0);
+  h += '</tbody><tfoot><tr><th class="ro-namecol">Totaal</th>' + days.map(d => { const t = dayTot(d); return '<td class="ro-foot"><strong>' + fmtHM(t.min) + '</strong><span>' + t.n + (t.n === 1 ? ' persoon' : ' personen') + '</span></td>'; }).join('') +
+    '<td class="ro-foot"><strong>' + fmtHM(wk) + '</strong><span>deze week</span></td></tr></tfoot></table></div>';
+  return h;
+}
+function quickMenu(R, p, d) {
+  const key = p.id + '|' + d;
+  return '<div class="ro-quick" role="menu">' + (R.templates || []).map((t, i) => '<button class="shift t' + (i % 6) + '" role="menuitem" data-act="rx-quick" data-id="' + t.id + '" data-v="' + key + '">' + esc(t.name) + '<small>' + esc(t.start + '–' + t.end) + '</small></button>').join('') +
+    '<button class="btn small" data-act="sh-new" data-id="' + p.id + '" data-v="' + d + '">Anders…</button><button class="btn small ghost" data-act="rx-menu" data-v="">Sluiten</button></div>';
+}
+function shiftChip(R, s, withName) {
+  const tp = tplOf(R, s);
+  const issues = R.canPlan ? shiftIssues(R, s) : [];
+  const label = (withName ? '<b>' + esc(s.memberName.split(' ')[0]) + '</b> ' : '') + esc(s.start + '–' + s.end) + (issues.length ? ' <span class="ro-warn" aria-label="Let op">!</span>' : '');
+  const note = s.note || tp ? '<small>' + esc([tp ? tp.t.name : '', s.note || ''].filter(Boolean).join(' · ')) + '</small>' : '';
+  const cls = 'shift' + (tp ? ' t' + tp.i : '') + (issues.length ? ' warn' : '');
+  const title = s.memberName + (s.note ? ' · ' + s.note : '') + (issues.length ? '\nLet op: ' + issues.join('; ') : '');
+  return R.canPlan ? '<button class="' + cls + '" draggable="true" data-shift-drag="' + s.id + '" data-act="sh-edit" data-id="' + s.id + '" title="' + esc(title) + '">' + label + note + '</button>'
+    : '<span class="' + cls + '" title="' + esc(s.memberName) + '">' + label + note + '</span>';
+}
+
+// ---------- panelen: bezetting, open plekken, voorstel, ongedaan maken ----------
+function rosterPanels(R) {
+  if (!R.canPlan) return '';
+  let h = '';
+  if (S.roUndo && Date.now() - S.roUndo.at < 120000) h += '<div class="ro-undo" role="status"><span>' + esc(S.roUndo.label) + '</span><button class="btn small" data-act="rx-undo">Ongedaan maken</button><button class="icon-btn small" data-act="rx-undo-x" aria-label="Sluiten">' + ICON.x + '</button></div>';
+  if (S.roNeedsEdit) h += needsEditor(R);
+  if (S.roOpenPanel) h += openSpots(R);
+  if (S.roProposal) h += proposalPanel(R);
+  return h;
+}
+function needsEditor(R) {
+  const E = S.roNeedsEdit; const cols = (R.templates || []).length ? R.templates.map(t => [String(t.id), t.name + ' ' + t.start + '–' + t.end]) : [['dag', 'Aantal mensen']];
+  return '<section class="card stack" style="gap:12px;max-width:none"><div class="item-top"><h2 style="margin:0">Bezetting: hoeveel mensen heb je nodig?</h2><button class="icon-btn small" data-act="rx-needs-x" aria-label="Sluiten">' + ICON.x + '</button></div>' +
+    '<p class="small muted" style="margin:0">' + ((R.templates || []).length ? 'Per vaste dienst en per dag. Een dienst telt mee als begin- en eindtijd gelijk zijn aan de vaste dienst.' : 'Per dag. Maak vaste diensten aan om het per dienst in te stellen.') + ' Leeg of 0 = niet bijhouden.</p>' +
+    '<div class="table-wrap"><table class="roster ro-needs"><thead><tr><th></th>' + WD.map(w => '<th>' + w.slice(0, 2) + '</th>').join('') + '</tr></thead><tbody>' +
+    cols.map(c => '<tr><th class="pad" style="text-align:left">' + esc(c[1]) + '</th>' + [1, 2, 3, 4, 5, 6, 7].map(wd => '<td><input class="input" inputmode="numeric" data-need="' + wd + '|' + c[0] + '" value="' + esc(((E[wd] || {})[c[0]]) || '') + '" aria-label="' + esc(c[1] + ' ' + WD[wd - 1]) + '"></td>').join('') + '</tr>').join('') +
+    '</tbody></table></div><div class="row"><button class="btn primary" data-act="rx-needs-save">Opslaan</button><button class="btn ghost" data-act="rx-needs-x">Annuleren</button></div></section>';
+}
+function openList(R) {
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
+  const out = [];
+  days.forEach(d => { if (d < today()) return; coverage(R, d).items.forEach(i => { if (i.have < i.need) out.push({ d, item: i, missing: i.need - i.have }); }); });
+  return out;
+}
+function openSpots(R) {
+  const L = openList(R);
+  let h = '<section class="card stack" style="gap:12px;max-width:none"><div class="item-top"><h2 style="margin:0">Open plekken deze week</h2><button class="icon-btn small" data-act="rx-open-x" aria-label="Sluiten">' + ICON.x + '</button></div>';
+  if (!Object.keys(R.needs || {}).length) return h + '<p class="small muted" style="margin:0">Stel eerst in hoeveel mensen je per dag nodig hebt (knop <strong>Bezetting instellen</strong>).</p></section>';
+  if (!L.length) return h + '<p style="margin:0">Alles is gevuld. 🎉</p></section>';
+  h += L.map(o => {
+    const c = candidates(R, o.d, o.item.tpl).slice(0, 8);
+    return '<div class="ro-open"><div><strong>' + esc(dayShort(o.d)) + ' · ' + esc(o.item.tpl ? o.item.tpl.name + ' ' + o.item.tpl.start + '–' + o.item.tpl.end : 'Mensen') + '</strong><span class="badge orange">nog ' + o.missing + ' nodig</span></div>' +
+      '<div class="who-list">' + (c.length ? c.map(x => '<button class="who-chip ' + (x.kan ? 'kan' : 'leeg') + '" data-act="rx-fill" data-id="' + x.p.id + '" data-v="' + o.d + '|' + (o.item.tpl ? o.item.tpl.id : '') + '"><strong>' + esc(x.p.name) + '</strong><small>' + (x.kan ? 'kan' : 'niet ingevuld') + (x.left != null ? ' · nog ' + fmtHM(Math.max(0, x.left)) + ' u' : '') + '</small></button>').join('') : '<span class="small muted">Niemand beschikbaar.</span>') + '</div></div>';
+  }).join('');
+  return h + '<p class="small muted" style="margin:0">Klik op een naam om diegene meteen in te plannen. Groen = heeft aangegeven te kunnen.</p></section>';
+}
+function makeProposal(R) {
+  const work = Object.assign({}, R, { shifts: R.shifts.slice() });
+  const out = [];
+  openList(R).forEach(o => {
+    for (let k = 0; k < o.missing; k++) {
+      const tpl = o.item.tpl || (R.templates || [])[0] || { start: '09:00', end: '17:00', name: '' };
+      const c = candidates(work, o.d, o.item.tpl).filter(x => x.left == null || x.left >= shiftMin(tpl) || x.kan)[0];
+      if (!c) break;
+      const s = { id: 'p' + out.length, memberId: c.p.id, memberName: c.p.name, date: o.d, start: tpl.start, end: tpl.end, note: '', tplName: tpl.name, why: c.kan ? 'kan' : 'niet ingevuld' };
+      work.shifts.push(s); out.push(s);
+    }
+  });
+  return out;
+}
+function proposalPanel(R) {
+  const P = S.roProposal;
+  let h = '<section class="card stack" style="gap:12px;max-width:none"><div class="item-top"><h2 style="margin:0">Voorstel</h2><button class="icon-btn small" data-act="rx-propose-x" aria-label="Sluiten">' + ICON.x + '</button></div>';
+  if (!Object.keys(R.needs || {}).length) return h + '<p class="small muted" style="margin:0">Stel eerst in hoeveel mensen je per dag nodig hebt (knop <strong>Bezetting instellen</strong>). Dan kan CrewHarbor een voorstel maken.</p></section>';
+  if (!P.length) return h + '<p style="margin:0">Er zijn geen open plekken om te vullen, of er is niemand beschikbaar.</p></section>';
+  h += '<p class="small muted" style="margin:0">CrewHarbor kiest eerst mensen die hebben aangegeven te kunnen, daarna wie nog de meeste contracturen over heeft. Vink uit wat je niet wilt.</p>' +
+    '<div class="ro-prop">' + P.map((s, i) => '<label class="check"><input type="checkbox" data-prop="' + i + '"' + (s.off ? '' : ' checked') + '> <span><strong>' + esc(dayShort(s.date)) + '</strong> · ' + esc(s.memberName) + ' · ' + esc(s.start + '–' + s.end) + (s.tplName ? ' (' + esc(s.tplName) + ')' : '') + ' <span class="small muted">' + esc(s.why) + '</span></span></label>').join('') + '</div>' +
+    '<div class="row"><button class="btn primary" data-act="rx-propose-apply">' + P.filter(s => !s.off).length + ' diensten inplannen</button><button class="btn ghost" data-act="rx-propose-x">Annuleren</button></div></section>';
+  return h;
+}
+
+// ---------- dagweergave (tijdlijn) ----------
+function rosterDayView(R) {
+  const d = S.rosterDay || today();
+  const list = R.shifts.filter(s => s.date === d);
+  let from = 6 * 60, to = 23 * 60;
+  list.forEach(s => { from = Math.min(from, toMin(s.start)); const e = toMin(s.end) <= toMin(s.start) ? 24 * 60 : toMin(s.end); to = Math.max(to, e); });
+  from = Math.floor(from / 60) * 60; to = Math.min(24 * 60, Math.ceil(to / 60) * 60);
+  const span = to - from; const pos = m => ((m - from) / span * 100).toFixed(2) + '%';
+  const hours = []; for (let m = from; m <= to; m += 60) hours.push(m);
+  const people = R.canPlan ? rosterPeople(R) : R.people.filter(p => list.some(s => same(s.memberId, p.id)));
+  // aantal mensen per uur
+  const perHour = hours.slice(0, -1).map(m => list.filter(s => { const a = toMin(s.start), b = toMin(s.end) <= a ? 24 * 60 : toMin(s.end); return a < m + 60 && b > m; }).length);
+  const max = Math.max(1, ...perHour);
+  let h = '<div class="ro-daynav"><button class="icon-btn" data-act="rx-day" data-v="' + addDays(d, -1) + '" aria-label="Vorige dag">' + ICON.left + '</button><strong>' + esc(dayLong(d)) + '</strong>' +
+    '<button class="icon-btn" data-act="rx-day" data-v="' + addDays(d, 1) + '" aria-label="Volgende dag">' + ICON.right + '</button>' + (d !== today() ? '<button class="btn small ghost" data-act="rx-day" data-v="' + today() + '">Vandaag</button>' : '') + '</div>';
+  h += '<div class="tl card"><div class="tl-row tl-head"><div class="tl-name"></div><div class="tl-track">' + hours.map(m => '<span class="tl-hour" style="left:' + pos(m) + '">' + String(m / 60).padStart(2, '0') + '</span>').join('') + '</div></div>' +
+    '<div class="tl-row tl-load"><div class="tl-name small muted">Aan het werk</div><div class="tl-track">' + perHour.map((n, i) => '<span class="tl-bar-n' + (n === 0 ? ' zero' : '') + '" style="left:' + pos(hours[i]) + ';width:' + (60 / span * 100) + '%;opacity:' + (0.25 + 0.75 * n / max) + '" title="' + String(hours[i] / 60).padStart(2, '0') + ':00 · ' + n + (n === 1 ? ' persoon' : ' personen') + '">' + n + '</span>').join('') + '</div></div>';
+  h += people.map(p => {
+    const mine = list.filter(s => same(s.memberId, p.id));
+    const av = R.canPlan ? availOf(R, p.id, d) : null; const ab = absFor(R.absences, p.id, d);
+    const avBand = av && av.status === 'kan' ? '<span class="tl-av" style="left:' + pos(av.start ? toMin(av.start) : from) + ';width:' + (((av.end ? toMin(av.end) : to) - (av.start ? toMin(av.start) : from)) / span * 100) + '%" title="Kan werken"></span>' : '';
+    return '<div class="tl-row' + (av && av.status === 'kan_niet' ? ' niet' : '') + (ab && ab.status === 'goedgekeurd' ? ' abs' : '') + '"><div class="tl-name">' + avatar(p.id, p.name, 'sm2') + '<span>' + esc(p.name) + (ab ? ' ' + absChip(ab) : '') + '</span></div><div class="tl-track">' + avBand +
+      mine.map(s => { const a = toMin(s.start), b = toMin(s.end) <= a ? 24 * 60 : toMin(s.end); const tp = tplOf(R, s);
+        return '<button class="tl-shift shift' + (tp ? ' t' + tp.i : '') + '"' + (R.canPlan ? ' data-act="sh-edit" data-id="' + s.id + '"' : '') + ' style="left:' + pos(a) + ';width:' + ((b - a) / span * 100) + '%" title="' + esc(s.memberName + ' ' + s.start + '–' + s.end + (s.note ? ' · ' + s.note : '')) + '">' + esc(s.start + '–' + s.end) + (tp ? ' · ' + esc(tp.t.name) : '') + '</button>'; }).join('') +
+      (R.canPlan && !mine.length && !(ab && ab.status === 'goedgekeurd') && !(p.leavingOn && d > p.leavingOn) ? '<button class="tl-add" data-act="sh-new" data-id="' + p.id + '" data-v="' + d + '">+ inplannen</button>' : '') + '</div></div>';
+  }).join('');
+  return h + '</div><p class="small muted">Groene achtergrond = heeft aangegeven te kunnen. De bovenste balk laat per uur zien hoeveel mensen er werken.</p>';
+}
+
+// ---------- klikken ----------
+document.getElementById('app').addEventListener('click', async e => {
+  const el = e.target.closest('[data-act^="rx-"]'); if (!el || el.disabled) return;
+  const act = el.dataset.act, v = el.dataset.v, id = el.dataset.id;
+  const R = S.roster;
+  try {
+    switch (act) {
+      case 'rx-menu': S.roMenu = v || null; render(); return;
+      case 'rx-quick': {
+        const [pid, d] = v.split('|'); const t = R.templates.find(x => same(x.id, id));
+        el.disabled = true;
+        const s = await roCreate(pid, d, t.start, t.end, t.note || '', S.locFilter || memberLoc(pid));
+        S.roMenu = null; roUndo('Dienst ingepland: ' + s.memberName + ' ' + dayShort(d) + ' ' + t.name, async () => { await rpc('cd_shift_delete', { p_id: s.id }); });
+        await roReload(); return;
+      }
+      case 'rx-undo': {
+        const U = S.roUndo; S.roUndo = null; if (!U) return;
+        el.disabled = true; await U.run(); toast('Ongedaan gemaakt.'); await roReload(); return;
+      }
+      case 'rx-undo-x': S.roUndo = null; render(); return;
+      case 'rx-day': S.rosterView = 'dag'; S.rosterDay = v; S.roMenu = null; if (mondayOf(v) !== S.rosterWeek) { S.rosterWeek = mondayOf(v); await roReload(); } else render(); return;
+      case 'rx-needs': S.roNeedsEdit = JSON.parse(JSON.stringify(R.needs || {})); S.roOpenPanel = false; S.roProposal = null; render(); return;
+      case 'rx-needs-x': S.roNeedsEdit = null; render(); return;
+      case 'rx-needs-save': {
+        el.disabled = true; const v2 = await rpc('cd_roster_needs_save', { p: S.roNeedsEdit });
+        S.roster.needs = v2; S.roNeedsEdit = null; render(); toast('Bezetting opgeslagen. Boven elke dag zie je nu hoeveel plekken gevuld zijn.'); return;
+      }
+      case 'rx-open': S.roOpenPanel = !S.roOpenPanel; S.roProposal = null; S.roNeedsEdit = null; render(); return;
+      case 'rx-open-x': S.roOpenPanel = false; render(); return;
+      case 'rx-fill': {
+        const [d, tid] = v.split('|'); const t = tid ? R.templates.find(x => same(x.id, tid)) : (R.templates[0] || { start: '09:00', end: '17:00' });
+        el.disabled = true; const s = await roCreate(id, d, t.start, t.end, t.note || '', S.locFilter || memberLoc(id));
+        roUndo('Ingepland: ' + s.memberName + ' ' + dayShort(d), async () => { await rpc('cd_shift_delete', { p_id: s.id }); });
+        await roReload(); return;
+      }
+      case 'rx-propose': S.roProposal = makeProposal(R); S.roOpenPanel = false; S.roNeedsEdit = null; render(); return;
+      case 'rx-propose-x': S.roProposal = null; render(); return;
+      case 'rx-propose-apply': {
+        const todo = S.roProposal.filter(s => !s.off); if (!todo.length) return;
+        el.disabled = true; const made = []; let fail = 0;
+        for (const s of todo) { try { made.push((await roCreate(s.memberId, s.date, s.start, s.end, '', S.locFilter || memberLoc(s.memberId))).id); } catch (err) { fail++; } }
+        S.roProposal = null; roUndo(made.length + ' diensten uit het voorstel ingepland', async () => { for (const x of made) { try { await rpc('cd_shift_delete', { p_id: x }); } catch (err) { /* */ } } });
+        toast(made.length + ' diensten ingepland.' + (fail ? ' ' + fail + ' lukten niet.' : ''), !!fail); await roReload(); return;
+      }
+      case 'rx-std-save': {
+        el.closest('details').open = false;
+        if (!confirm('Deze week (' + R.shifts.length + ' diensten) opslaan als standaardweek? Een eerdere standaardweek wordt vervangen.')) return;
+        const d = await rpc('cd_roster_standard_save', { p_week: R.weekStart }); toast('Standaardweek opgeslagen (' + d.count + ' diensten).'); await roReload(); return;
+      }
+      case 'rx-std-apply': {
+        el.closest('details').open = false;
+        if (!confirm('De standaardweek invullen in week ' + weekNo(R.weekStart) + '? Diensten die er al staan blijven staan.')) return;
+        const before = new Set(R.shifts.map(s => String(s.id)));
+        const d = await rpc('cd_roster_standard_apply', { p_week: R.weekStart });
+        await roReload();
+        const added = S.roster.shifts.filter(s => !before.has(String(s.id))).map(s => s.id);
+        roUndo(d.added + ' diensten uit de standaardweek ingevuld', async () => { for (const x of added) { try { await rpc('cd_shift_delete', { p_id: x }); } catch (err) { /* */ } } });
+        toast(d.added + ' diensten ingevuld.' + (d.skipped ? ' ' + d.skipped + ' overgeslagen (stond er al, verlof of niet meer in dienst).' : '')); render(); return;
+      }
+      default: return;
+    }
+  } catch (err) { toast(err.message, true); el.disabled = false; }
+});
+document.getElementById('app').addEventListener('input', e => {
+  const el = e.target;
+  if (el.dataset.need && S.roNeedsEdit) { const [wd, k] = el.dataset.need.split('|'); S.roNeedsEdit[wd] = S.roNeedsEdit[wd] || {}; S.roNeedsEdit[wd][k] = el.value.replace(/\D/g, ''); return; }
+  if (el.dataset.prop !== undefined && S.roProposal) { S.roProposal[Number(el.dataset.prop)].off = !el.checked; const b = document.querySelector('[data-act="rx-propose-apply"]'); if (b) b.textContent = S.roProposal.filter(s => !s.off).length + ' diensten inplannen'; return; }
+  if (el.dataset.in === 'roq') { S.roFilter = Object.assign({}, S.roFilter, { q: el.value }); clearTimeout(S.roqT); S.roqT = setTimeout(() => { renderKeepFocus(); }, 250); return; }
+});
+document.getElementById('app').addEventListener('change', e => {
+  const el = e.target;
+  if (el.dataset.in === 'roleft') { S.roFilter = Object.assign({}, S.roFilter, { left: el.checked }); render(); }
+  if (el.dataset.prop !== undefined && S.roProposal) S.roProposal[Number(el.dataset.prop)].off = !el.checked;
+});
+
+// ---------- slepen ----------
+let roDrag = null;
+document.getElementById('app').addEventListener('dragstart', e => {
+  const s = e.target.closest && e.target.closest('[data-shift-drag],[data-tpl-drag]'); if (!s) return;
+  roDrag = s.dataset.shiftDrag ? { type: 'shift', id: s.dataset.shiftDrag } : { type: 'tpl', id: s.dataset.tplDrag };
+  e.dataTransfer.effectAllowed = 'copyMove';
+  try { e.dataTransfer.setData('text/plain', roDrag.type + ':' + roDrag.id); } catch (err) { /* */ }
+  s.classList.add('dragging'); document.body.classList.add('ro-dragging');
+});
+document.getElementById('app').addEventListener('dragend', e => {
+  const s = e.target.closest && e.target.closest('[data-shift-drag],[data-tpl-drag]'); if (s) s.classList.remove('dragging');
+  document.querySelectorAll('td.drop-over').forEach(c => c.classList.remove('drop-over')); document.body.classList.remove('ro-dragging'); roDrag = null;
+});
+document.getElementById('app').addEventListener('dragover', e => {
+  if (!roDrag) return; const c = e.target.closest('td[data-cell]'); if (!c) return;
+  e.preventDefault(); e.dataTransfer.dropEffect = roDrag.type === 'tpl' || e.ctrlKey || e.altKey || e.metaKey ? 'copy' : 'move';
+  document.querySelectorAll('td.drop-over').forEach(x => { if (x !== c) x.classList.remove('drop-over'); }); c.classList.add('drop-over');
+});
+document.getElementById('app').addEventListener('drop', async e => {
+  if (!roDrag) return; const c = e.target.closest('td[data-cell]'); if (!c) return;
+  e.preventDefault(); c.classList.remove('drop-over');
+  const D = roDrag; roDrag = null; document.body.classList.remove('ro-dragging');
+  const [pid, d] = c.dataset.cell.split('|'); const R = S.roster;
+  try {
+    if (D.type === 'tpl') {
+      const t = R.templates.find(x => same(x.id, D.id));
+      const s = await roCreate(pid, d, t.start, t.end, t.note || '', S.locFilter || memberLoc(pid));
+      roUndo('Ingepland: ' + s.memberName + ' ' + dayShort(d) + ' ' + t.name, async () => { await rpc('cd_shift_delete', { p_id: s.id }); });
+    } else {
+      const s = R.shifts.find(x => same(x.id, D.id)); if (!s) return;
+      const copy = e.ctrlKey || e.altKey || e.metaKey;
+      if (!copy && same(s.memberId, pid) && s.date === d) return;
+      if (copy) {
+        const n = await roCreate(pid, d, s.start, s.end, s.note || '', s.locationId);
+        roUndo('Dienst gekopieerd naar ' + n.memberName + ' ' + dayShort(d), async () => { await rpc('cd_shift_delete', { p_id: n.id }); });
+      } else {
+        const old = { memberId: s.memberId, date: s.date, start: s.start, end: s.end, note: s.note || '' };
+        const n = await rpc('cd_shift_save', { p_id: s.id, p: { memberId: pid, date: d, start: s.start, end: s.end, note: s.note || '' } });
+        roUndo('Dienst verplaatst naar ' + n.memberName + ' ' + dayShort(d), async () => { await rpc('cd_shift_save', { p_id: s.id, p: old }); });
+      }
+    }
+    await roReload();
+  } catch (err) { toast(err.message, true); }
+});
