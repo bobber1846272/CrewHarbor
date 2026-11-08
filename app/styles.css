@@ -1065,3 +1065,29 @@ table.ro2 tr.ro-group th { text-align: left; background: #F2F6F7; padding: 8px 1
 .ro-cov2 { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; line-height: 1.5; padding: 0 7px; border-radius: 6px; font-weight: 600; white-space: nowrap; }
 .ro-cov2 b { font-weight: 800; }
 .ro-cov2.ok { background: #DCFAE6; color: #067647; } .ro-cov2.half { background: #FEF0C7; color: #93370D; } .ro-cov2.bad { background: #FEE4E2; color: #B42318; }
+
+/* ---------- afdelingen & functies ---------- */
+.ro-depts { display: flex; gap: 6px; flex-wrap: wrap; }
+.dept-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: #fff; border-radius: 99px; padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; min-height: 34px; }
+.dept-chip i { width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--accent)); }
+.dept-chip.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.dept-chip.on .muted { color: #BFD6DE; }
+.dept-chip[style].on { background: var(--c); border-color: var(--c); }
+.shift.has-dept { box-shadow: inset 4px 0 0 var(--dept); }
+.shift.has-dept.warn { box-shadow: inset 4px 0 0 var(--dept), inset 7px 0 0 #F79009; }
+.func-tag { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .03em; padding: 0 5px; border-radius: 4px; background: #0D2340; color: #fff; text-transform: uppercase; }
+.who-head .func-tag { font-size: 11px; margin-left: 6px; }
+.ue-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.ue-row { display: flex; gap: 8px; align-items: center; }
+.ue-row input[type=color] { width: 38px; height: 38px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: #fff; flex: none; cursor: pointer; }
+.ue-row .input { flex: 1; min-height: 38px; }
+.unit-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.unit-chip { border: 1px solid var(--line-2); background: #fff; border-radius: 99px; padding: 5px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+.unit-chip.on { background: var(--c, var(--navy)); border-color: var(--c, var(--navy)); color: #fff; font-weight: 600; }
+/* concept-pil naast de titel */
+.ro-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ro-title h1 { margin: 0; }
+.pub-pill { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: #FEF0C7; color: #93370D; border: 1px dashed #F5B94B; }
+.pub-pill.on { background: #DCFAE6; color: #067647; border: 1px solid #ABEFC6; }
+.ro-title .btn.small { min-height: 30px; padding: 4px 12px; font-size: 13px; }
+.ro-title .link-btn { font-size: 13px; color: var(--muted); }

@@ -38,7 +38,7 @@ function gaps(R, d) {
   return out;
 }
 const gapTxt = g => hhmm(g.from) + '–' + hhmm(g.to);
-function weekMin(R, pid, exceptId) { return R.shifts.filter(s => same(s.memberId, pid) && !same(s.id, exceptId)).reduce((a, s) => a + shiftMin(s), 0); }
+function weekMin(R, pid, exceptId) { return (R.allShifts || R.shifts).filter(s => same(s.memberId, pid) && !same(s.id, exceptId)).reduce((a, s) => a + shiftMin(s), 0); }
 function contractMin(p) { return p && p.contractType === 'vast' ? Number(p.contractHours) * 60 : 0; }
 function availOf(R, pid, d) { return (R.availability || []).find(a => same(a.memberId, pid) && a.date === d); }
 function shiftIssues(R, s) {
@@ -51,21 +51,53 @@ function shiftIssues(R, s) {
   else if (av && av.status === 'kan' && av.start && (s.start < av.start || s.end > av.end)) out.push('Kan alleen ' + av.start + '–' + av.end);
   const ab = absFor(R.absences, s.memberId, s.date);
   if (ab && ab.status === 'aangevraagd') out.push('Heeft verlof aangevraagd');
+  if (s.functionId && p && !hasFunc(p, s.functionId)) { const f = funcOf(s.functionId, R); out.push('Heeft de functie ' + (f ? f.name : '') + ' niet'); }
   const ch = contractMin(p);
   if (ch && weekMin(R, s.memberId) > ch) out.push('Boven contracturen deze week (' + fmtHM(weekMin(R, s.memberId)) + ' van ' + fmtHM(ch) + ')');
   return out;
 }
 async function roReload() { S.quiet = true; try { await loadRoster(); } finally { S.quiet = false; } render(); }
-function roUndo(label, run) { S.roUndo = { label, run, at: Date.now() }; }
-async function roCreate(memberId, date, start, end, note, locationId) {
-  const s = await rpc('cd_shift_save', { p_id: null, p: { memberId, date, start, end, note: note || '' } });
-  if (locationId && LOCS().length) { try { await rpc('cd_shift_location', { p_id: s.id, p_location: locationId }); } catch (e) { /* */ } }
+// ---------- ongedaan maken (Ctrl+Z) en opnieuw (Ctrl+Shift+Z) ----------
+const RO_UNDO = [], RO_REDO = [];
+function roPush(op) { RO_UNDO.push(op); if (RO_UNDO.length > 50) RO_UNDO.shift(); RO_REDO.length = 0; }
+const specOf = (x, over) => Object.assign({ memberId: x.memberId, date: x.date, start: x.start, end: x.end, note: x.note || '', locationId: x.locationId || '', departmentId: x.departmentId || '', functionId: x.functionId || '' }, over || {});
+async function roCreate(spec) {
+  const s = await rpc('cd_shift_save', { p_id: null, p: { memberId: spec.memberId, date: spec.date, start: spec.start, end: spec.end, note: spec.note || '', departmentId: spec.departmentId || '', functionId: spec.functionId || '' } });
+  if (spec.locationId && LOCS().length) { try { await rpc('cd_shift_location', { p_id: s.id, p_location: spec.locationId }); } catch (e) { /* */ } }
   return s;
 }
+function opCreate(specs, label, ids) {
+  const st = { ids: ids.slice(), specs: specs.map(x => specOf(x)) };
+  return { label, undo: async () => { for (const id of st.ids) { try { await rpc('cd_shift_delete', { p_id: id }); } catch (e) { /* */ } } },
+    redo: async () => { st.ids = []; for (const sp of st.specs) { try { st.ids.push((await roCreate(sp)).id); } catch (e) { /* */ } } } };
+}
+function opDelete(shift) {
+  const st = { id: shift.id, spec: specOf(shift) };
+  return { label: 'Dienst verwijderd', undo: async () => { st.id = (await roCreate(st.spec)).id; }, redo: async () => { await rpc('cd_shift_delete', { p_id: st.id }); } };
+}
+function opMove(id, from, to) {
+  return { label: 'Dienst verplaatst', undo: async () => { await rpc('cd_shift_save', { p_id: id, p: from }); }, redo: async () => { await rpc('cd_shift_save', { p_id: id, p: to }); } };
+}
+let roBusy = false;
+document.addEventListener('keydown', async e => {
+  if (!(e.ctrlKey || e.metaKey) || route() !== 'rooster' || !S.roster || !S.roster.canPlan) return;
+  const k = e.key.toLowerCase(); if (k !== 'z' && k !== 'y') return;
+  const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+  e.preventDefault(); if (roBusy) return;
+  const redo = k === 'y' || e.shiftKey; const from = redo ? RO_REDO : RO_UNDO, to = redo ? RO_UNDO : RO_REDO;
+  const op = from.pop(); if (!op) { toast(redo ? 'Niets om opnieuw te doen.' : 'Niets om ongedaan te maken.'); return; }
+  roBusy = true;
+  try { await (redo ? op.redo() : op.undo()); to.push(op); toast((redo ? 'Opnieuw: ' : 'Ongedaan: ') + op.label.toLowerCase() + '.'); await roReload(); }
+  catch (err) { toast(err.message, true); } finally { roBusy = false; }
+});
+function roDone(op, msg) { roPush(op); toast(msg + ' · Ctrl+Z = terug'); }
+function tplSpec(t, pid, d) { return { memberId: pid, date: d, start: t.start, end: t.end, note: t.note || '', locationId: S.locFilter || memberLoc(pid), departmentId: t.departmentId || (S.roFilter || {}).dept || '', functionId: t.functionId || '' }; }
+const hasFunc = (p, fid) => !fid || (p.functionIds || []).some(f => same(f, fid));
 function canGetShift(R, p, d, tpl) {
   if (p.leavingOn && d > p.leavingOn) return null;
+  if (tpl && tpl.functionId && !hasFunc(p, tpl.functionId)) return null;
   if (blockedAbs(R, p.id, d)) return null;
-  if (R.shifts.some(s => same(s.memberId, p.id) && s.date === d)) return null;
+  if ((R.allShifts || R.shifts).some(s => same(s.memberId, p.id) && s.date === d)) return null;
   const av = availOf(R, p.id, d);
   if (av && av.status === 'kan_niet') return null;
   if (tpl && av && av.status === 'kan' && av.start && (tpl.start < av.start || tpl.end > av.end)) return null;
@@ -77,14 +109,28 @@ function candidates(R, d, tpl) {
     .sort((a, b) => ((b.left > 0) - (a.left > 0)) || (b.kan - a.kan) || ((b.left == null ? -1 : b.left) - (a.left == null ? -1 : a.left)) || a.p.name.localeCompare(b.p.name));
 }
 
+// afdelingsfilter: laat alleen diensten (en vaste diensten) van die afdeling zien
+function roView(R) {
+  const dept = (S.roFilter || {}).dept; if (!dept || !R.canPlan) return R;
+  const inDept = x => same(x.departmentId, dept);
+  return Object.assign({}, R, { allShifts: R.shifts, shifts: R.shifts.filter(inDept), templates: (R.templates || []).filter(t => !t.departmentId || inDept(t)) });
+}
 // ---------- weekweergave voor planners ----------
+function deptBar(R) {
+  const U = UNITS(R); if (!U.departments.length) return '';
+  const F = S.roFilter || {};
+  const cnt = id => (R.allShifts || R.shifts).filter(s => same(s.departmentId, id)).length;
+  return '<div class="ro-depts" role="group" aria-label="Afdeling"><button class="dept-chip' + (!F.dept ? ' on' : '') + '" data-act="rx-dept" data-v="">Alle afdelingen</button>' +
+    U.departments.map(d => '<button class="dept-chip' + (same(F.dept, d.id) ? ' on' : '') + '" style="--c:' + esc(d.color) + '" data-act="rx-dept" data-v="' + d.id + '"><i></i>' + esc(d.name) + ' <span class="muted">' + cnt(d.id) + '</span></button>').join('') + '</div>';
+}
 function rosterToolbar(R) {
   if (!R.canPlan) return '';
   const tpls = R.templates || [];
   const F = S.roFilter || {};
-  return '<div class="ro-tools">' +
+  return deptBar(R) + '<div class="ro-tools">' +
     '<div class="ro-palette">' + (tpls.length ? '<span class="small muted">Sleep naar een vakje:</span>' + tpls.map(t => { const i = tpls.indexOf(t) % 6;
-      return '<span class="shift t' + i + ' ro-drag" draggable="true" data-tpl-drag="' + t.id + '" title="Sleep naar een medewerker en dag">' + esc(t.name) + '<small>' + esc(t.start + '–' + t.end) + '</small></span>'; }).join('')
+      const dp = deptOf(t.departmentId, R), fn = funcOf(t.functionId, R);
+      return '<span class="shift t' + i + ' ro-drag" draggable="true" data-tpl-drag="' + t.id + '"' + (dp ? ' style="box-shadow:inset 4px 0 0 ' + esc(dp.color) + '"' : '') + ' title="Sleep naar een medewerker en dag">' + esc(t.name) + '<small>' + esc(t.start + '–' + t.end) + (fn ? ' · ' + esc(fn.name) : '') + '</small></span>'; }).join('')
       : '<span class="small muted">Tip: maak vaste diensten (onderaan), dan kun je ze in het rooster slepen.</span>') + '</div>' +
     '<div class="ro-actions">' +
       '<div class="seg small" role="group" aria-label="Contract">' + [['alle', 'Iedereen'], ['vast', 'Vaste uren'], ['flex', 'Flex']].map(o => { const n = o[0] === 'alle' ? R.people.length : R.people.filter(p => (p.contractType === 'vast') === (o[0] === 'vast')).length;
@@ -93,8 +139,10 @@ function rosterToolbar(R) {
       '<label class="check small"><input type="checkbox" data-in="roleft"' + (F.left ? ' checked' : '') + '> Alleen met uren over</label>' +
       '<button class="btn small" data-act="rx-open">Open plekken</button>' +
       '<button class="btn small" data-act="rx-propose">Voorstel maken</button>' +
-      '<button class="btn small" data-act="rx-needs">Bezetting instellen</button>' +
-      '<button class="btn small" data-act="rx-hours">Openingstijden</button>' +
+      '<details class="ro-more"><summary class="btn small">Instellen ▾</summary><div class="ro-menu">' +
+        '<button class="link-btn" data-act="rx-hours">Openingstijden</button>' +
+        '<button class="link-btn" data-act="rx-needs">Bezetting per dienst</button>' +
+        '<button class="link-btn" data-act="rx-units">Afdelingen &amp; functies</button></div></details>' +
       '<details class="ro-more"><summary class="btn small">Meer ▾</summary><div class="ro-menu">' +
         '<button class="link-btn" data-act="rx-std-apply"' + (R.standardCount ? '' : ' disabled') + '>Standaardweek invullen' + (R.standardCount ? ' (' + R.standardCount + ' diensten)' : '') + '</button>' +
         '<button class="link-btn" data-act="rx-std-save">Deze week opslaan als standaardweek</button>' +
@@ -103,6 +151,10 @@ function rosterToolbar(R) {
 }
 function rosterPeople(R) {
   const F = S.roFilter || {}; const q = (F.q || '').trim().toLowerCase();
+  if (F.dept && R.people.some(p => (p.departmentIds || []).length)) {
+    const busy = new Set(R.shifts.map(s => String(s.memberId)));
+    R = Object.assign({}, R, { people: R.people.filter(p => (p.departmentIds || []).some(x => same(x, F.dept)) || busy.has(String(p.id))) });
+  }
   const ct = F.ct || 'alle';
   return R.people.filter(p => (!q || p.name.toLowerCase().includes(q)) && (!F.left || !contractMin(p) || weekMin(R, p.id) < contractMin(p))
       && (ct === 'alle' || (ct === 'vast' ? p.contractType === 'vast' : p.contractType !== 'vast')))
@@ -170,23 +222,38 @@ function shiftChip(R, s, withName) {
   const tp = tplOf(R, s);
   const issues = R.canPlan ? shiftIssues(R, s) : [];
   const label = (withName ? '<b>' + esc(s.memberName.split(' ')[0]) + '</b> ' : '') + esc(s.start + '–' + s.end) + (issues.length ? ' <span class="ro-warn" aria-label="Let op">!</span>' : '');
-  const note = s.note || tp ? '<small>' + esc([tp ? tp.t.name : '', s.note || ''].filter(Boolean).join(' · ')) + '</small>' : '';
-  const cls = 'shift' + (tp ? ' t' + tp.i : '') + (issues.length ? ' warn' : '');
+  const dp = deptOf(s.departmentId, R), fn = funcOf(s.functionId, R);
+  const note = s.note || tp || fn || (dp && !(S.roFilter || {}).dept) ? '<small>' + (fn ? '<b class="func-tag">' + esc(fn.name) + '</b> ' : '') + esc([dp && !(S.roFilter || {}).dept ? dp.name : '', tp ? tp.t.name : '', s.note || ''].filter(Boolean).join(' · ')) + '</small>' : '';
+  const cls = 'shift' + (tp ? ' t' + tp.i : '') + (issues.length ? ' warn' : '') + (dp ? ' has-dept' : '');
   const title = s.memberName + (s.note ? ' · ' + s.note : '') + (issues.length ? '\nLet op: ' + issues.join('; ') : '');
-  return R.canPlan ? '<button class="' + cls + '" draggable="true" data-shift-drag="' + s.id + '" data-act="sh-edit" data-id="' + s.id + '" title="' + esc(title) + '">' + label + note + '</button>'
-    : '<span class="' + cls + '" title="' + esc(s.memberName) + '">' + label + note + '</span>';
+  const st = dp ? ' style="--dept:' + esc(dp.color) + '"' : '';
+  return R.canPlan ? '<button class="' + cls + '"' + st + ' draggable="true" data-shift-drag="' + s.id + '" data-act="sh-edit" data-id="' + s.id + '" title="' + esc(title) + '">' + label + note + '</button>'
+    : '<span class="' + cls + '"' + st + ' title="' + esc(s.memberName) + '">' + label + note + '</span>';
 }
 
 // ---------- panelen: bezetting, open plekken, voorstel, ongedaan maken ----------
 function rosterPanels(R) {
   if (!R.canPlan) return '';
   let h = '';
-  if (S.roUndo && Date.now() - S.roUndo.at < 120000) h += '<div class="ro-undo" role="status"><span>' + esc(S.roUndo.label) + '</span><button class="btn small" data-act="rx-undo">Ongedaan maken</button><button class="icon-btn small" data-act="rx-undo-x" aria-label="Sluiten">' + ICON.x + '</button></div>';
   if (S.roNeedsEdit) h += modal(needsEditor(R), 'rx-needs-x');
   else if (S.roHoursEdit) h += modal(hoursEditor(), 'rx-hours-x');
+  else if (S.roUnitsEdit) h += modal(unitsEditor(), 'rx-units-x');
   else if (S.roOpenPanel) h += modal(openSpots(R), 'rx-open-x');
   else if (S.roProposal) h += modal(proposalPanel(R), 'rx-propose-x');
   return h;
+}
+const DEPT_COLORS = ['#1D9BAE', '#16A34A', '#F59E0B', '#DC2626', '#7C3AED', '#2563EB', '#DB2777', '#EA580C', '#0F766E', '#64748B'];
+function unitsEditor() {
+  const E = S.roUnitsEdit;
+  const dRow = (d, i) => '<div class="ue-row"><input type="color" value="' + esc(d.color) + '" data-ue="d|' + i + '|color" aria-label="Kleur"><input class="input" data-ue="d|' + i + '|name" value="' + esc(d.name) + '" maxlength="30" placeholder="Bijv. Kassa"><button class="icon-btn small" data-act="rx-ue-del" data-v="d|' + i + '" aria-label="Weghalen">' + ICON.x + '</button></div>';
+  const fRow = (f, i) => '<div class="ue-row"><input class="input" data-ue="f|' + i + '|name" value="' + esc(f.name) + '" maxlength="30" placeholder="Bijv. HOKA"><button class="icon-btn small" data-act="rx-ue-del" data-v="f|' + i + '" aria-label="Weghalen">' + ICON.x + '</button></div>';
+  return '<section class="card stack" style="gap:14px;max-width:none"><div class="item-top"><h2 style="margin:0">Afdelingen &amp; functies</h2><button class="icon-btn small" data-act="rx-units-x" aria-label="Sluiten">' + ICON.x + '</button></div>' +
+    '<div class="ue-cols"><div class="stack" style="gap:8px"><strong>Afdelingen</strong><span class="small muted">Waar wordt gewerkt? Bijv. Kassa, Groente, Vers. Elke afdeling krijgt een kleur in het rooster.</span>' + E.departments.map(dRow).join('') +
+      '<button class="btn small ghost" data-act="rx-ue-add" data-v="d">+ Afdeling</button></div>' +
+    '<div class="stack" style="gap:8px"><strong>Functies</strong><span class="small muted">Wat mag iemand doen? Bijv. HOKA of Sleutelhouder. Zet een functie op een dienst, dan kun je alleen mensen met die functie inplannen. Wie welke functie heeft, stel je in bij Mensen.</span>' + E.functions.map(fRow).join('') +
+      '<button class="btn small ghost" data-act="rx-ue-add" data-v="f">+ Functie</button></div></div>' +
+    (!E.departments.length && !E.functions.length ? '<button class="btn small" data-act="rx-ue-example">Voorbeeld supermarkt invullen</button>' : '') +
+    '<div class="row"><button class="btn primary" data-act="rx-units-save">Opslaan</button><button class="btn ghost" data-act="rx-units-x">Annuleren</button></div></section>';
 }
 function hoursEditor() {
   const E = S.roHoursEdit;
@@ -237,15 +304,15 @@ function openSpots(R) {
   return h + '<p class="small muted" style="margin:0">Klik op een naam om diegene meteen in te plannen. Groen = heeft aangegeven te kunnen.</p></section>';
 }
 function makeProposal(R) {
-  const work = Object.assign({}, R, { shifts: R.shifts.slice() });
+  const work = Object.assign({}, R, { shifts: R.shifts.slice(), allShifts: (R.allShifts || R.shifts).slice() });
   const out = [];
   openList(R).forEach(o => {
     for (let k = 0; k < o.missing; k++) {
       const tpl = o.item.tpl || (R.templates || [])[0] || { start: '09:00', end: '17:00', name: '' };
       const c = candidates(work, o.d, o.item.tpl).filter(x => x.left == null || x.left >= shiftMin(tpl) || x.kan)[0];
       if (!c) break;
-      const s = { id: 'p' + out.length, memberId: c.p.id, memberName: c.p.name, date: o.d, start: tpl.start, end: tpl.end, note: '', tplName: tpl.name, why: c.kan ? 'kan' : 'niet ingevuld' };
-      work.shifts.push(s); out.push(s);
+      const s = { id: 'p' + out.length, memberId: c.p.id, memberName: c.p.name, date: o.d, start: tpl.start, end: tpl.end, note: '', tplName: tpl.name, departmentId: tpl.departmentId || (S.roFilter || {}).dept || '', functionId: tpl.functionId || '', why: c.kan ? 'kan' : 'niet ingevuld' };
+      work.shifts.push(s); work.allShifts.push(s); out.push(s);
     }
   });
   // gaten in de openingstijden: per gat één persoon voor precies die uren (minimaal 1 uur)
@@ -254,8 +321,8 @@ function makeProposal(R) {
       if (o.g.to - o.g.from < 60) return;
       const t = { start: hhmm(o.g.from), end: hhmm(o.g.to) };
       const c = candidates(work, o.d, t)[0]; if (!c) return;
-      const s = { id: 'p' + out.length, memberId: c.p.id, memberName: c.p.name, date: o.d, start: t.start, end: t.end, note: '', tplName: 'openingstijden', why: c.kan ? 'kan' : 'niet ingevuld' };
-      work.shifts.push(s); out.push(s);
+      const s = { id: 'p' + out.length, memberId: c.p.id, memberName: c.p.name, date: o.d, start: t.start, end: t.end, note: '', tplName: 'openingstijden', departmentId: (S.roFilter || {}).dept || '', why: c.kan ? 'kan' : 'niet ingevuld' };
+      work.shifts.push(s); work.allShifts.push(s); out.push(s);
     });
   }
   return out;
@@ -313,27 +380,36 @@ document.getElementById('app').addEventListener('click', async e => {
   try {
     switch (act) {
       case 'rx-menu': S.roMenu = v || null; render(); return;
+      case 'rx-dept': S.roFilter = Object.assign({}, S.roFilter, { dept: v || '' }); S.roMenu = null; render(); return;
+      case 'rx-units': { const dd = el.closest('details'); if (dd) dd.open = false; const U = UNITS(R); S.roUnitsEdit = { departments: U.departments.map(d => Object.assign({}, d)), functions: U.functions.map(f => Object.assign({}, f)) }; S.roHoursEdit = null; S.roNeedsEdit = null; S.roOpenPanel = false; S.roProposal = null; render(); return; }
+      case 'rx-units-x': S.roUnitsEdit = null; render(); return;
+      case 'rx-ue-add': { const E = S.roUnitsEdit; if (v === 'd') E.departments.push({ name: '', color: DEPT_COLORS[E.departments.length % DEPT_COLORS.length] }); else E.functions.push({ name: '' }); render(); const ins = document.querySelectorAll('[data-ue^="' + v + '|"][data-ue$="|name"]'); if (ins.length) ins[ins.length - 1].focus(); return; }
+      case 'rx-ue-del': { const [k, i] = v.split('|'); (k === 'd' ? S.roUnitsEdit.departments : S.roUnitsEdit.functions).splice(Number(i), 1); render(); return; }
+      case 'rx-ue-example': {
+        S.roUnitsEdit.departments = ['Kassa', 'Groente & fruit', 'Vers', 'Vries', 'DKW', 'Vakkenvullen'].map((n, i) => ({ name: n, color: DEPT_COLORS[i] }));
+        S.roUnitsEdit.functions = ['HOKA', 'Leidinggevende', 'Sleutelhouder'].map(n => ({ name: n })); render(); return;
+      }
+      case 'rx-units-save': {
+        el.disabled = true; const u = await rpc('cd_units_save', { p: S.roUnitsEdit });
+        S.roster.units = u; S.roUnitsEdit = null; if (S.roFilter && S.roFilter.dept && !u.departments.some(d => same(d.id, S.roFilter.dept))) S.roFilter.dept = '';
+        toast('Afdelingen en functies opgeslagen.'); await roReload(); return;
+      }
       case 'rx-ct': S.roFilter = Object.assign({}, S.roFilter, { ct: v }); render(); return;
       case 'rx-quick': {
         const [pid, d] = v.split('|'); const t = R.templates.find(x => same(x.id, id));
         el.disabled = true;
-        const s = await roCreate(pid, d, t.start, t.end, t.note || '', S.locFilter || memberLoc(pid));
-        S.roMenu = null; roUndo('Dienst ingepland: ' + s.memberName + ' ' + dayShort(d) + ' ' + t.name, async () => { await rpc('cd_shift_delete', { p_id: s.id }); });
+        const sp = tplSpec(t, pid, d); const s = await roCreate(sp);
+        S.roMenu = null; roDone(opCreate([sp], 'Dienst ingepland', [s.id]), s.memberName.split(' ')[0] + ' ingepland ' + dayShort(d));
         await roReload(); return;
       }
-      case 'rx-undo': {
-        const U = S.roUndo; S.roUndo = null; if (!U) return;
-        el.disabled = true; await U.run(); toast('Ongedaan gemaakt.'); await roReload(); return;
-      }
-      case 'rx-undo-x': S.roUndo = null; render(); return;
       case 'rx-day': S.rosterView = 'dag'; S.rosterDay = v; S.roMenu = null; if (mondayOf(v) !== S.rosterWeek) { S.rosterWeek = mondayOf(v); await roReload(); } else render(); return;
-      case 'rx-needs': S.roNeedsEdit = JSON.parse(JSON.stringify(R.needs || {})); S.roHoursEdit = null; S.roOpenPanel = false; S.roProposal = null; render(); return;
+      case 'rx-needs': { const dd = el.closest('details'); if (dd) dd.open = false; } S.roNeedsEdit = JSON.parse(JSON.stringify(R.needs || {})); S.roHoursEdit = null; S.roOpenPanel = false; S.roProposal = null; render(); return;
       case 'rx-needs-x': S.roNeedsEdit = null; render(); return;
       case 'rx-needs-save': {
         el.disabled = true; const v2 = await rpc('cd_roster_needs_save', { p: S.roNeedsEdit });
         S.roster.needs = v2; S.roNeedsEdit = null; render(); toast('Bezetting opgeslagen. Boven elke dag zie je nu hoeveel plekken gevuld zijn.'); return;
       }
-      case 'rx-hours': S.roHoursEdit = JSON.parse(JSON.stringify(R.opening || {})); S.roNeedsEdit = null; S.roOpenPanel = false; S.roProposal = null; render(); return;
+      case 'rx-hours': { const dd = el.closest('details'); if (dd) dd.open = false; } S.roHoursEdit = JSON.parse(JSON.stringify(R.opening || {})); S.roNeedsEdit = null; S.roOpenPanel = false; S.roProposal = null; render(); return;
       case 'rx-hours-x': S.roHoursEdit = null; render(); return;
       case 'rx-hours-copy': { const m = S.roHoursEdit['1'] || { open: false }; [2, 3, 4, 5].forEach(wd => { S.roHoursEdit[wd] = Object.assign({}, m); }); render(); return; }
       case 'rx-hours-save': {
@@ -342,26 +418,28 @@ document.getElementById('app').addEventListener('click', async e => {
       }
       case 'rx-fillgap': {
         const [d, a, b] = v.split('|');
-        el.disabled = true; const s = await roCreate(id, d, a, b, '', S.locFilter || memberLoc(id));
-        roUndo('Ingepland: ' + s.memberName + ' ' + dayShort(d) + ' ' + a + '–' + b, async () => { await rpc('cd_shift_delete', { p_id: s.id }); });
+        const sp = { memberId: id, date: d, start: a, end: b, note: '', locationId: S.locFilter || memberLoc(id), departmentId: (S.roFilter || {}).dept || '' };
+        el.disabled = true; const s = await roCreate(sp);
+        roDone(opCreate([sp], 'Dienst ingepland', [s.id]), s.memberName.split(' ')[0] + ' ingepland ' + dayShort(d) + ' ' + a + '–' + b);
         await roReload(); return;
       }
       case 'rx-open': S.roOpenPanel = !S.roOpenPanel; S.roProposal = null; S.roNeedsEdit = null; S.roHoursEdit = null; render(); return;
       case 'rx-open-x': S.roOpenPanel = false; render(); return;
       case 'rx-fill': {
         const [d, tid] = v.split('|'); const t = tid ? R.templates.find(x => same(x.id, tid)) : (R.templates[0] || { start: '09:00', end: '17:00' });
-        el.disabled = true; const s = await roCreate(id, d, t.start, t.end, t.note || '', S.locFilter || memberLoc(id));
-        roUndo('Ingepland: ' + s.memberName + ' ' + dayShort(d), async () => { await rpc('cd_shift_delete', { p_id: s.id }); });
+        const sp = tplSpec(t, id, d); el.disabled = true; const s = await roCreate(sp);
+        roDone(opCreate([sp], 'Dienst ingepland', [s.id]), s.memberName.split(' ')[0] + ' ingepland ' + dayShort(d));
         await roReload(); return;
       }
-      case 'rx-propose': S.roProposal = makeProposal(R); S.roOpenPanel = false; S.roNeedsEdit = null; S.roHoursEdit = null; render(); return;
+      case 'rx-propose': S.roProposal = makeProposal(roView(R)); S.roOpenPanel = false; S.roNeedsEdit = null; S.roHoursEdit = null; render(); return;
       case 'rx-propose-x': S.roProposal = null; render(); return;
       case 'rx-propose-apply': {
         const todo = S.roProposal.filter(s => !s.off); if (!todo.length) return;
         el.disabled = true; const made = []; let fail = 0;
-        for (const s of todo) { try { made.push((await roCreate(s.memberId, s.date, s.start, s.end, '', S.locFilter || memberLoc(s.memberId))).id); } catch (err) { fail++; } }
-        S.roProposal = null; roUndo(made.length + ' diensten uit het voorstel ingepland', async () => { for (const x of made) { try { await rpc('cd_shift_delete', { p_id: x }); } catch (err) { /* */ } } });
-        toast(made.length + ' diensten ingepland.' + (fail ? ' ' + fail + ' lukten niet.' : ''), !!fail); await roReload(); return;
+        const okSpecs = [];
+        for (const x of todo) { const sp = specOf(x, { note: '', locationId: S.locFilter || memberLoc(x.memberId) }); try { made.push((await roCreate(sp)).id); okSpecs.push(sp); } catch (err) { fail++; } }
+        S.roProposal = null; roPush(opCreate(okSpecs, made.length + ' diensten uit het voorstel', made));
+        toast(made.length + ' diensten ingepland.' + (fail ? ' ' + fail + ' lukten niet.' : '') + ' · Ctrl+Z = terug', !!fail); await roReload(); return;
       }
       case 'rx-std-save': {
         el.closest('details').open = false;
@@ -374,8 +452,8 @@ document.getElementById('app').addEventListener('click', async e => {
         const before = new Set(R.shifts.map(s => String(s.id)));
         const d = await rpc('cd_roster_standard_apply', { p_week: R.weekStart });
         await roReload();
-        const added = S.roster.shifts.filter(s => !before.has(String(s.id))).map(s => s.id);
-        roUndo(d.added + ' diensten uit de standaardweek ingevuld', async () => { for (const x of added) { try { await rpc('cd_shift_delete', { p_id: x }); } catch (err) { /* */ } } });
+        const addedS = S.roster.shifts.filter(s => !before.has(String(s.id)));
+        roPush(opCreate(addedS, d.added + ' diensten uit de standaardweek', addedS.map(s => s.id)));
         toast(d.added + ' diensten ingevuld.' + (d.skipped ? ' ' + d.skipped + ' overgeslagen (stond er al, verlof of niet meer in dienst).' : '')); render(); return;
       }
       default: return;
@@ -384,6 +462,7 @@ document.getElementById('app').addEventListener('click', async e => {
 });
 document.getElementById('app').addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset.ue && S.roUnitsEdit) { const [k, i, f] = el.dataset.ue.split('|'); (k === 'd' ? S.roUnitsEdit.departments : S.roUnitsEdit.functions)[Number(i)][f] = el.value; return; }
   if (el.dataset.oh && S.roHoursEdit && el.type !== 'checkbox') { const [wd, k] = el.dataset.oh.split('|'); S.roHoursEdit[wd] = Object.assign({ open: true }, S.roHoursEdit[wd], { [k]: el.value }); return; }
   if (el.dataset.need && S.roNeedsEdit) { const [wd, k] = el.dataset.need.split('|'); S.roNeedsEdit[wd] = S.roNeedsEdit[wd] || {}; S.roNeedsEdit[wd][k] = el.value.replace(/\D/g, ''); return; }
   if (el.dataset.prop !== undefined && S.roProposal) { S.roProposal[Number(el.dataset.prop)].off = !el.checked; const b = document.querySelector('[data-act="rx-propose-apply"]'); if (b) b.textContent = S.roProposal.filter(s => !s.off).length + ' diensten inplannen'; return; }
@@ -422,19 +501,20 @@ document.getElementById('app').addEventListener('drop', async e => {
   try {
     if (D.type === 'tpl') {
       const t = R.templates.find(x => same(x.id, D.id));
-      const s = await roCreate(pid, d, t.start, t.end, t.note || '', S.locFilter || memberLoc(pid));
-      roUndo('Ingepland: ' + s.memberName + ' ' + dayShort(d) + ' ' + t.name, async () => { await rpc('cd_shift_delete', { p_id: s.id }); });
+      const sp = tplSpec(t, pid, d); const s = await roCreate(sp);
+      roDone(opCreate([sp], 'Dienst ingepland', [s.id]), s.memberName.split(' ')[0] + ' ingepland ' + dayShort(d));
     } else {
       const s = R.shifts.find(x => same(x.id, D.id)); if (!s) return;
       const copy = e.ctrlKey || e.altKey || e.metaKey;
       if (!copy && same(s.memberId, pid) && s.date === d) return;
       if (copy) {
-        const n = await roCreate(pid, d, s.start, s.end, s.note || '', s.locationId);
-        roUndo('Dienst gekopieerd naar ' + n.memberName + ' ' + dayShort(d), async () => { await rpc('cd_shift_delete', { p_id: n.id }); });
+        const sp = specOf(s, { memberId: pid, date: d }); const n = await roCreate(sp);
+        roDone(opCreate([sp], 'Dienst gekopieerd', [n.id]), 'Gekopieerd naar ' + n.memberName.split(' ')[0] + ' ' + dayShort(d));
       } else {
         const old = { memberId: s.memberId, date: s.date, start: s.start, end: s.end, note: s.note || '' };
-        const n = await rpc('cd_shift_save', { p_id: s.id, p: { memberId: pid, date: d, start: s.start, end: s.end, note: s.note || '' } });
-        roUndo('Dienst verplaatst naar ' + n.memberName + ' ' + dayShort(d), async () => { await rpc('cd_shift_save', { p_id: s.id, p: old }); });
+        const nw = Object.assign({}, old, { memberId: pid, date: d });
+        const n = await rpc('cd_shift_save', { p_id: s.id, p: nw });
+        roDone(opMove(s.id, old, nw), 'Verplaatst naar ' + n.memberName.split(' ')[0] + ' ' + dayShort(d));
       }
     }
     await roReload();

@@ -313,6 +313,7 @@ async function loadRoute() {
   if (r === 'cijfers') jobs.push(rpc('cd_stats', { p_days: S.statDays }).then(d => { S.stats = d; }));
   if (r === 'logboek') jobs.push(loadLog(), loadColleagues());
   if (r === 'mensen' || r === 'rollen') jobs.push(loadPeople());
+  if (r === 'mensen') jobs.push(rpc('cd_units').then(d => { S.units = d; }).catch(() => { S.units = null; }));
   if (r === 'uren') jobs.push(loadHours());
   if (r === 'rooster') jobs.push(loadRoster());
   if (r === 'goedkeuren') jobs.push(rpc('cd_hours_pending').then(d => { S.pending = d; }));
@@ -1001,6 +1002,16 @@ function permSummary(roleId) {
   return '<div class="small muted">' + esc(r.description || '') + '</div><div class="chips" style="margin-top:6px">' +
     PERM_GROUPS.flatMap(g => g[1]).filter(p => r.permissions.includes(p[0])).map(p => '<span class="badge">' + esc(p[1]) + '</span>').join('') + '</div>';
 }
+function unitsBox(u) {
+  const U = S.units; if (!U || (!U.departments.length && !U.functions.length)) return '';
+  if (!(can('members.manage') || can('hours.plan'))) return '';
+  const E = S.muEdit && same(S.muEdit.id, u.id) ? S.muEdit : { id: u.id, d: (u.departmentIds || []).map(String), f: (u.functionIds || []).map(String) };
+  const pick = (list, sel, kind) => list.map(x => '<button type="button" class="unit-chip' + (sel.includes(String(x.id)) ? ' on' : '') + '" data-act="mu-toggle" data-v="' + kind + '|' + x.id + '"' + (x.color ? ' style="--c:' + esc(x.color) + '"' : '') + ' aria-pressed="' + sel.includes(String(x.id)) + '">' + esc(x.name) + '</button>').join('');
+  return '<fieldset class="box" style="margin:0"><legend class="legend" style="padding:0 4px">Afdelingen en functies</legend>' +
+    (U.departments.length ? '<div class="small muted">Afdelingen</div><div class="unit-chips">' + pick(U.departments, E.d, 'd') + '</div>' : '') +
+    (U.functions.length ? '<div class="small muted" style="margin-top:8px">Functies (wat mag diegene doen?)</div><div class="unit-chips">' + pick(U.functions, E.f, 'f') + '</div>' : '') +
+    (S.muEdit && same(S.muEdit.id, u.id) ? '<div class="row" style="margin-top:8px"><button class="btn small dark" data-act="mu-save" data-id="' + u.id + '">Opslaan</button><button class="btn small ghost" data-act="mu-cancel">Annuleren</button></div>' : '') + '</fieldset>';
+}
 function viewMemberPanel() {
   if (S.mNew) {
     const first = (S.roles.roles.find(r => r.name === 'Medewerker' && r.canAssign) || S.roles.roles.find(r => !r.isOwner && r.canAssign) || {}).id;
@@ -1036,7 +1047,7 @@ function viewMemberPanel() {
     (self ? '<dl class="kv"><dt>Rol</dt><dd>' + esc(u.roleName) + '</dd></dl>' :
       '<div class="field"><label for="m-role">Rol</label><select class="input" id="m-role" data-act-change="m-role-edit">' + roleOptions(u.roleId) + '</select><div id="m-perms">' + permSummary(u.roleId) + '</div></div>' +
       '<label class="check"><input type="checkbox" id="m-active"' + (u.active ? ' checked' : '') + '> Account actief (kan inloggen)</label>') +
-    (!self || S.me.isOwner ? contractFields(u) : '<dl class="kv"><dt>Contract</dt><dd>' + esc(contractText(u)) + '</dd></dl>') + leaveAccountBox(u) +
+    (!self || S.me.isOwner ? contractFields(u) : '<dl class="kv"><dt>Contract</dt><dd>' + esc(contractText(u)) + '</dd></dl>') + leaveAccountBox(u) + unitsBox(u) +
     (can('members.manage') && (!self || S.me.isOwner || can('members.manage')) ? memberBizFields(u) : '') +
     '<div class="detail-section"><button class="btn dark" data-act="m-save" data-id="' + u.id + '">Opslaan</button>' +
     (self || !can('members.manage') || u.leaving ? '' : '<button class="btn danger" data-act="m-off-open" data-id="' + u.id + '">Uit dienst melden</button>') + '</div>' +
@@ -1566,6 +1577,17 @@ async function loadRoster() {
     S.roster = await rpc('cd_roster', { p_week: S.rosterWeek || today() }); S.rosterWeek = S.roster.weekStart;
   }
 }
+function UNITS(R) { return (R && R.units) || (S.roster && S.roster.units) || { departments: [], functions: [] }; }
+function deptOf(id, R) { return UNITS(R).departments.find(d => same(d.id, id)); }
+function funcOf(id, R) { return UNITS(R).functions.find(f => same(f.id, id)); }
+function unitFields(R, E) {
+  const U = UNITS(R); if (!U.departments.length && !U.functions.length) return '';
+  return '<div class="fields2">' +
+    (U.departments.length ? '<div class="field"><label for="sh-dept">Afdeling</label><select class="input" id="sh-dept" data-sh="departmentId" data-rerender="1"><option value="">— Geen —</option>' +
+      U.departments.map(d => '<option value="' + d.id + '"' + (same(d.id, E.departmentId) ? ' selected' : '') + '>' + esc(d.name) + '</option>').join('') + '</select></div>' : '') +
+    (U.functions.length ? '<div class="field"><label for="sh-func">Functie nodig</label><select class="input" id="sh-func" data-sh="functionId" data-rerender="1"><option value="">— Geen —</option>' +
+      U.functions.map(f => '<option value="' + f.id + '"' + (same(f.id, E.functionId) ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select></div>' : '') + '</div>';
+}
 function shiftForm(R) {
   const E = S.shiftEdit;
   const p = R.people.find(x => same(x.id, E.memberId));
@@ -1578,7 +1600,7 @@ function shiftForm(R) {
     '<div class="field"><label for="sh-end">Eind</label><input class="input" type="time" id="sh-end" data-sh="end" value="' + esc(E.end) + '"></div></div>' +
     (p && p.leavingOn ? '<p class="small" style="margin:0;color:var(--red)">' + esc(p.name) + ' vertrekt: de laatste werkdag is ' + esc(dayLong(p.leavingOn).toLowerCase()) + '.</p>' : '') +
     (R.templates && R.templates.length ? '<div class="chips"><span class="small muted">Vaste dienst:</span>' + R.templates.map(t => '<button class="chip quick" data-act="sh-tpl" data-id="' + t.id + '">' + esc(t.name) + ' ' + esc(t.start + '–' + t.end) + '</button>').join('') + '</div>' : '') +
-    shiftWarnings(R, E) + whoCanWork(R, E) +
+    unitFields(R, E) + shiftWarnings(R, E) + whoCanWork(R, E) +
     '<div class="fields2">' + shiftLocField(E) + '<div class="field"><label for="sh-note">Notitie <span class="muted" style="font-weight:400">(optioneel, bijv. balie of magazijn)</span></label><input class="input" id="sh-note" data-sh="note" maxlength="120" value="' + esc(E.note) + '"></div></div>' +
     '<div class="form-foot">' + (E.id ? '<button class="btn danger small" data-act="sh-del" data-id="' + E.id + '" style="margin-right:auto">' + ICON.trash + 'Verwijderen</button>' : '') +
     '<button class="btn small ghost" data-act="sh-cancel">Annuleren</button><button class="btn primary small" data-act="sh-save">' + (E.id ? 'Opslaan' : 'Inplannen') + '</button></div></section>';
@@ -1596,6 +1618,7 @@ function whoCanWork(R, E) {
   const groups = { kan: [], leeg: [], niet: [], vrij: [], dienst: [] };
   R.people.forEach(x => {
     if (x.leavingOn && E.date > x.leavingOn) return;
+    if (E.functionId && !(x.functionIds || []).some(f => same(f, E.functionId))) return;
     const off = absFor(R.absences, x.id, E.date);
     const av = (R.availability || []).find(a => same(a.memberId, x.id) && a.date === E.date);
     const has = (R.shifts || []).find(s2 => same(s2.memberId, x.id) && s2.date === E.date && !same(s2.id, E.id));
@@ -1608,7 +1631,8 @@ function whoCanWork(R, E) {
   const chip = ([x, sub], kind) => '<button type="button" class="who-chip ' + kind + (same(x.id, E.memberId) ? ' on' : '') + '"' + (kind === 'vrij' ? ' disabled' : ' data-act="sh-pick" data-id="' + x.id + '"') + '>' +
     '<strong>' + esc(x.name) + '</strong>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</button>';
   const block = (title, list, kind) => list.length ? '<div class="who-group"><span class="who-title ' + kind + '">' + title + ' · ' + list.length + '</span><div class="who-list">' + list.map(i => chip(i, kind)).join('') + '</div></div>' : '';
-  return '<div class="who-can"><strong class="who-head">Wie kan er op ' + esc(dayLong(E.date).toLowerCase()) + '?</strong>' +
+  const fn = E.functionId ? funcOf(E.functionId, R) : null;
+  return '<div class="who-can"><strong class="who-head">Wie kan er op ' + esc(dayLong(E.date).toLowerCase()) + '?' + (fn ? ' <span class="func-tag">alleen met functie ' + esc(fn.name) + '</span>' : '') + '</strong>' +
     block('Beschikbaar', groups.kan, 'kan') + block('Niet ingevuld', groups.leeg, 'leeg') + block('Al ingepland', groups.dienst, 'dienst') +
     block('Niet beschikbaar', groups.niet, 'niet') + block('Verlof of ziek (kan niet)', groups.vrij, 'vrij') +
     '<p class="small muted" style="margin:0">Klik op een naam om die medewerker te kiezen.</p></div>';
@@ -1628,7 +1652,7 @@ function viewRoster() {
   const R = rosterFiltered(S.roster); if (!R) return '';
   const view = S.rosterView || (R.canPlan ? 'week' : 'mijn');
   const month = view === 'maand', mineView = view === 'mijn', dayView = view === 'dag';
-  let h = '<header class="page-head"><div><h1>Rooster</h1><p>' + (mineView ? 'Jouw diensten van deze week.' : R.canPlan && !month ? 'Klik op <strong>+</strong> of sleep een vaste dienst naar een vakje. Sleep een dienst om hem te verplaatsen (met Ctrl ingedrukt: kopiëren).' : 'Wie wanneer werkt.') + '</p></div></header>';
+  let h = '<header class="page-head"><div><div class="ro-title"><h1>Rooster</h1>' + (R.canPlan && !mineView && !month ? pubPill(R) : '') + '</div><p>' + (mineView ? 'Jouw diensten van deze week.' : R.canPlan && !month ? 'Klik op <strong>+</strong> of sleep een vaste dienst naar een vakje. Sleep een dienst om hem te verplaatsen (met Ctrl ingedrukt: kopiëren).' : 'Wie wanneer werkt.') + '</p></div></header>';
   h += '<div class="roster-bar"><div class="seg" role="group" aria-label="Weergave">' + [['mijn', 'Mijn week'], ['week', 'Iedereen'], ['dag', 'Dag'], ['maand', 'Maand']].map(v =>
     '<button data-act="ro-view" data-v="' + v[0] + '" class="' + (view === v[0] ? 'on' : '') + '" aria-pressed="' + (view === v[0]) + '">' + v[1] + '</button>').join('') + '</div>';
   if (month) {
@@ -1644,12 +1668,13 @@ function viewRoster() {
   }
   h += (mineView ? '' : locFilterSelect()) + '</div>';
   if (mineView) return h + rosterMine(R);
-  if (!month) h += publishBanner(R);
-  h += rosterPanels(R);
+  if (!month && !R.canPlan) h += publishBanner(R);
+  const RV = roView(R);
+  h += rosterPanels(RV);
   if (S.shiftEdit) h += modal(shiftForm(R), 'sh-cancel');
   if (!R.people.length) return h + '<div class="empty">Nog geen actieve medewerkers.</div>';
-  if (dayView) return h + rosterDayView(R) + (R.canPlan ? templatesCard(R) : '');
-  return h + (month ? '' : rosterToolbar(R)) + (month ? rosterMonth(R) : rosterWeek(R)) + (month ? '' : rosterLegend(R)) + (R.canPlan ? templatesCard(R) : '');
+  if (dayView) return h + deptBar(RV) + rosterDayView(RV) + (R.canPlan ? templatesCard(R) : '');
+  return h + (month ? '' : rosterToolbar(RV)) + (month ? rosterMonth(R) : rosterWeek(RV)) + (month ? '' : rosterLegend(R)) + (R.canPlan ? templatesCard(R) : '');
 }
 function tplOf(R, s) { const i = (R.templates || []).findIndex(t => t.start === s.start && t.end === s.end); return i < 0 ? null : { i: i % 6, t: R.templates[i] }; }
 function rosterMine(R) {
@@ -1674,6 +1699,11 @@ function rosterMine(R) {
   return h;
 }
 function weekPub(R, wk) { return (R.published || []).find(x => x.week === wk); }
+function pubPill(R) {
+  const pub = weekPub(R, R.weekStart);
+  if (pub) return '<span class="pub-pill on" title="' + esc('Vastgezet' + (pub.byName ? ' door ' + pub.byName : '') + ' · ' + fmtDate(pub.at) + '. Iedereen ziet deze week; wijzigingen worden gemeld.') + '">✓ Verstuurd</span><button class="link-btn small" data-act="ro-unpublish">Terug naar concept</button>';
+  return '<span class="pub-pill" title="Alleen planners zien deze week">Concept</span><button class="btn small primary" data-act="ro-publish"' + (R.shifts.length ? '' : ' disabled') + ' title="Zet het rooster vast; iedereen met een dienst krijgt een melding">Versturen</button>';
+}
 function publishBanner(R) {
   const pub = weekPub(R, R.weekStart);
   if (!R.canPlan) return pub || R.shifts.length ? '' : '<div class="alert info"><span>Het rooster voor deze week is nog niet klaar.</span></div>';
@@ -1687,12 +1717,15 @@ function templatesCard(R) {
   let h = '<section class="card tpl-card"><button class="tpl-head" data-act="tpl-toggle" aria-expanded="' + open + '"><span><strong>Vaste diensten</strong> <span class="small muted">' +
     (R.templates.length ? R.templates.map(t => esc(t.name)).join(' · ') : 'Nog geen, bijvoorbeeld Ochtend 08:30–13:00') + '</span></span>' + ICON.chev + '</button>';
   if (open) {
-    const E = S.tplEdit || { name: '', start: '', end: '', note: '' };
-    h += '<div class="tpl-list">' + R.templates.map(t => '<div class="tpl-item"><span class="shift">' + esc(t.name) + ' · ' + esc(t.start + '–' + t.end) + (t.note ? '<small>' + esc(t.note) + '</small>' : '') + '</span>' +
-      '<button class="icon-btn small" data-act="tpl-del" data-id="' + t.id + '" aria-label="' + esc(t.name) + ' verwijderen">' + ICON.trash + '</button></div>').join('') + '</div>' +
+    const E = S.tplEdit || { name: '', start: '', end: '', note: '' }; const U = UNITS(R);
+    h += '<div class="tpl-list">' + R.templates.map(t => { const d = deptOf(t.departmentId, R), f = funcOf(t.functionId, R);
+      return '<div class="tpl-item"><span class="shift"' + (d ? ' style="border-left:4px solid ' + esc(d.color) + '"' : '') + '>' + esc(t.name) + ' · ' + esc(t.start + '–' + t.end) + ((d || f || t.note) ? '<small>' + esc([d ? d.name : '', f ? f.name : '', t.note || ''].filter(Boolean).join(' · ')) + '</small>' : '') + '</span>' +
+      '<button class="icon-btn small" data-act="tpl-del" data-id="' + t.id + '" aria-label="' + esc(t.name) + ' verwijderen">' + ICON.trash + '</button></div>'; }).join('') + '</div>' +
       '<div class="row" style="align-items:flex-end"><div class="field" style="flex:1 1 140px"><label for="tpl-name">Naam</label><input class="input" id="tpl-name" data-tpl="name" maxlength="40" value="' + esc(E.name) + '" placeholder="Ochtend"></div>' +
       '<div class="field" style="flex:0 1 120px"><label for="tpl-start">Begin</label><input class="input" type="time" id="tpl-start" data-tpl="start" value="' + esc(E.start) + '"></div>' +
       '<div class="field" style="flex:0 1 120px"><label for="tpl-end">Eind</label><input class="input" type="time" id="tpl-end" data-tpl="end" value="' + esc(E.end) + '"></div>' +
+      (U.departments.length ? '<div class="field" style="flex:1 1 130px"><label for="tpl-dept">Afdeling</label><select class="input" id="tpl-dept" data-tpl="departmentId"><option value="">—</option>' + U.departments.map(d => '<option value="' + d.id + '"' + (same(d.id, E.departmentId) ? ' selected' : '') + '>' + esc(d.name) + '</option>').join('') + '</select></div>' : '') +
+      (U.functions.length ? '<div class="field" style="flex:1 1 130px"><label for="tpl-func">Functie</label><select class="input" id="tpl-func" data-tpl="functionId"><option value="">—</option>' + U.functions.map(f => '<option value="' + f.id + '"' + (same(f.id, E.functionId) ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select></div>' : '') +
       '<div class="field" style="flex:1 1 140px"><label for="tpl-note">Notitie</label><input class="input" id="tpl-note" data-tpl="note" maxlength="120" value="' + esc(E.note) + '" placeholder="Bijv. balie"></div>' +
       '<button class="btn dark" data-act="tpl-save">Toevoegen</button></div>';
   }
@@ -1757,7 +1790,9 @@ async function copyLastWeek() {
   if (!todo.length) { toast(prev.shifts.length ? 'Alle diensten van vorige week staan er al.' : 'Vorige week stonden er geen diensten.'); return false; }
   if (!confirm(todo.length + (todo.length === 1 ? ' dienst' : ' diensten') + ' van vorige week overnemen in deze week?')) return false;
   let ok = 0;
-  for (const s of todo) { try { await rpc('cd_shift_save', { p_id: null, p: { memberId: s.memberId, date: s.date, start: s.start, end: s.end, note: s.note || '' } }); ok++; } catch (e) { /* sla over */ } }
+  const made = [];
+  for (const s of todo) { try { made.push((await rpc('cd_shift_save', { p_id: null, p: { memberId: s.memberId, date: s.date, start: s.start, end: s.end, note: s.note || '', departmentId: s.departmentId || '', functionId: s.functionId || '' } })).id); ok++; } catch (e) { /* sla over */ } }
+  if (made.length) roPush(opCreate(todo.filter((x, i) => i < made.length), made.length + ' diensten van vorige week', made));
   const skip = todo.length - ok;
   toast(ok + (ok === 1 ? ' dienst' : ' diensten') + ' gekopieerd.' + (skip ? ' ' + skip + ' overgeslagen (verlof, ziek of niet meer in dienst).' : ''), !!skip);
   return true;
@@ -1942,14 +1977,10 @@ function viewKiosk() {
   let body;
   if (K.exit) {
     const X = K.exit;
-    body = '<form class="kiosk-exit" data-form="kiosk-exit" novalidate><h1>Prikklok verlaten</h1><p>Log in met ' + (X.legacy ? 'je naam en code' : 'je e-mailadres en wachtwoord') + '. Alleen mensen met het recht "Prikklok verlaten" kunnen dit.</p>' +
+    body = '<form class="kiosk-exit" data-form="kiosk-exit" novalidate><h1>Prikklok verlaten</h1><p>Log in met je e-mailadres en wachtwoord. Alleen mensen met het recht "Prikklok verlaten" kunnen dit.</p>' +
       (X.err ? '<p class="kiosk-err" role="alert">' + esc(X.err) + '</p>' : '') +
-      (X.legacy
-        ? '<div class="field"><label for="kx-name">Naam</label><input class="input" id="kx-name" name="name" autocomplete="off" value="' + esc(X.name || '') + '"></div>' +
-          '<div class="field"><label for="kx-code">Code</label><input class="input code-input" id="kx-code" name="code" type="password" inputmode="numeric" autocomplete="off"></div>'
-        : '<div class="field"><label for="kx-name">E-mailadres</label><input class="input" id="kx-name" name="name" type="email" autocapitalize="none" spellcheck="false" autocomplete="off" value="' + esc(X.name || '') + '"></div>' +
-          '<div class="field"><label for="kx-code">Wachtwoord</label><input class="input" id="kx-code" name="code" type="password" autocomplete="off"></div>') +
-      '<button type="button" class="linkbtn" data-act="k-exit-mode">' + (X.legacy ? 'Inloggen met e-mailadres' : 'Ik log nog in met een code') + '</button>' +
+      '<div class="field"><label for="kx-name">E-mailadres</label><input class="input" id="kx-name" name="name" type="email" autocapitalize="none" spellcheck="false" autocomplete="off" value="' + esc(X.name || '') + '"></div>' +
+      '<div class="field"><label for="kx-code">Wachtwoord</label><input class="input" id="kx-code" name="code" type="password" autocomplete="off"></div>' +
       '<label class="check"><input type="checkbox" name="revoke"' + (X.revoke ? ' checked' : '') + '> Prikklok op dit apparaat helemaal uitzetten</label>' +
       '<div class="form-foot"><button type="button" class="btn ghost" data-act="k-exit-cancel">Annuleren</button><button type="submit" class="btn primary"' + (X.busy ? ' disabled' : '') + '>' + (X.busy ? 'Bezig…' : 'Inloggen') + '</button></div></form>';
   } else if (K.error === 'none' || K.error === 'revoked') {
@@ -2698,6 +2729,7 @@ $app.addEventListener('click', async e => {
         const prev = S.shiftEdit;
         const mid = raw || (rosterFiltered(S.roster).people[0] || {}).id;
         S.shiftEdit = { id: null, memberId: mid, date: el.dataset.v, start: prev && !prev.id ? prev.start : '09:00', end: prev && !prev.id ? prev.end : '17:00', note: prev && !prev.id ? prev.note : '',
+          departmentId: (S.roFilter && S.roFilter.dept) || '', functionId: '',
           locationId: S.locFilter || memberLoc(mid) || (prev && !prev.id ? prev.locationId : '') || '' };
         S.roMenu = null; render(); return;
       }
@@ -2705,7 +2737,8 @@ $app.addEventListener('click', async e => {
       case 'sh-cancel': S.shiftEdit = null; render(); return;
       case 'sh-save': {
         const E = S.shiftEdit;
-        const saved = await rpc('cd_shift_save', { p_id: E.id || null, p: { memberId: E.memberId, date: E.date, start: E.start, end: E.end, note: E.note } });
+        const saved = await rpc('cd_shift_save', { p_id: E.id || null, p: { memberId: E.memberId, date: E.date, start: E.start, end: E.end, note: E.note, departmentId: E.departmentId || '', functionId: E.functionId || '' } });
+        if (!E.id && saved) roPush(opCreate([Object.assign({}, E, { locationId: E.locationId })], 'Dienst ingepland', [saved.id]));
         if (LOCS().length && saved && (saved.locationId || '') !== (E.locationId || '')) await rpc('cd_shift_location', { p_id: saved.id, p_location: E.locationId || null });
         toast(E.id ? 'Dienst gewijzigd.' : 'Dienst ingepland.');
         S.shiftEdit = null;
@@ -2714,8 +2747,7 @@ $app.addEventListener('click', async e => {
       case 'sh-del': {
         const old = S.roster.shifts.find(x => same(x.id, num));
         await rpc('cd_shift_delete', { p_id: num }); S.shiftEdit = null;
-        if (old) roUndo('Dienst verwijderd: ' + old.memberName + ' ' + dayShort(old.date) + ' ' + old.start + '–' + old.end, async () => { await roCreate(old.memberId, old.date, old.start, old.end, old.note || '', old.locationId); });
-        else toast('Dienst verwijderd.');
+        if (old) { roPush(opDelete(old)); toast('Dienst verwijderd. Ctrl+Z zet hem terug.'); } else toast('Dienst verwijderd.');
         break;
       }
 
@@ -2745,6 +2777,18 @@ $app.addEventListener('click', async e => {
       case 'go-account': S.setTab = 'account'; if (route() === 'instellingen') { e.preventDefault(); render(); window.scrollTo(0, 0); } return;
       case 'set-tab': S.setTab = el.dataset.v; render(); return;
       case 'm-qclear': S.mq = ''; S.mFilter = {}; render(); return;
+      case 'mu-toggle': {
+        const u = S.members.find(x => same(x.id, S.mSel)); if (!u) return;
+        const E = S.muEdit && same(S.muEdit.id, u.id) ? S.muEdit : (S.muEdit = { id: u.id, d: (u.departmentIds || []).map(String), f: (u.functionIds || []).map(String) });
+        const [k, id] = el.dataset.v.split('|'); const arr = E[k]; const i = arr.indexOf(id); if (i >= 0) arr.splice(i, 1); else arr.push(id); render(); return;
+      }
+      case 'mu-cancel': S.muEdit = null; render(); return;
+      case 'mu-save': {
+        const E = S.muEdit; el.disabled = true;
+        const d = await rpc('cd_member_units', { p_member: E.id, p_departments: E.d, p_functions: E.f });
+        const u = S.members.find(x => same(x.id, E.id)); if (u) { u.departmentIds = d.departmentIds; u.functionIds = d.functionIds; }
+        S.muEdit = null; render(); toast('Afdelingen en functies opgeslagen.'); return;
+      }
       case 'pres-toggle': { S.presOpen = !S.presOpen; const pr = document.getElementById('presence'); if (pr) pr.outerHTML = viewPresence(); return; }
       case 'pres-out': S.presOutOpen = !el.parentElement.open; return;
       case 'pinw-mode': S.pinNew.mode = el.dataset.v; render(); return;
@@ -2768,7 +2812,7 @@ $app.addEventListener('click', async e => {
       case 'sh-pick': if (S.shiftEdit) { S.shiftEdit.memberId = raw; render(); } return;
       case 'sh-tpl': {
         const t = S.roster.templates.find(x => same(x.id, raw));
-        Object.assign(S.shiftEdit, { start: t.start, end: t.end, note: t.note || S.shiftEdit.note }); render(); return;
+        Object.assign(S.shiftEdit, { start: t.start, end: t.end, note: t.note || S.shiftEdit.note, departmentId: t.departmentId || S.shiftEdit.departmentId || '', functionId: t.functionId || '' }); render(); return;
       }
       case 'ro-publish': {
         const wk = S.roster.weekStart;
