@@ -175,8 +175,8 @@ function accountCard() {
       : '<p class="small" style="margin:0"><span class="badge">Uit</span> Zet het aan voor een extra slot op je account. Je hebt alleen een authenticator-app op je telefoon nodig.</p>' +
         (legacy ? '<p class="small muted" style="margin:0">Koppel eerst je e-mailadres.</p>' : '<div><button class="btn dark" data-act="ac-mfa-on">Aanzetten</button></div>'));
   {
-    h += '<h3 class="card-sub">Pincode voor de prikklok</h3><p class="small muted" style="margin:0">Hiermee klok je in op een prikklok-tablet zonder je telefoon. ' + (me.hasPin ? 'Je hebt een pincode ingesteld.' : 'Je hebt nog geen pincode.') + '</p>' +
-      '<div class="field"><label for="ac-pin">' + (me.hasPin ? 'Nieuwe pincode' : 'Pincode') + '</label><input class="input code-input" id="ac-pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="4 tot 8 cijfers"></div>' +
+    h += '<h3 class="card-sub">Pincode voor de prikklok</h3><p class="small muted" style="margin:0">Normaal klok je in met de wisselende code uit de app. Je eigen pincode werkt alleen als de eigenaar dat tijdelijk heeft toegestaan. ' + (me.hasPin ? 'Je hebt een pincode ingesteld.' : 'Je hebt nog geen pincode.') + '</p>' +
+      '<div class="field"><label for="ac-pin">' + (me.hasPin ? 'Nieuwe pincode' : 'Pincode') + '</label><input class="input code-input" id="ac-pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="8 cijfers"></div>' +
       '<div class="row"><button class="btn" data-act="ac-pin-save">Pincode opslaan</button>' + (me.hasPin ? '<button class="btn ghost" data-act="ac-pin-clear">Pincode weghalen</button>' : '') + '</div>';
   }
   h += '<h3 class="card-sub">Laatste keren ingelogd</h3>' + loginRows(S.myLogins, false) +
@@ -282,7 +282,7 @@ document.getElementById('app').addEventListener('click', async e => {
       }
       case 'ac-pin-save': case 'ac-pin-clear': {
         const pin = act === 'ac-pin-clear' ? '' : document.getElementById('ac-pin').value.trim();
-        if (act === 'ac-pin-save' && !/^\d{4,8}$/.test(pin)) { toast('Een pincode bestaat uit 4 tot 8 cijfers.', true); return; }
+        if (act === 'ac-pin-save' && !/^\d{8}$/.test(pin)) { toast('Een pincode bestaat uit precies 8 cijfers.', true); return; }
         el.disabled = true;
         await rpc('cd_clock_pin_set', { p_pin: pin });
         await loadSession(); render(); toast(pin ? 'Je pincode is opgeslagen.' : 'Je pincode is weggehaald.'); return;

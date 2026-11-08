@@ -834,3 +834,9 @@ details summary { cursor: pointer; font-weight: 600; min-height: 32px; display: 
 /* pauzeregels */
 .br-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
 .br-row .input { width: 76px; min-height: 38px; }
+
+/* ---------- danger zone ---------- */
+.danger-zone { border: 2px solid #DC2626; background: #FFF7F7; }
+.dz-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #fff; background: #DC2626; padding: 2px 8px; border-radius: 99px; }
+.dz-form { border: 1px dashed #F3A6A6; border-radius: 12px; padding: 14px; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.kiosk-pinnote { margin: 0 32px 12px; padding: 12px 18px; border-radius: 12px; background: #FEF3C7; color: #78350F; font-weight: 600; font-size: 16px; text-align: center; }

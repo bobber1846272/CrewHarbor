@@ -34,11 +34,11 @@ function viewMobile() {
 function mCode() {
   const R = S.running; const W = S.nowWeek;
   const todayShift = W ? W.shifts.find(s => s.date === W.today) : null;
-  const code = M.clock ? M.clock.code : '------';
+  const code = M.clock ? M.clock.code : '--------';
   const left = secondsLeft();
   let h = '<section class="m-card m-codecard"><p class="m-label">Jouw klokcode</p>' +
-    '<div class="m-code" id="m-code" aria-live="polite">' + esc(code.slice(0, 3)) + ' ' + esc(code.slice(3)) + '</div>' +
-    '<div class="m-timer"><span id="m-bar" style="width:' + (left / 30 * 100) + '%"></span></div>' +
+    '<div class="m-code" id="m-code" aria-live="polite">' + esc(code.slice(0, 4)) + ' ' + esc(code.slice(4)) + '</div>' +
+    '<div class="m-timer"><span id="m-bar" style="width:' + (left / ((M.clock && M.clock.period) || 20) * 100) + '%"></span></div>' +
     '<p class="m-sub" id="m-left">Nieuwe code over ' + left + ' sec</p>' +
     '<p class="m-help">Tik bij de prikklok op je naam en voer deze code in.</p></section>';
   h += '<section class="m-card m-status ' + (R ? 'in' : '') + '">' + (R
@@ -200,5 +200,5 @@ setInterval(async () => {
   const left = secondsLeft();
   if (!M.clock || left <= 0) { await loadClockCode(); render(); return; }
   const l = document.getElementById('m-left'); if (l) l.textContent = 'Nieuwe code over ' + left + ' sec';
-  const b = document.getElementById('m-bar'); if (b) b.style.width = (left / 30 * 100) + '%';
+  const b = document.getElementById('m-bar'); if (b) b.style.width = (left / ((M.clock && M.clock.period) || 20) * 100) + '%';
 }, 1000);

@@ -312,6 +312,7 @@ async function loadRoute() {
   if (r === 'urenoverzicht') jobs.push(loadReport());
   if (r === 'telefonie') jobs.push(loadPhone());
   if (r === 'instellingen') jobs.push(loadSecurity());
+  if (r === 'instellingen' && S.me && S.me.isOwner) jobs.push(rpc('cd_pin_windows').then(d => { S.pinWin = d; }).catch(() => { S.pinWin = null; }));
   if (typeof loadBizRoute === 'function') jobs.push(loadBizRoute(r));
   if (r === 'instellingen' && can('org.manage')) jobs.push(rpc('cd_phone_status').then(d => { S.phStatus = d; }).catch(() => { S.phStatus = null; }));
   if (r === 'prikklok') jobs.push(rpc('cd_kiosks').then(d => { S.kiosks = d; }));
@@ -1079,7 +1080,27 @@ function viewSettings() {
   }
   if (S.me.isOwner) h += billingCard();
   h += (can('org.manage') ? breakRulesCard() : '') + locationsCard() + payrollSettingsCard() + mailPrefsCard();
-  return h + securityCards() + '</div>';
+  return h + securityCards() + (S.me.isOwner ? pinWindowCard() : '') + '</div>';
+}
+// ---------- danger zone: eigen pincode bij de prikklok ----------
+function pinD(v) { const x = new Date(v + 'T12:00'); return x.getDate() + ' ' + MONTHS[x.getMonth()]; }
+function pinDT(v) { const [d, t] = v.split('T'); const x = new Date(d + 'T12:00'); return x.getDate() + ' ' + MONTHS[x.getMonth()] + ' ' + t; }
+function pinWindowCard() {
+  const D = S.pinWin; if (!D) return '';
+  const P = S.pinNew || (S.pinNew = { mode: 'dagen', from: today(), to: today(), t1: '08:00', t2: '17:00' });
+  const active = D.windows.find(w => w.active);
+  let h = '<section class="card stack danger-zone" style="gap:14px;grid-column:1/-1"><div><span class="dz-tag">Danger zone</span><h2 style="margin-top:6px">Inklokken met eigen pincode</h2>' +
+    '<p class="small" style="margin:4px 0 0">Normaal klokt iedereen in met de wisselende code uit de CrewHarbor-app (8 cijfers, elke 20 seconden nieuw). Een eigen pincode is minder veilig: een collega kan hem afkijken en voor iemand anders inklokken. Zet dit alleen aan als het echt nodig is, bijvoorbeeld als de app een paar dagen niet werkt.</p></div>' +
+    (active ? '<div class="alert warn"><strong>Staat nu aan</strong>&nbsp;tot ' + esc(pinDT(active.to)) + '. Op de prikklok staat een melding.</div>' : '<p class="small muted" style="margin:0">Staat nu uit. ' + D.pins + ' ' + (D.pins === 1 ? 'medewerker heeft' : 'medewerkers hebben') + ' een eigen pincode ingesteld.</p>');
+  if (D.windows.length) h += '<div class="doc-list">' + D.windows.map(w => '<div class="doc"><div class="doc-main"><strong>' + esc(pinDT(w.from)) + ' tot ' + esc(pinDT(w.to)) + '</strong><span class="small muted">' + (w.active ? 'Nu actief' : 'Gepland') + (w.by ? ' · door ' + esc(w.by) : '') + '</span></div>' +
+    '<div class="doc-act"><button class="btn small danger" data-act="pinw-del" data-id="' + w.id + '">' + (w.active ? 'Nu uitzetten' : 'Weghalen') + '</button></div></div>').join('') + '</div>';
+  h += '<fieldset class="dz-form"><legend class="legend">Periode toevoegen</legend>' +
+    '<div class="seg" role="radiogroup"><button class="' + (P.mode === 'dagen' ? 'on' : '') + '" data-act="pinw-mode" data-v="dagen" role="radio" aria-checked="' + (P.mode === 'dagen') + '">Hele dagen</button><button class="' + (P.mode === 'tijd' ? 'on' : '') + '" data-act="pinw-mode" data-v="tijd" role="radio" aria-checked="' + (P.mode === 'tijd') + '">Eén dag, tussen tijden</button></div>' +
+    (P.mode === 'dagen'
+      ? '<div class="fields4"><div class="field"><label for="pw-from">Van</label><input class="input" type="date" id="pw-from" data-pw="from" min="' + today() + '" value="' + esc(P.from) + '"></div><div class="field"><label for="pw-to">Tot en met</label><input class="input" type="date" id="pw-to" data-pw="to" min="' + today() + '" value="' + esc(P.to) + '"></div></div>'
+      : '<div class="fields4"><div class="field"><label for="pw-from">Datum</label><input class="input" type="date" id="pw-from" data-pw="from" min="' + today() + '" value="' + esc(P.from) + '"></div><div class="field"><label for="pw-t1">Van</label><input class="input" type="time" id="pw-t1" data-pw="t1" value="' + esc(P.t1) + '"></div><div class="field"><label for="pw-t2">Tot</label><input class="input" type="time" id="pw-t2" data-pw="t2" value="' + esc(P.t2) + '"></div></div>') +
+    '<div><button class="btn danger" data-act="pinw-add">Eigen pincode toestaan</button></div></fieldset></section>';
+  return h;
 }
 const BREAK_DEFAULT = { auto: true, adult: [{ fromMin: 330, breakMin: 30 }, { fromMin: 600, breakMin: 45 }], minor: [{ fromMin: 270, breakMin: 30 }, { fromMin: 600, breakMin: 45 }] };
 function breakRules() { return Object.assign({}, BREAK_DEFAULT, (S.org.settings || {}).breakRules || {}); }
@@ -1296,7 +1317,7 @@ function clockCard() {
     return '<section class="card clock' + (R ? ' on' : '') + '"><div class="clock-text">' +
       (R ? '<span class="small"><span class="live-dot"></span> Ingeklokt sinds ' + esc(R.start) + '</span><strong id="clock-elapsed" data-date="' + esc(R.date) + '" data-start="' + esc(R.start) + '">' + fmtHM(runningSince(R)) + '</strong>'
         : '<span class="small muted">Je bent niet ingeklokt</span><strong>Klok in bij de prikklok</strong>') + '</div>' +
-      '<span class="small muted" style="max-width:260px">Bij jullie gaat in- en uitklokken via de prikklok op locatie, met je eigen code.</span></section>';
+      '<span class="small muted" style="max-width:260px">Bij jullie gaat in- en uitklokken via de prikklok op locatie, met de code uit de app.</span></section>';
   }
   return '<section class="card clock' + (R ? ' on' : '') + '"><div class="clock-text">' +
     (R ? '<span class="small">' + '<span class="live-dot"></span> Ingeklokt sinds ' + esc(R.start) + (R.date !== today() ? ' (' + esc(dayShort(R.date)) + ')' : '') + '</span><strong id="clock-elapsed" data-date="' + esc(R.date) + '" data-start="' + esc(R.start) + '">' + fmtHM(runningSince(R)) + '</strong>'
@@ -1803,8 +1824,8 @@ function viewKiosk() {
     const goingIn = !P || !P.in;
     body = '<div class="kiosk-pad"><button class="btn ghost" data-act="k-cancel">' + ICON.left + 'Terug</button>' +
       '<div class="kiosk-who">' + avatar(P.id, P.name, 'xl') + '<div><h1>' + esc(P.name) + '</h1><p>' + (goingIn ? 'Inklokken' + (P.shift ? ' · ingepland ' + esc(P.shift) : '') : 'Uitklokken · binnen sinds ' + esc(P.in)) + '</p></div></div>' +
-      '<label class="kiosk-label" id="k-lab">Voer je pincode in, of de klokcode uit de CrewHarbor-app</label>' +
-      '<div class="kiosk-dots' + (K.err ? ' bad' : '') + '" aria-labelledby="k-lab" aria-live="polite">' + (K.code ? K.code.split('').map(() => '<span></span>').join('') : '<em>••••••</em>') + '</div>' +
+      '<label class="kiosk-label" id="k-lab">' + (K.info && K.info.pinUntil ? 'Voer de klokcode uit de CrewHarbor-app in, of je eigen pincode' : 'Voer de klokcode uit de CrewHarbor-app in') + '</label>' +
+      '<div class="kiosk-dots' + (K.err ? ' bad' : '') + '" aria-labelledby="k-lab" aria-live="polite">' + (K.code ? K.code.split('').map(() => '<span></span>').join('') : '<em>••••••••</em>') + '</div>' +
       (K.err ? '<p class="kiosk-err" role="alert">' + esc(K.err) + '</p>' : '') +
       '<div class="keypad">' + ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'del', '0', 'ok'].map(k =>
         k === 'del' ? '<button data-act="k-key" data-v="del" aria-label="Wissen">⌫</button>'
@@ -1819,13 +1840,14 @@ function viewKiosk() {
       '<div class="kiosk-grid">' + people.map(p => '<button class="kiosk-person' + (p.in ? ' in' : '') + '" data-act="k-sel" data-id="' + p.id + '">' + avatar(p.id, p.name, 'lg') +
         '<strong>' + esc(p.name) + '</strong><small>' + (p.in ? '<span class="live-dot"></span> Binnen sinds ' + esc(p.in) : p.shift ? 'Ingepland ' + esc(p.shift) : 'Niet ingeklokt') + '</small></button>').join('') + '</div></div>';
   }
-  return '<div class="kiosk">' + head + '<main class="kiosk-main">' + body + '</main>' +
-    '<footer class="kiosk-foot">Klokken met je eigen code. Klopt er iets niet? Pas je uren aan in CrewHarbor of meld het bij je leidinggevende.</footer></div>';
+  const pinNote = K.info && K.info.pinUntil ? '<div class="kiosk-pinnote" role="status">Tijdelijk mag je ook inklokken met je eigen pincode, tot ' + esc(pinDT(K.info.pinUntil)) + '.</div>' : '';
+  return '<div class="kiosk">' + head + pinNote + '<main class="kiosk-main">' + body + '</main>' +
+    '<footer class="kiosk-foot">Klokken met de code uit de CrewHarbor-app. Klopt er iets niet? Pas je uren aan in CrewHarbor of meld het bij je leidinggevende.</footer></div>';
 }
 let kioskTimer = null;
 function kioskReset(delay) { clearTimeout(kioskTimer); kioskTimer = setTimeout(async () => { K.sel = null; K.code = ''; K.err = null; K.result = null; K.exit = null; await loadKiosk(); if (route() === 'klok') render(); }, delay); }
 async function kioskSubmit() {
-  if (K.busy || K.code.length < 6) return;
+  if (K.busy || K.code.length < 8) return;
   K.busy = true; K.err = null; render();
   try {
     K.result = await svc('kiosk-clock', { token: kioskToken(), memberId: K.sel, code: K.code });
@@ -1839,8 +1861,9 @@ async function kioskSubmit() {
 function kioskKey(k) {
   if (!K.sel || K.busy || K.result) return;
   if (k === 'del') K.code = K.code.slice(0, -1);
-  else if (/^\d$/.test(k) && K.code.length < 12) K.code += k;
+  else if (/^\d$/.test(k) && K.code.length < 8) K.code += k;
   K.err = null; render(); kioskReset(30000);
+  if (K.code.length === 8) kioskSubmit();
 }
 document.addEventListener('keydown', e => {
   if (route() !== 'klok' || !K.sel) return;
@@ -2209,6 +2232,7 @@ let searchTimer, similarTimer, dupTimer, cbqTimer, logTimer;
 $app.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.f && S.F) { S.F[el.dataset.f] = el.value; S.F.serverError = null; if (el.dataset.f === 'order' || el.dataset.f === 'phone') checkDup(); return; }
+  if (el.dataset.pw && S.pinNew) { S.pinNew[el.dataset.pw] = el.value; return; }
   if (el.dataset.t && S.T) { S.T[el.dataset.t] = el.value; S.T.serverError = null; if (el.dataset.t === 'title') checkSimilar(); return; }
   if (el.dataset.in === 'q') { S.q = el.value; runSearch(); }
   if (el.dataset.in === 'cbq') {
@@ -2516,6 +2540,20 @@ $app.addEventListener('click', async e => {
       case 'br-add': { S.brEdit = S.brEdit || JSON.parse(JSON.stringify(breakRules())); const k = el.dataset.v; S.brEdit[k] = (S.brEdit[k] || []).concat([{ fromMin: 360, breakMin: 30 }]); render(); return; }
       case 'br-del': { S.brEdit = S.brEdit || JSON.parse(JSON.stringify(breakRules())); const [k, i] = el.dataset.v.split('|'); S.brEdit[k].splice(Number(i), 1); render(); return; }
       case 'br-reset': S.brEdit = JSON.parse(JSON.stringify(BREAK_DEFAULT)); render(); return;
+      case 'pinw-mode': S.pinNew.mode = el.dataset.v; render(); return;
+      case 'pinw-add': {
+        const P = S.pinNew; const dagen = P.mode === 'dagen';
+        if (!P.from || (dagen && !P.to) || (!dagen && (!P.t1 || !P.t2))) { toast('Vul de datum' + (dagen ? 's' : ' en tijden') + ' in.', true); return; }
+        const txt = dagen ? (P.from === P.to ? 'op ' + pinD(P.from) : 'van ' + pinD(P.from) + ' tot en met ' + pinD(P.to)) : 'op ' + pinD(P.from) + ' van ' + P.t1 + ' tot ' + P.t2;
+        if (!confirm('Weet je het zeker? Iedereen met een eigen pincode kan dan ' + txt + ' daarmee inklokken. Dit is minder veilig dan de code uit de app.')) return;
+        el.disabled = true;
+        S.pinWin = await rpc('cd_pin_window_add', dagen ? { p_from_date: P.from, p_to_date: P.to } : { p_from_date: P.from, p_to_date: P.from, p_from_time: P.t1, p_to_time: P.t2 });
+        S.pinNew = null; render(); toast('Eigen pincode is toegestaan ' + txt + '.'); return;
+      }
+      case 'pinw-del': {
+        if (!confirm('Deze periode weghalen? Dan werkt de eigen pincode in die tijd niet.')) return;
+        el.disabled = true; S.pinWin = await rpc('cd_pin_window_del', { p_id: raw }); render(); toast('Weggehaald.'); return;
+      }
       case 'br-save': {
         const r = await rpc('cd_break_rules_save', { p: S.brEdit || breakRules() });
         S.org.settings = Object.assign({}, S.org.settings, { breakRules: r }); S.brEdit = null; render(); toast('Pauzeregels opgeslagen.'); return;
