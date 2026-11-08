@@ -1160,3 +1160,11 @@ table.ro2 tr.ro-group th { text-align: left; background: #F2F6F7; padding: 8px 1
 .lv-table th { text-align: left; font-size: 12.5px; color: #5B6B78; font-weight: 600; padding: 6px 10px; border-bottom: 1px solid #E3E9EC; }
 .lv-table td { padding: 7px 10px; border-bottom: 1px solid #EEF2F4; }
 .lv-table { max-width: none; table-layout: fixed; } .lv-table th, .lv-table td { padding: 6px 6px; }
+
+.lv-table td:nth-child(3), .lv-table th:nth-child(3) { text-align: right; }
+.lv-table td:last-child { text-align: right; padding: 2px 0; }
+.lv-table tr.own td { background: #F7FBFB; }
+.lv-own { font-size: 11px; font-weight: 700; color: #1D6E7B; background: #E1F1F3; padding: 1px 6px; border-radius: 99px; margin-left: 4px; }
+.lv-add { display: grid; gap: 6px; padding: 12px; border-radius: 12px; background: #F7F9FA; border: 1px solid #E6ECEE; }
+table.lv-table { min-width: 0; width: 100%; }
+.lv-add .row { align-items: center; }

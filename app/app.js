@@ -1189,14 +1189,21 @@ async function loadLeaveAcc(id) {
 }
 function leaveRulesCard() {
   const L = (S.org.settings || {}).leave || {}; const v = k => L[k] === undefined ? true : !!L[k];
-  const auto = L.auto === undefined ? true : !!L.auto, wk = Number(L.weeks) || 4;
+  const auto = L.auto === undefined ? true : !!L.auto;
+  if (S.lvWeeks == null) S.lvWeeks = Number(L.weeks) || 4;
+  if (!S.lvContracts) S.lvContracts = (L.contracts || []).map(Number);
+  const wk = S.lvWeeks;
   const fmtNum = n => String(Math.round(n * 100) / 100).replace('.', ',');
-  const ex = h => '<tr><td>' + h + ' uur per week</td><td><strong>' + fmtNum(wk * h) + ' uur</strong></td><td class="muted">' + fmtNum(wk * h / 8) + ' dagen</td></tr>';
+  const std = [40, 36, 32, 24], all = std.concat(S.lvContracts.filter(h => !std.includes(h))).sort((x, y) => y - x);
+  const ex = h => { const own = !std.includes(h); return '<tr' + (own ? ' class="own"' : '') + '><td>' + fmtNum(h) + ' uur' + (own ? ' <span class="lv-own">eigen</span>' : '') + '</td><td><strong>' + fmtNum(wk * h) + ' uur</strong></td><td class="muted">' + fmtNum(wk * h / 8) + '</td><td>' +
+    (own ? '<button class="icon-btn small" data-act="lv-ctr-del" data-v="' + h + '" aria-label="' + fmtNum(h) + ' uur weghalen">' + ICON.x + '</button>' : '') + '</td></tr>'; };
   return '<section class="card stack" style="gap:12px"><h2>Standaard verlof</h2><p class="small muted" style="margin:0">Het verlofsaldo wordt automatisch berekend uit de contracturen. Wettelijk minimum in Nederland: <strong>4 × de uren per week</strong>. Een eigen saldo bij Mensen gaat altijd voor.</p>' +
     '<label class="check"><input type="checkbox" id="lr-auto"' + (auto ? ' checked' : '') + '> <span><strong>Verlof automatisch berekenen</strong></span></label>' +
-    '<div class="field" style="max-width:300px"><label for="lr-weeks">Weken verlof per jaar</label><select class="input" id="lr-weeks">' + [4, 4.5, 5, 5.5, 6].map(n => '<option value="' + n + '"' + (n === wk ? ' selected' : '') + '>' + String(n).replace('.', ',') + ' weken' + (n === 4 ? ' (wettelijk minimum)' : ' (' + String(n * 5).replace('.', ',') + ' dagen bij fulltime)') + '</option>').join('') + '</select></div>' +
-    '<table class="lv-table"><thead><tr><th>Contract</th><th>Verlof per jaar</th><th>In dagen van 8 uur</th></tr></thead><tbody>' + ex(40) + ex(36) + ex(32) + ex(24) + '</tbody></table>' +
-    '<p class="small muted" style="margin:0">Anders: uren per week × ' + String(wk).replace('.', ',') + '. Flex en 0-uren: per gewerkt uur ' + String((wk / 52).toFixed(4)).replace('.', ',') + ' uur verlof (' + String(wk).replace('.', ',') + ' weken ÷ 52), op basis van goedgekeurde uren.</p>' +
+    '<div class="field"><label for="lr-weeks">Weken verlof per jaar</label><select class="input" id="lr-weeks" data-in="lvweeks">' + [4, 4.5, 5, 5.5, 6].map(n => '<option value="' + n + '"' + (n === wk ? ' selected' : '') + '>' + String(n).replace('.', ',') + ' weken' + (n === 4 ? ' (wettelijk minimum)' : ' (' + String(n * 5).replace('.', ',') + ' dagen bij fulltime)') + '</option>').join('') + '</select></div>' +
+    '<table class="lv-table"><colgroup><col><col><col style="width:64px"><col style="width:40px"></colgroup><thead><tr><th>Contract</th><th>Verlof per jaar</th><th>Dagen*</th><th></th></tr></thead><tbody>' + all.map(ex).join('') + '</tbody></table>' +
+    '<div class="lv-add"><label for="lv-new" class="small"><strong>Eigen contract toevoegen</strong></label><div class="row" style="gap:8px;flex-wrap:nowrap"><input class="input" id="lv-new" data-in="lvnew" inputmode="decimal" placeholder="Bijv. 28" style="max-width:110px"><span class="small muted" style="white-space:nowrap">uur per week</span><button class="btn small" data-act="lv-ctr-add">Toevoegen</button></div>' +
+      '<span class="small" id="lv-prev" style="color:var(--accent)"></span></div>' +
+    '<p class="small muted" style="margin:0">* Dagen van 8 uur. Flex en 0-uren: per gewerkt uur ' + String((wk / 52).toFixed(4)).replace('.', ',') + ' uur verlof (' + String(wk).replace('.', ',') + ' weken ÷ 52), op basis van goedgekeurde uren.</p>' +
     '<div><button class="btn primary" data-act="lr-save">Opslaan</button></div></section>' +
     '<section class="card stack" style="gap:12px"><h2>Verlofregels</h2><p class="small muted" style="margin:0">Wat mag er gebeuren als iemand meer verlof aanvraagt dan er op zijn saldo staat? Wie het verlof goedkeurt, kiest dan uit de opties die hier aan staan.</p>' +
     Object.keys(COVER).map(k => '<label class="check"><input type="checkbox" id="lr-' + k + '"' + (v(k) ? ' checked' : '') + '> <span><strong>' + COVER[k][0] + '</strong><br><span class="small muted">' + COVER[k][1] + '</span></span></label>').join('') +
@@ -2488,6 +2495,9 @@ $app.addEventListener('input', e => {
     const b = document.querySelector('[data-act="br-save"]'); if (b) b.disabled = false; return;
   }
   if (el.dataset.avp) { avpSet(el); return; }
+  if (el.dataset.in === 'lvweeks') { S.lvWeeks = Number(el.value) || 4; render(); return; }
+  if (el.dataset.in === 'lvnew') { const h = Number(String(el.value).trim().replace(',', '.')), out = document.getElementById('lv-prev'), wk = S.lvWeeks || 4;
+    if (out) out.textContent = h > 0 && h <= 60 ? '= ' + String(Math.round(wk * h * 100) / 100).replace('.', ',') + ' uur verlof per jaar (' + String(Math.round(wk * h / 8 * 10) / 10).replace('.', ',') + ' dagen van 8 uur)' : ''; return; }
   if (el.dataset.tpl) { S.tplEdit = S.tplEdit || { name: '', start: '', end: '', note: '' }; S.tplEdit[el.dataset.tpl] = el.value; return; }
   if (el.dataset.in === 'kq') { K.q = el.value; renderKeepFocus(); return; }
   if (el.dataset.in === 'kbq') { S.kbQ = el.value; clearTimeout(logTimer); logTimer = setTimeout(async () => { try { await loadKb(); renderKeepFocus(); } catch (err) { toast(err.message, true); } }, 300); }
@@ -3101,12 +3111,20 @@ $app.addEventListener('click', async e => {
         await rpc('cd_leave_account_save', { p_member: raw, p_year: S.leaveYear || Number(today().slice(0, 4)), p_leave: lv, p_tvt: tv || 0 });
         await loadLeaveAcc(raw); render(); toast(lv == null ? 'Saldo weggehaald.' : 'Verlofsaldo opgeslagen.'); return;
       }
+      case 'lv-ctr-add': {
+        const inp = document.getElementById('lv-new'); const h = Number(String(inp.value).trim().replace(',', '.'));
+        if (!isFinite(h) || h <= 0 || h > 60) { toast('Vul een aantal uren per week in, tussen 0 en 60.', true); inp.focus(); return; }
+        const r = Math.round(h * 100) / 100; S.lvContracts = S.lvContracts || [];
+        if (![40, 36, 32, 24].includes(r) && !S.lvContracts.includes(r)) S.lvContracts.push(r);
+        render(); toast('Toegevoegd. Klik op Opslaan om het te bewaren.'); return;
+      }
+      case 'lv-ctr-del': S.lvContracts = (S.lvContracts || []).filter(x => x !== Number(el.dataset.v)); render(); return;
       case 'lr-save': {
         const p = Object.fromEntries(Object.keys(COVER).map(k => [k, document.getElementById('lr-' + k).checked]));
         p.advanceMax = Number(String(document.getElementById('lr-max').value).replace(',', '.'));
-        p.auto = document.getElementById('lr-auto').checked; p.weeks = Number(document.getElementById('lr-weeks').value) || 4;
+        p.auto = document.getElementById('lr-auto').checked; p.weeks = Number(document.getElementById('lr-weeks').value) || 4; p.contracts = S.lvContracts || [];
         el.disabled = true; const v = await rpc('cd_leave_settings_save', { p });
-        S.org.settings = Object.assign({}, S.org.settings, { leave: v }); render(); toast('Verlofregels opgeslagen.'); return;
+        S.org.settings = Object.assign({}, S.org.settings, { leave: v }); S.lvContracts = null; S.lvWeeks = null; render(); toast('Opgeslagen.'); return;
       }
       case 'm-new': S.mNew = true; S.mNewRole = null; render(); document.getElementById('m-name').focus(); return;
       case 'm-cancel': S.mNew = false; render(); return;
