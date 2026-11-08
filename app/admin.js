@@ -162,6 +162,11 @@ const range = p => (p.minMembers || 1) + (p.maxMembers ? '–' + p.maxMembers : 
 const planPriceTxt = p => isFreePlan(p) ? 'gratis, alleen in Beheer' : (p.fixed ? '' : 'vanaf ') + eur(p.monthCents) + '/mnd';
 const euroIn = (name, cents) => '<input class="input" name="' + name + '" inputmode="decimal" value="' + ((cents || 0) / 100).toFixed(2).replace('.', ',') + '">';
 function planOptions(sel) { return (A.data.plans || []).map(p => '<option value="' + esc(p.id) + '"' + (p.id === sel ? ' selected' : '') + '>' + esc(p.name) + ' · ' + range(p) + ' · ' + planPriceTxt(p) + '</option>').join(''); }
+function planDelBtn(p) {
+  const n = (A.data.orgs || []).filter(o => o.planId === p.id).length;
+  return n ? '<span class="small muted">Verwijderen kan niet: ' + n + ' bedrij' + (n === 1 ? 'f gebruikt' : 'ven gebruiken') + ' dit pakket.</span>'
+    : '<button class="btn danger" type="button" data-act="plan-del" data-id="' + esc(p.id) + '" style="margin-left:auto">Pakket verwijderen</button>';
+}
 function viewBilling() {
   const M = A.mollie;
   let h = '<section class="card"><div class="item-top"><h2 style="margin:0">Betalen met Mollie</h2>' + (M ? (M.hasKey ? '<span class="badge green">' + (M.mode === 'live' ? 'Live' : 'Testmodus') + '</span>' : '<span class="badge orange">Nog niet gekoppeld</span>') : '') + '</div>' +
@@ -200,7 +205,7 @@ function viewBilling() {
       '<div class="field"><label>Inbegrepen extra\u2019s (de rest kan de klant er los bij nemen)</label><div class="row">' + FEAT.map(f => '<label class="check"><input type="checkbox" name="f-' + f[0] + '"' + ((p.features || []).includes(f[0]) ? ' checked' : '') + '> ' + f[1] + '</label>').join('') + '</div></div>' +
       (p.isNew ? '' : '<p class="small muted" style="margin:0">Berekende prijs: <strong>' + esc(planPriceTxt(p)) + '</strong>' + (isFreePlan(p) ? '' : ' · losse extra\u2019s: ' + FEAT.filter(f => !(p.features || []).includes(f[0])).map(f => f[1] + ' +' + eur((p.addonCents || {})[f[0]] || 0)).join(', ')) + '</p>') +
       '<div class="row"><label class="check"><input type="checkbox" name="public"' + (p.public !== false ? ' checked' : '') + '> Live (op de website en te kiezen door klanten). Uit = verborgen, alleen in Beheer</label><label class="check"><input type="checkbox" name="popular"' + (p.popular ? ' checked' : '') + '> Meest gekozen</label></div>' +
-      '<div class="row"><button class="btn primary" type="submit">Opslaan</button>' + (p.isNew ? '<button class="btn ghost" type="button" data-act="plan-cancel">Annuleren</button>' : '') + '</div></form></details>').join('') + '</section>';
+      '<div class="row"><button class="btn primary" type="submit">Opslaan</button>' + (p.isNew ? '<button class="btn ghost" type="button" data-act="plan-cancel">Annuleren</button>' : planDelBtn(p)) + '</div></form></details>').join('') + '</section>';
   return h;
 }
 function orgBilling(o) {
@@ -520,6 +525,11 @@ $app.addEventListener('click', async e => {
       case 'plan-toggle': A.planOpen = A.planOpen || {}; A.planOpen[id] = !b.parentElement.open; break;
       case 'plan-new': A.planNew = true; render(); break;
       case 'plan-cancel': A.planNew = false; render(); break;
+      case 'plan-del': {
+        const pl = (A.data.plans || []).find(x => x.id === id);
+        if (!confirm('Pakket "' + (pl ? pl.name : id) + '" definitief verwijderen? Dit kun je niet ongedaan maken.')) break;
+        await rpc('cd_admin_plan_delete', { p_id: id }); await load(); render(); toast('Pakket verwijderd.'); break;
+      }
       case 'mollie-remove': if (!confirm('Mollie ontkoppelen? Bedrijven kunnen dan geen betaling meer instellen; lopende incasso’s blijven bij Mollie doorlopen.')) break;
         await svc('admin-mollie-save', { key: '' }); A.mollie = await svc('admin-mollie-get'); render(); toast('Mollie ontkoppeld.'); break;
       case 'mfa-reset': A.mfaResetFor = id; A.codeFor = null; render(); break;
