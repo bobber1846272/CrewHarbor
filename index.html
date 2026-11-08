@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..750&display=swap">
-<link rel="stylesheet" href="site.css?v=6">
+<link rel="stylesheet" href="site.css?v=7">
 <script>
   // oude links (uitnodigingen, wachtwoord) gaan naar de app
   if (/^#\/[a-z]/.test(location.hash)) location.replace('app/' + location.hash);
@@ -27,6 +27,7 @@
     <nav class="nav" aria-label="Hoofdmenu">
       <a href="#functies">Functies</a>
       <a href="#prijzen">Prijzen</a>
+      <a href="prijzen.html">Vergelijken</a>
       <a href="#veilig">Veiligheid</a>
       <a href="#vragen">Vragen</a>
       <a href="support.html">Support</a>
@@ -114,7 +115,13 @@
         </div>
         <div class="calc-out" id="calc-out" aria-live="polite"></div>
       </div>
-      <div class="plans" id="plans" aria-live="polite"></div>
+      <div class="plans-wrap">
+        <button type="button" class="plans-arrow prev" id="plans-prev" aria-label="Vorige pakketten">&#8249;</button>
+        <div class="plans" id="plans" aria-live="polite"></div>
+        <button type="button" class="plans-arrow next" id="plans-next" aria-label="Volgende pakketten">&#8250;</button>
+      </div>
+      <div class="plans-dots" id="plans-dots"></div>
+      <p class="center plans-more"><a class="btn outline" href="prijzen.html">Vergelijk alle pakketten in een tabel</a></p>
       <p class="fine center">Alle prijzen zijn exclusief btw. Je betaalt via iDEAL en daarna maandelijks automatisch, of per factuur.</p>
     </div>
   </section>
@@ -188,6 +195,7 @@
     <nav aria-label="Onderaan">
       <a href="app/">Inloggen</a>
       <a href="#prijzen">Prijzen</a>
+      <a href="prijzen.html">Pakketten vergelijken</a>
       <a href="support.html">Support</a>
       <a href="app/privacy.html">Privacyverklaring</a>
       <a href="app/verwerkersovereenkomst.html">Verwerkersovereenkomst</a>
@@ -197,6 +205,6 @@
 
 <script src="app/config.js"></script>
 <script src="app/logo.js"></script>
-<script src="site.js?v=5"></script>
+<script src="site.js?v=6"></script>
 </body>
 </html>
