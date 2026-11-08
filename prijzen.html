@@ -10,56 +10,56 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..750&display=swap">
-<link rel="stylesheet" href="site.css?v=8">
+<link rel="stylesheet" href="site.css?v=9">
 </head>
-<body>
+<body class="v3 sub">
 <a class="skip" href="#main">Naar de inhoud</a>
 <header class="top" id="top">
   <div class="wrap top-in">
     <a class="brand" href="./" aria-label="CrewHarbor, naar het begin"><span id="logo"></span></a>
-    <nav class="nav" aria-label="Hoofdmenu">
+    <nav class="nav" id="nav" aria-label="Hoofdmenu">
       <a href="./#functies">Functies</a>
+      <a href="./#hoe">Zo werkt het</a>
       <a href="./#prijzen">Prijzen</a>
-      <a href="prijzen.html" aria-current="page">Vergelijken</a>
+      <a href="./#veilig">Veiligheid</a>
+      <a href="./#vragen">Vragen</a>
       <a href="support.html">Support</a>
     </nav>
     <div class="top-act">
-      <a class="btn light" href="app/">Inloggen</a>
+      <a class="btn light hide-s" href="app/">Inloggen</a>
+      <a class="btn glow" href="./#aanvragen">Gratis proberen</a>
+      <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav"><span></span></button>
     </div>
   </div>
 </header>
 
 <main id="main">
-  <section class="band" aria-labelledby="c-h">
+  <section class="hx sub-hx" aria-labelledby="c-h"><div class="hx-glow" aria-hidden="true"></div><div class="wrap hx-in"><span class="pill-badge"><i></i> 30 dagen gratis proberen</span><h1 id="c-h">Welk pakket<br><span class="grad">past bij jou?</span></h1><p class="hx-lead">Alles op een rij. Je betaalt alleen voor actieve medewerkers, daarna per maand opzegbaar.</p></div></section>
+  <section class="sec tint cmp-sec" aria-label="Vergelijking">
     <div class="wrap">
-      <div class="sec-head">
-        <h1 id="c-h">Welk pakket past bij jou?</h1>
-        <p>Alles op een rij. Je betaalt alleen voor actieve medewerkers, de eerste 30 dagen zijn gratis en daarna is het per maand opzegbaar.</p>
-      </div>
       <div class="cmp-wrap"><table class="cmp" id="cmp"><tbody><tr><td>Pakketten laden…</td></tr></tbody></table></div>
       <div class="cmp-legend"><span><b class="yes">✓</b> zit erin</span><span><b class="add">+ € p.m.</b> los erbij te nemen</span><span><b class="no">–</b> niet beschikbaar</span></div>
       <p class="fine center">Alle prijzen zijn exclusief btw. Je betaalt via iDEAL en daarna maandelijks automatisch, of per factuur.</p>
-      <p class="center" style="margin-top:22px"><a class="btn primary big" href="./#aanvragen">30 dagen gratis proberen</a></p>
+      <p class="center" style="margin-top:22px"><a class="btn dark big" href="./#aanvragen">30 dagen gratis proberen</a></p>
     </div>
   </section>
 </main>
 
-<footer class="foot">
-  <div class="wrap foot-in">
-    <div><span id="logo2"></span><p>De vaste haven voor je team.<br>Een product van <strong>Spark Apps</strong>.</p></div>
-    <nav aria-label="Onderaan">
-      <a href="app/">Inloggen</a>
-      <a href="./#prijzen">Prijzen</a>
-      <a href="prijzen.html">Pakketten vergelijken</a>
-      <a href="support.html">Support</a>
-      <a href="app/privacy.html">Privacyverklaring</a>
-      <a href="app/verwerkersovereenkomst.html">Verwerkersovereenkomst</a>
-    </nav>
+<footer class="foot v3f">
+  <div class="wrap">
+    <div class="foot-cols">
+      <div class="foot-brand"><span id="logo2"></span><p>De vaste haven voor je team.<br>Een product van <strong>Spark Apps</strong>.</p></div>
+      <nav aria-label="Product"><b>Product</b><a href="./#functies">Functies</a><a href="./#prijzen">Prijzen</a><a href="prijzen.html">Pakketten vergelijken</a><a href="app/">Inloggen</a></nav>
+      <nav aria-label="Hulp"><b>Hulp</b><a href="support.html">Support</a><a href="./#vragen">Veelgestelde vragen</a><a href="mailto:support@crewharbor.nl">support@crewharbor.nl</a></nav>
+      <nav aria-label="Juridisch"><b>Juridisch</b><a href="app/privacy.html">Privacyverklaring</a><a href="app/verwerkersovereenkomst.html">Verwerkersovereenkomst</a></nav>
+    </div>
+    <div class="foot-word" aria-hidden="true">crewharbor</div>
   </div>
 </footer>
 
 <script src="app/config.js"></script>
 <script src="app/logo.js"></script>
 <script src="prijzen.js?v=1"></script>
+<script src="nav.js?v=1"></script>
 </body>
 </html>

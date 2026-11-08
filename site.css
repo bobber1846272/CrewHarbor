@@ -473,3 +473,23 @@ textarea.input { resize: vertical; }
 .foot-word { font-size: clamp(54px, 14.2vw, 196px); white-space: nowrap; }
 .v3 .plans { padding: 22px 12px 44px; margin: 0 -12px; }
 @media (max-width: 640px) { .facts strong { font-size: 22px; } .facts-in div { padding: 20px 10px; } .facts span { font-size: 13px; } }
+
+/* subpagina's (support, vergelijken) in v3-stijl */
+.sub .hx { padding: 150px 0 96px; }
+.sub .hx h1 { font-size: clamp(42px, 6.4vw, 80px); }
+.sup-hx .sup-search { max-width: 640px; margin: 34px auto 0; }
+.sup-hx .sup-search .input { min-height: 60px; border-radius: 99px; padding: 0 26px; font-size: 17px; background: rgba(255,255,255,.96); border: 0; box-shadow: 0 20px 60px rgba(0,0,0,.35), 0 0 0 6px rgba(127,196,207,.12); }
+.sup-hx .sup-ways { max-width: 640px; margin: 16px auto 0; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.sup-hx .sup-way { background: var(--glass); border: 1px solid var(--glass-line); color: #fff; border-radius: 18px; text-align: left; transition: background .2s, border-color .2s; }
+.sup-hx .sup-way:hover { background: rgba(255,255,255,.1); border-color: rgba(127,196,207,.5); }
+.sup-hx .sup-way span { color: #A9B9C7; }
+.sup-cats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.sup-cats a { padding: 8px 14px; border-radius: 99px; background: var(--bg); color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 600; border: 1px solid var(--line); }
+.sup-cats a:hover { border-color: var(--accent); color: var(--accent); }
+.v3 .faq-cat { margin: 34px 0 12px; scroll-margin-top: 110px; }
+.v3 #faq-groups .faq-cat:first-child { margin-top: 0; }
+.v3 #faq-groups .faq { display: grid; gap: 10px; }
+.cmp-sec { padding-top: 64px; }
+.cmp-sec .cmp-wrap { border-radius: 24px; box-shadow: 0 20px 60px rgba(13,35,64,.08); }
+.cmp-sec .btn.outline, .cmp-sec .btn.primary { border-radius: 99px; }
+@media (max-width: 640px) { .sub .hx { padding: 120px 0 64px; } }
