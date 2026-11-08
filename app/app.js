@@ -1354,24 +1354,50 @@ function shiftForm(R) {
   const p = R.people.find(x => same(x.id, E.memberId));
   return '<section class="card stack" style="gap:14px;max-width:none"><h2 style="margin:0">' + (E.id ? 'Dienst wijzigen' : 'Dienst inplannen') + '</h2>' +
     '<div class="fields4"><div class="field"><label for="sh-member">Medewerker</label><select class="input" id="sh-member" data-sh="memberId" data-rerender="1">' +
-      R.people.map(x => '<option value="' + x.id + '"' + (same(x.id, E.memberId) ? ' selected' : '') + '>' + esc(x.name) + (x.leavingOn ? ' (weg na ' + esc(dayShort(x.leavingOn)) + ')' : '') + '</option>').join('') + '</select></div>' +
-    '<div class="field"><label for="sh-date">Datum</label><input class="input" type="date" id="sh-date" data-sh="date" value="' + esc(E.date) + '"' + (p && p.leavingOn ? ' max="' + esc(p.leavingOn) + '"' : '') + '></div>' +
+      R.people.map(x => { const off = blockedAbs(R, x.id, E.date); return '<option value="' + x.id + '"' + (same(x.id, E.memberId) ? ' selected' : '') + (off && !same(x.id, E.memberId) ? ' disabled' : '') + '>' + esc(x.name) +
+        (off ? ' (' + esc(off.kind === 'ziek' ? 'ziek' : off.kindLabel.toLowerCase()) + ')' : '') + (x.leavingOn ? ' (weg na ' + esc(dayShort(x.leavingOn)) + ')' : '') + '</option>'; }).join('') + '</select></div>' +
+    '<div class="field"><label for="sh-date">Datum</label><input class="input" type="date" id="sh-date" data-sh="date" data-rerender="1" value="' + esc(E.date) + '"' + (p && p.leavingOn ? ' max="' + esc(p.leavingOn) + '"' : '') + '></div>' +
     '<div class="field"><label for="sh-start">Begin</label><input class="input" type="time" id="sh-start" data-sh="start" value="' + esc(E.start) + '"></div>' +
     '<div class="field"><label for="sh-end">Eind</label><input class="input" type="time" id="sh-end" data-sh="end" value="' + esc(E.end) + '"></div></div>' +
     (p && p.leavingOn ? '<p class="small" style="margin:0;color:var(--red)">' + esc(p.name) + ' vertrekt: de laatste werkdag is ' + esc(dayLong(p.leavingOn).toLowerCase()) + '.</p>' : '') +
     (R.templates && R.templates.length ? '<div class="chips"><span class="small muted">Vaste dienst:</span>' + R.templates.map(t => '<button class="chip quick" data-act="sh-tpl" data-id="' + t.id + '">' + esc(t.name) + ' ' + esc(t.start + '–' + t.end) + '</button>').join('') + '</div>' : '') +
-    shiftWarnings(R, E) +
+    shiftWarnings(R, E) + whoCanWork(R, E) +
     '<div class="fields2">' + shiftLocField(E) + '<div class="field"><label for="sh-note">Notitie <span class="muted" style="font-weight:400">(optioneel, bijv. balie of magazijn)</span></label><input class="input" id="sh-note" data-sh="note" maxlength="120" value="' + esc(E.note) + '"></div></div>' +
     '<div class="form-foot">' + (E.id ? '<button class="btn danger small" data-act="sh-del" data-id="' + E.id + '" style="margin-right:auto">' + ICON.trash + 'Verwijderen</button>' : '') +
     '<button class="btn small ghost" data-act="sh-cancel">Annuleren</button><button class="btn primary small" data-act="sh-save">' + (E.id ? 'Opslaan' : 'Inplannen') + '</button></div></section>';
+}
+// goedgekeurd verlof of ziek: niet in te plannen
+function blockedAbs(R, memberId, d) { const a = absFor(R.absences, memberId, d); return a && a.status === 'goedgekeurd' ? a : null; }
+// overzicht voor de roostermaker: wie kan er op deze dag?
+function whoCanWork(R, E) {
+  if (!R.canPlan || !E.date) return '';
+  const groups = { kan: [], leeg: [], niet: [], vrij: [], dienst: [] };
+  R.people.forEach(x => {
+    if (x.leavingOn && E.date > x.leavingOn) return;
+    const off = absFor(R.absences, x.id, E.date);
+    const av = (R.availability || []).find(a => same(a.memberId, x.id) && a.date === E.date);
+    const has = (R.shifts || []).find(s2 => same(s2.memberId, x.id) && s2.date === E.date && !same(s2.id, E.id));
+    if (off && off.status === 'goedgekeurd') groups.vrij.push([x, off.kind === 'ziek' ? 'ziek' : off.kindLabel.toLowerCase()]);
+    else if (has) groups.dienst.push([x, has.start + '–' + has.end]);
+    else if (av && av.status === 'kan_niet') groups.niet.push([x, av.note || '']);
+    else if (av && av.status === 'kan') groups.kan.push([x, (av.start ? av.start + '–' + av.end : 'hele dag') + (off ? ' · verlof aangevraagd' : '')]);
+    else groups.leeg.push([x, off ? 'verlof aangevraagd' : '']);
+  });
+  const chip = ([x, sub], kind) => '<button type="button" class="who-chip ' + kind + (same(x.id, E.memberId) ? ' on' : '') + '"' + (kind === 'vrij' ? ' disabled' : ' data-act="sh-pick" data-id="' + x.id + '"') + '>' +
+    '<strong>' + esc(x.name) + '</strong>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</button>';
+  const block = (title, list, kind) => list.length ? '<div class="who-group"><span class="who-title ' + kind + '">' + title + ' · ' + list.length + '</span><div class="who-list">' + list.map(i => chip(i, kind)).join('') + '</div></div>' : '';
+  return '<div class="who-can"><strong class="who-head">Wie kan er op ' + esc(dayLong(E.date).toLowerCase()) + '?</strong>' +
+    block('Beschikbaar', groups.kan, 'kan') + block('Niet ingevuld', groups.leeg, 'leeg') + block('Al ingepland', groups.dienst, 'dienst') +
+    block('Niet beschikbaar', groups.niet, 'niet') + block('Verlof of ziek (kan niet)', groups.vrij, 'vrij') +
+    '<p class="small muted" style="margin:0">Klik op een naam om die medewerker te kiezen.</p></div>';
 }
 function shiftWarnings(R, E) {
   if (!E.memberId || !E.date) return '';
   const w = [];
   const ab = absFor(R.absences, E.memberId, E.date);
-  if (ab) w.push((ab.status === 'aangevraagd' ? 'Heeft ' + ab.kindLabel.toLowerCase() + ' aangevraagd' : 'Is ' + (ab.kind === 'ziek' ? 'ziek gemeld' : 'met ' + ab.kindLabel.toLowerCase())) + ' op deze dag.');
+  if (ab) w.push(ab.status === 'aangevraagd' ? 'Heeft ' + ab.kindLabel.toLowerCase() + ' aangevraagd op deze dag.' : 'Is ' + (ab.kind === 'ziek' ? 'ziek gemeld' : 'met ' + ab.kindLabel.toLowerCase()) + ' op deze dag en kan niet worden ingepland.');
   const av = (R.availability || []).find(x => same(x.memberId, E.memberId) && x.date === E.date);
-  if (av && av.status === 'kan_niet') w.push('Heeft aangegeven niet te kunnen' + (av.note ? ' (' + av.note + ')' : '') + '.');
+  if (av && av.status === 'kan_niet') w.push('Heeft aangegeven niet te kunnen' + (av.source === 'vast' ? ' (vaste beschikbaarheid)' : '') + (av.note ? ' (' + av.note + ')' : '') + '.');
   if (av && av.status === 'kan' && av.start && E.start && E.end && (E.start < av.start || E.end > av.end)) w.push('Kan alleen van ' + av.start + ' tot ' + av.end + '.');
   if (av && av.status === 'kan' && !w.length) return '<p class="small" style="margin:0;color:var(--green)">Heeft aangegeven te kunnen' + (av.start ? ' van ' + esc(av.start) + ' tot ' + esc(av.end) : '') + '.</p>';
   return w.length ? '<div class="alert warn" style="padding:10px 14px"><span>' + w.map(esc).join(' ') + '</span></div>' : '';
@@ -1446,7 +1472,10 @@ function workedCell(R, p, d, shifts) {
 }
 function rosterWeek(R) {
   const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
-  return '<div class="table-wrap"><table class="roster"><thead><tr><th>Medewerker</th>' + days.map(d => '<th class="' + (d === today() ? 'is-today' : '') + '">' + esc(dayShort(d)) + '</th>').join('') + '<th>Totaal</th></tr></thead><tbody>' +
+  const dayCount = d => { if (!R.canPlan) return ''; let k = 0, n = 0;
+    R.people.forEach(p => { if (blockedAbs(R, p.id, d)) { n++; return; } const a = (R.availability || []).find(x => same(x.memberId, p.id) && x.date === d); if (a) { if (a.status === 'kan') k++; else n++; } });
+    return k || n ? '<div class="day-count"><span class="kan">' + k + ' kan</span><span class="niet">' + n + ' niet</span></div>' : ''; };
+  return '<div class="table-wrap"><table class="roster"><thead><tr><th>Medewerker</th>' + days.map(d => '<th class="' + (d === today() ? 'is-today' : '') + '">' + esc(dayShort(d)) + dayCount(d) + '</th>').join('') + '<th>Totaal</th></tr></thead><tbody>' +
     R.people.map(p => {
       const mine = R.shifts.filter(s => same(s.memberId, p.id));
       const tot = mine.reduce((a, s) => a + spanMin(s.start, s.end), 0);
@@ -1458,9 +1487,9 @@ function rosterWeek(R) {
           const ab = absFor(R.absences, p.id, d);
           const av = R.canPlan ? (R.availability || []).find(x => same(x.memberId, p.id) && x.date === d) : null;
           return '<td class="rc' + (d === today() ? ' is-today' : '') + (gone ? ' gone' : '') + (ab && ab.status === 'goedgekeurd' ? ' absent' : '') + '">' +
-            (ab ? absChip(ab) : '') + (av ? '<span class="av-tag ' + av.status + '" title="' + esc(av.note || '') + '"><span class="av-dot ' + av.status + '"></span>' + (av.status === 'kan' ? (av.start ? esc(av.start + '–' + av.end) : 'Kan') : 'Kan niet') + '</span>' : '') +
+            (ab ? absChip(ab) : '') + (av ? '<span class="av-tag ' + av.status + (av.source === 'vast' ? ' vast' : '') + '" title="' + esc((av.source === 'vast' ? 'Vaste beschikbaarheid' : 'Doorgegeven voor deze dag') + (av.note ? ': ' + av.note : '')) + '"><span class="av-dot ' + av.status + '"></span>' + (av.status === 'kan' ? (av.start ? esc(av.start + '–' + av.end) : 'Kan') : 'Kan niet') + '</span>' : '') +
             dayShifts.map(s => shiftChip(R, s, false)).join('') + (S.rosterCompare ? workedCell(R, p, d, dayShifts) : '') +
-            (gone ? '<span class="gone-txt">Uit dienst</span>' : R.canPlan ? '<button class="cell-add" data-act="sh-new" data-id="' + p.id + '" data-v="' + d + '" aria-label="Dienst inplannen voor ' + esc(p.name) + ' op ' + esc(dayShort(d)) + '">+</button>' : '') + '</td>';
+            (gone ? '<span class="gone-txt">Uit dienst</span>' : ab && ab.status === 'goedgekeurd' ? '' : R.canPlan ? '<button class="cell-add" data-act="sh-new" data-id="' + p.id + '" data-v="' + d + '" aria-label="Dienst inplannen voor ' + esc(p.name) + ' op ' + esc(dayShort(d)) + '">+</button>' : '') + '</td>';
         }).join('') +
         '<td class="pad"><strong>' + fmtHM(tot) + '</strong>' + (ch ? '<div class="small muted">van ' + fmtHM(ch) + '</div>' : '') +
           (S.rosterCompare ? '<div class="small" style="margin-top:4px">Gewerkt <strong>' + fmtHM((R.worked || []).filter(w => same(w.memberId, p.id)).reduce((a, w) => a + (w.minutes || 0), 0)) + '</strong></div>' : '') + '</td></tr>';
@@ -1514,7 +1543,8 @@ async function copyLastWeek() {
   if (!confirm(todo.length + (todo.length === 1 ? ' dienst' : ' diensten') + ' van vorige week overnemen in deze week?')) return false;
   let ok = 0;
   for (const s of todo) { try { await rpc('cd_shift_save', { p_id: null, p: { memberId: s.memberId, date: s.date, start: s.start, end: s.end, note: s.note || '' } }); ok++; } catch (e) { /* sla over */ } }
-  toast(ok + (ok === 1 ? ' dienst' : ' diensten') + ' gekopieerd.');
+  const skip = todo.length - ok;
+  toast(ok + (ok === 1 ? ' dienst' : ' diensten') + ' gekopieerd.' + (skip ? ' ' + skip + ' overgeslagen (verlof, ziek of niet meer in dienst).' : ''), !!skip);
   return true;
 }
 
@@ -1867,6 +1897,26 @@ async function loadAvailability() {
   const [av, wk] = await Promise.all([rpc('cd_availability', { p_from: mondayOf(m), p_to: addDays(mondayOf(monthEnd(m)), 6) }),
     rpc('cd_roster_range', { p_from: mondayOf(m), p_to: addDays(mondayOf(monthEnd(m)), 6) })]);
   S.av = av; S.avRoster = wk;
+  if (!S.avPatEdit) S.avPat = await rpc('cd_availability_pattern');
+}
+function avpSet(el) {
+  const [wd, k] = el.dataset.avp.split('|');
+  S.avPatEdit = S.avPatEdit || Object.fromEntries((S.avPat || []).map(x => [x.weekday, Object.assign({}, x)]));
+  S.avPatEdit[wd] = Object.assign({ weekday: Number(wd), status: '' }, S.avPatEdit[wd], { [k]: el.value });
+}
+const WD = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
+function avPatternCard() {
+  const P = S.avPatEdit || Object.fromEntries((S.avPat || []).map(x => [x.weekday, Object.assign({}, x)]));
+  const row = i => { const wd = i + 1, r = P[wd] || { status: '' };
+    return '<div class="avp-row"><strong>' + WD[i] + '</strong>' +
+      '<select class="input" data-avp="' + wd + '|status" data-rerender="1">' + [['', '— Niet ingevuld'], ['kan', 'Kan werken'], ['kan_niet', 'Kan niet']].map(o => '<option value="' + o[0] + '"' + ((r.status || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>' +
+      (r.status === 'kan' ? '<input class="input" type="time" aria-label="' + WD[i] + ' vanaf" data-avp="' + wd + '|start" value="' + esc(r.start || '') + '"><span class="muted">tot</span><input class="input" type="time" aria-label="' + WD[i] + ' tot" data-avp="' + wd + '|end" value="' + esc(r.end || '') + '">' : '<span></span><span></span><span></span>') +
+      '</div>'; };
+  return '<section class="card stack" style="gap:12px"><div class="item-top"><h2 style="margin:0">Vaste week</h2>' + (S.avPatEdit ? '<span class="badge orange">Niet opgeslagen</span>' : '') + '</div>' +
+    '<p class="small muted" style="margin:0">Wanneer kun je normaal gesproken werken? Bijvoorbeeld ma t/m vr vanaf 12:00 tot 21:00. Dit geldt elke week. Laat de tijden leeg voor de hele dag.</p>' +
+    '<div class="avp">' + [0, 1, 2, 3, 4, 5, 6].map(row).join('') + '</div>' +
+    '<div class="row"><button class="btn primary" data-act="avp-save"' + (S.avPatEdit ? '' : ' disabled') + '>Vaste week opslaan</button>' +
+    (S.avPatEdit ? '<button class="btn ghost" data-act="avp-cancel">Annuleren</button>' : '') + '</div></section>';
 }
 function viewAvailability() {
   if (!S.av) return '';
@@ -1879,16 +1929,19 @@ function viewAvailability() {
     '<strong>' + monthLabel(m) + '</strong><button class="icon-btn" data-act="av-month" data-v="' + addMonths(m, 1) + '" aria-label="Volgende maand">' + ICON.right + '</button>' +
     (m !== cur ? '<button class="btn small ghost" data-act="av-month" data-v="' + cur + '">Naar deze maand</button>' : '') + '</div>' +
     '<span class="small muted">Tik op dagen om ze te kiezen, of op ma t/m zo om die dag elke week te kiezen.</span></div>';
+  h += avPatternCard();
+  h += '<h2 class="card-sub" style="margin:8px 0 0">Losse dagen</h2><p class="small muted" style="margin:0">Wijkt een dag af van je vaste week (bijv. een toets of feestje)? Kies de dag hieronder. Een losse dag gaat altijd voor.</p>';
   h += '<div class="month av-month"><div class="month-head">' + ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'].map((d, i) => '<button class="av-wd" data-act="av-weekday" data-v="' + i + '">' + d + '</button>').join('') + '</div><div class="month-grid">';
   for (let d = from; d <= to; d = addDays(d, 1)) {
     const out = d < m || d > last, past = d < today();
-    const a = S.av.find(x => x.date === d);
+    const a = S.av.find(x => x.date === d) || Object.assign({ vast: true }, (S.avRoster.availability || []).find(x => x.date === d && same(x.memberId, S.me.id) && x.source === 'vast') || { none: true });
+    if (a.none) delete a.status;
     const ab = absFor(S.avRoster.absences, S.me.id, d);
     const sh = S.avRoster.shifts.filter(s => same(s.memberId, S.me.id) && s.date === d);
-    h += '<button class="mday av' + (out ? ' out' : '') + (past ? ' past' : '') + (d === today() ? ' today' : '') + (sel[d] ? ' picked' : '') + (a ? ' ' + a.status : '') + '"' +
+    h += '<button class="mday av' + (out ? ' out' : '') + (past ? ' past' : '') + (d === today() ? ' today' : '') + (sel[d] ? ' picked' : '') + (a.status ? ' ' + a.status + (a.vast ? ' vast' : '') : '') + '"' +
       (past || out ? ' disabled' : ' data-act="av-pick" data-v="' + d + '"') + ' aria-pressed="' + !!sel[d] + '">' +
       '<span class="mday-num">' + pd(d).getDate() + '</span>' +
-      (a ? '<span class="av-state">' + (a.status === 'kan' ? 'Kan' + (a.start ? ' ' + esc(a.start + '–' + a.end) : '') : 'Kan niet') + '</span>' + (a.note ? '<span class="av-note">' + esc(a.note) + '</span>' : '') : '') +
+      (a.status ? '<span class="av-state">' + (a.status === 'kan' ? 'Kan' + (a.start ? ' ' + esc(a.start + '–' + a.end) : '') : 'Kan niet') + (a.vast ? ' <small>(vast)</small>' : '') + '</span>' + (a.note ? '<span class="av-note">' + esc(a.note) + '</span>' : '') : '') +
       (ab ? absChip(ab) : '') + (sh.length ? '<span class="av-shift">Dienst ' + esc(sh[0].start + '–' + sh[0].end) + '</span>' : '') + '</button>';
   }
   h += '</div></div>';
@@ -2132,6 +2185,7 @@ $app.addEventListener('input', e => {
   if (el.dataset.off && S.offboard && !['reason', 'mode'].includes(el.dataset.off)) { S.offboard[el.dataset.off] = el.value; return; }
   if (el.dataset.abs && S.absForm) { S.absForm[el.dataset.abs] = el.value; return; }
   if (el.dataset.av) { S.avEdit = S.avEdit || { start: '', end: '', note: '' }; S.avEdit[el.dataset.av] = el.value; return; }
+  if (el.dataset.avp) { avpSet(el); if (!el.dataset.rerender) { const b = document.querySelector('[data-act="avp-save"]'); if (b) b.disabled = false; } return; }
   if (el.dataset.tpl) { S.tplEdit = S.tplEdit || { name: '', start: '', end: '', note: '' }; S.tplEdit[el.dataset.tpl] = el.value; return; }
   if (el.dataset.in === 'kq') { K.q = el.value; renderKeepFocus(); return; }
   if (el.dataset.in === 'kbq') { S.kbQ = el.value; clearTimeout(logTimer); logTimer = setTimeout(async () => { try { await loadKb(); renderKeepFocus(); } catch (err) { toast(err.message, true); } }, 300); }
@@ -2153,6 +2207,7 @@ $app.addEventListener('change', async e => {
   }
   if (el.dataset.sh && S.shiftEdit) { S.shiftEdit[el.dataset.sh] = el.value; if (el.dataset.rerender) render(); }
   if (el.dataset.in === 'rowho') { S.rosterWho = el.value; render(); }
+  if (el.dataset.avp && el.dataset.rerender) { avpSet(el); render(); }
   if (el.dataset.in === 'rocompare') { S.rosterCompare = el.checked; render(); }
   if (el.dataset.abs && S.absForm) { S.absForm[el.dataset.abs] = el.value; if (el.dataset.abs === 'from' && S.absForm.to && S.absForm.to < el.value) S.absForm.to = el.value; if (['from', 'to', 'memberId'].includes(el.dataset.abs)) render(); }
   if (el.dataset.h && S.hEdit) S.hEdit[el.dataset.h] = el.value;
@@ -2393,6 +2448,13 @@ $app.addEventListener('click', async e => {
       }
       case 'sh-del': if (!confirm('Deze dienst verwijderen?')) return; await rpc('cd_shift_delete', { p_id: num }); S.shiftEdit = null; toast('Dienst verwijderd.'); break;
 
+      case 'avp-cancel': S.avPatEdit = null; render(); return;
+      case 'avp-save': {
+        const P = S.avPatEdit || {};
+        S.avPat = await rpc('cd_availability_pattern_set', { p: [1, 2, 3, 4, 5, 6, 7].map(wd => ({ weekday: wd, status: (P[wd] || {}).status || '', start: (P[wd] || {}).start || '', end: (P[wd] || {}).end || '', note: (P[wd] || {}).note || '' })) });
+        S.avPatEdit = null; await loadAvailability(); render(); toast('Je vaste week is opgeslagen. Wie het rooster maakt, ziet dit meteen.'); return;
+      }
+      case 'sh-pick': if (S.shiftEdit) { S.shiftEdit.memberId = raw; render(); } return;
       case 'sh-tpl': {
         const t = S.roster.templates.find(x => same(x.id, raw));
         Object.assign(S.shiftEdit, { start: t.start, end: t.end, note: t.note || S.shiftEdit.note }); render(); return;

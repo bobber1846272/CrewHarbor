@@ -786,3 +786,29 @@ details summary { cursor: pointer; font-weight: 600; min-height: 32px; display: 
 .submit-bar.sticky { position: sticky; bottom: 16px; z-index: 20; box-shadow: 0 10px 30px rgba(13, 35, 64, .18); }
 .saved-tag { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: #067647; margin-right: 6px; }
 .saved-tag svg { width: 14px; height: 14px; }
+
+/* Rooster: wie kan er? */
+.who-can { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line, #D8E1E3); border-radius: 12px; background: #F8FBFB; }
+.who-head { font-size: 14px; }
+.who-group { display: flex; flex-direction: column; gap: 6px; }
+.who-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.who-title.kan { color: #067647; } .who-title.niet, .who-title.vrij { color: #B42318; } .who-title.leeg, .who-title.dienst { color: #4A5F6E; }
+.who-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.who-chip { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 10px; border-radius: 10px; border: 1px solid #D8E1E3; background: #fff; font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.who-chip small { font-size: 11px; color: #4A5F6E; }
+.who-chip.kan { border-color: #A6E3C0; background: #ECFDF3; }
+.who-chip.niet { border-color: #F5C2BE; background: #FEF3F2; }
+.who-chip.vrij { opacity: .55; cursor: not-allowed; text-decoration: line-through; }
+.who-chip.on { outline: 2px solid var(--accent, #1D6E7B); outline-offset: 1px; }
+.who-chip:not([disabled]):hover { border-color: var(--accent, #1D6E7B); }
+.day-count { display: flex; gap: 6px; justify-content: center; margin-top: 3px; font-size: 11px; font-weight: 600; }
+.day-count .kan { color: #067647; } .day-count .niet { color: #B42318; }
+.av-tag.vast { opacity: .8; border-style: dashed; }
+
+/* Beschikbaarheid: vaste week */
+.avp { display: flex; flex-direction: column; gap: 6px; }
+.avp-row { display: grid; grid-template-columns: 110px minmax(150px, 200px) 120px auto 120px; gap: 8px; align-items: center; }
+.avp-row .input { min-height: 38px; }
+@media (max-width: 700px) { .avp-row { grid-template-columns: 1fr 1fr; } .avp-row strong { grid-column: 1 / -1; } .avp-row > span:empty { display: none; } }
+.mday.vast { opacity: .85; }
+.mday .av-state small { font-weight: 400; opacity: .8; }
