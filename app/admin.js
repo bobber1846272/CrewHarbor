@@ -156,7 +156,7 @@ const eur = c => '€ ' + (Math.round(c || 0) / 100).toFixed(2).replace('.', ','
 const planName = id => ((A.data.plans || []).find(p => p.id === id) || {}).name || id || '–';
 const BSTAT = { trial: ['Proefperiode', ''], active: ['Betaalt', 'green'], past_due: ['Betaling mislukt', 'red'], canceled: ['Opgezegd', 'orange'], free: ['Gratis', 'green'], expired: ['Proef voorbij', 'red'] };
 const FEAT = [['payroll', 'Salarisexport'], ['phone', '3CX-telefonie'], ['locations', 'Meerdere vestigingen']];
-function planOptions(sel) { return (A.data.plans || []).map(p => '<option value="' + esc(p.id) + '"' + (p.id === sel ? ' selected' : '') + '>' + esc(p.name) + ' · ' + eur(p.priceCents) + '/mw</option>').join(''); }
+function planOptions(sel) { return (A.data.plans || []).map(p => '<option value="' + esc(p.id) + '"' + (p.id === sel ? ' selected' : '') + '>' + esc(p.name) + ' · ' + (p.public === false && !p.priceCents && !p.minCents ? 'gratis, alleen in Beheer' : eur(p.priceCents) + '/mw') + '</option>').join(''); }
 function viewBilling() {
   const M = A.mollie;
   let h = '<section class="card"><div class="item-top"><h2 style="margin:0">Betalen met Mollie</h2>' + (M ? (M.hasKey ? '<span class="badge green">' + (M.mode === 'live' ? 'Live' : 'Testmodus') + '</span>' : '<span class="badge orange">Nog niet gekoppeld</span>') : '') + '</div>' +
