@@ -15,7 +15,7 @@ const PERM_GROUPS = [
   ['Terugbellen', [['callbacks.create', 'Verzoeken aanmaken'], ['callbacks.assign', 'Toewijzen aan collega’s'], ['callbacks.view_all', 'Alle verzoeken zien'],
     ['callbacks.edit_all', 'Alle verzoeken bewerken'], ['callbacks.delete', 'Verzoeken verwijderen']]],
   ['Taken', [['tasks.create', 'Taken aanmaken'], ['tasks.assign', 'Taken aan anderen geven'], ['tasks.view_all', 'Alle taken zien'],
-    ['tasks.edit_all', 'Alle taken bewerken'], ['tasks.delete', 'Taken verwijderen']]],
+    ['tasks.edit_all', 'Alle taken bewerken'], ['tasks.delete', 'Taken verwijderen'], ['tasks.archive', 'Taakarchief: afgeronde taken van iedereen bekijken en aanpassen']]],
   ['Uren', [['hours.view_all', 'Uren van iedereen zien'], ['hours.approve', 'Uren en verlof goedkeuren'], ['hours.plan', 'Rooster plannen'], ['hours.kiosk', 'Prikklok instellen'], ['hours.kiosk_exit', 'Prikklok verlaten met eigen code']]],
   ['Kennis & documenten', [['kb.edit', 'Kennisbank bewerken'], ['docs.upload', 'Documenten uploaden'], ['docs.manage', 'Mappen en documenten beheren']]],
   ['Teamleiding', [['team.board', 'Teambord'], ['reports.view', 'Cijfers'], ['phone.view', 'Telefonie bekijken'], ['audit.view', 'Logboek']]],
@@ -357,7 +357,7 @@ async function loadCallbacks() {
   if (!list.some(c => same(c.id, S.cbSel))) S.cbSel = list.length ? list[0].id : null;
 }
 async function loadTasks() {
-  if (S.tView === 'all' && !can('tasks.view_all')) S.tView = 'mine';
+  if ((S.tView === 'all' && !can('tasks.view_all')) || (S.tView === 'archive' && !can('tasks.archive'))) S.tView = 'mine';
   S.tasks = await rpc('cd_tasks', { p_scope: S.tView });
 }
 async function loadLog() { S.log = await rpc('cd_audit', { p_member: S.logUser || null, p_q: S.logQ.trim() || null }); }
@@ -688,15 +688,15 @@ function viewCallbackForm() {
 
 // ----- taken -----
 function viewTasks() {
-  const all = S.tView === 'all';
-  let h = '<header class="page-head" style="max-width:920px"><div><h1>' + (all ? 'Alle taken' : 'Mijn taken') + '</h1><p>' +
-    (all ? 'Alle taken van het team.' : 'Wat je nog moet doen, ook taken die je met collega’s deelt.') + '</p></div>' +
+  const all = S.tView === 'all', arc = S.tView === 'archive';
+  let h = '<header class="page-head" style="max-width:920px"><div><h1>' + (arc ? 'Taakarchief' : all ? 'Alle taken' : 'Mijn taken') + '</h1><p>' +
+    (arc ? 'Alle afgeronde en gearchiveerde taken van het team. Klik op een taak om te zien wat erin stond.' : all ? 'Alle taken van het team.' : 'Wat je nog moet doen, ook taken die je met collega’s deelt.') + '</p></div>' +
     '<div class="actions"><button class="btn' + (S.searchOpen ? ' on' : '') + '" data-act="t-search" aria-expanded="' + S.searchOpen + '">' + ICON.search + 'Bestaat deze taak al?</button>' +
     (can('tasks.create') ? '<a class="btn primary" href="#/taak">' + ICON.plus + 'Nieuwe taak</a>' : '') + '</div></header>';
-  if (can('tasks.view_all')) h += '<div class="seg" role="group" aria-label="Weergave"><button data-act="t-view" data-v="mine" class="' + (!all ? 'on' : '') + '" aria-pressed="' + !all + '">Mijn taken</button>' +
-    '<button data-act="t-view" data-v="all" class="' + (all ? 'on' : '') + '" aria-pressed="' + all + '">Alle taken</button></div>';
+  const tabs = [['mine', 'Mijn taken'], can('tasks.view_all') ? ['all', 'Alle taken'] : null, can('tasks.archive') ? ['archive', 'Archief'] : null].filter(Boolean);
+  if (tabs.length > 1) h += '<div class="seg" role="group" aria-label="Weergave">' + tabs.map(v => '<button data-act="t-view" data-v="' + v[0] + '" class="' + (S.tView === v[0] ? 'on' : '') + '" aria-pressed="' + (S.tView === v[0]) + '">' + v[1] + '</button>').join('') + '</div>';
   if (S.searchOpen) h += viewSearch();
-  return h + (all ? viewAllTasks() : viewMyTasks());
+  return h + (arc ? viewArchiveTasks() : all ? viewAllTasks() : viewMyTasks());
 }
 function viewSearch() {
   return '<section class="card stack" style="gap:14px;padding:20px" aria-label="Controleer of een taak al bestaat">' +
@@ -763,7 +763,38 @@ function viewAllTasks() {
     ' · van ' + esc(t.createdByName) + (t.repeat && t.repeat !== 'none' ? ' · <span class="repeat">' + ICON.repeat + ' ' + esc(REPEATS[t.repeat]) + '</span>' : '') + '</span></div>' +
     dueBadge(t.dueAt, 'taak') + editBtn(t) + '</article>').join('') : '<div class="empty">Geen open taken.</div>';
   h += '<div class="section-title" style="margin-top:8px"><h2>Afgerond · ' + done.length + '</h2></div>';
-  h += done.map(t => '<article class="task done"><span class="item-title" style="flex:1 1 260px;min-width:0">' + esc(t.title) + '</span><span class="item-meta">Voor ' + esc(t.assignees.map(a => a.name).join(', ')) + '</span></article>').join('');
+  h += done.map(t => taskDetails(t)).join('');
+  return h + '</section>';
+}
+// afgeronde taak die je kunt openklappen: wat stond erin, wie, wanneer
+function taskDetails(t) {
+  const who = t.assignees.map(a => a.name + (a.done ? ' ✓' : '')).join(', ');
+  const canFix = can('tasks.archive') || can('tasks.edit_all') || same(t.createdBy, S.me.id);
+  return '<details class="task-det"><summary><span class="item-title">' + esc(t.title) + '</span>' +
+    '<span class="item-meta">Voor ' + esc(t.assignees.map(a => a.name).join(', ')) + (t.doneAt ? ' · afgerond ' + esc(fmtDate(t.doneAt)) : '') + '</span>' +
+    ((t.archivedBy || []).length ? '<span class="badge">Gearchiveerd</span>' : '') + '</summary>' +
+    '<div class="task-det-body">' + (t.desc ? '<p style="white-space:pre-wrap;margin:0">' + esc(t.desc) + '</p>' : '<p class="muted small" style="margin:0">Geen omschrijving.</p>') +
+    '<dl class="kv small"><dt>Gemaakt</dt><dd>' + esc(fmtDate(t.createdAt)) + ' door ' + esc(t.createdByName || '–') + '</dd>' +
+    '<dt>Voor</dt><dd>' + esc(who) + (t.assignees.length > 1 ? ' (' + (t.mode === 'iedereen' ? 'iedereen moest afvinken' : 'één persoon was genoeg') + ')' : '') + '</dd>' +
+    (t.dueAt ? '<dt>Deadline</dt><dd>' + esc(fmtDate(t.dueAt)) + '</dd>' : '') +
+    (t.priority && t.priority !== 'normaal' ? '<dt>Prioriteit</dt><dd>' + esc(t.priority) + '</dd>' : '') +
+    (t.repeat && t.repeat !== 'none' ? '<dt>Herhalen</dt><dd>' + esc(REPEATS[t.repeat]) + '</dd>' : '') +
+    ((t.archivedBy || []).length ? '<dt>Gearchiveerd door</dt><dd>' + esc(t.archivedBy.join(', ')) + '</dd>' : '') + '</dl>' +
+    (canFix ? '<div class="row"><button class="btn small" data-act="t-edit" data-id="' + t.id + '">' + ICON.edit + 'Aanpassen</button>' +
+      (can('tasks.archive') || can('tasks.edit_all') ? '<button class="btn small ghost" data-act="t-reopen" data-id="' + t.id + '">Weer openzetten</button>' : '') + '</div>' : '') +
+    '</div></details>';
+}
+function viewArchiveTasks() {
+  const q = (S.tArcQ || '').trim().toLowerCase();
+  const people = {};
+  S.tasks.forEach(t => t.assignees.forEach(a => { people[a.id] = a.name; }));
+  const list = S.tasks.filter(t => (S.tWho === 'ALL' || t.assignees.some(a => same(a.id, S.tWho))) &&
+    (!q || (t.title + ' ' + (t.desc || '')).toLowerCase().includes(q)));
+  let h = '<section class="stack" style="gap:14px"><div class="row" style="align-items:center"><input class="input" style="max-width:340px" placeholder="Zoek in titel of omschrijving" data-in="tarcq" value="' + esc(S.tArcQ || '') + '"></div>' +
+    '<div class="chips"><span class="muted small">Toon van:</span><button class="chip' + (S.tWho === 'ALL' ? ' on' : '') + '" data-act="t-who" data-v="ALL">Iedereen</button>' +
+    Object.keys(people).sort((a, b) => people[a].localeCompare(people[b])).map(id => '<button class="chip' + (same(S.tWho, id) ? ' on' : '') + '" data-act="t-who" data-v="' + id + '">' + esc(people[id]) + '</button>').join('') + '</div>';
+  h += '<div class="section-title"><h2>Afgerond · ' + list.length + '</h2></div>';
+  h += list.length ? list.map(taskDetails).join('') : '<div class="empty">' + (q ? 'Niets gevonden.' : 'Nog geen afgeronde taken.') + '</div>';
   return h + '</section>';
 }
 
@@ -2189,6 +2220,7 @@ $app.addEventListener('input', e => {
   if (el.dataset.tpl) { S.tplEdit = S.tplEdit || { name: '', start: '', end: '', note: '' }; S.tplEdit[el.dataset.tpl] = el.value; return; }
   if (el.dataset.in === 'kq') { K.q = el.value; renderKeepFocus(); return; }
   if (el.dataset.in === 'kbq') { S.kbQ = el.value; clearTimeout(logTimer); logTimer = setTimeout(async () => { try { await loadKb(); renderKeepFocus(); } catch (err) { toast(err.message, true); } }, 300); }
+  if (el.dataset.in === 'tarcq') { S.tArcQ = el.value; renderKeepFocus(); return; }
   if (el.dataset.in === 'logq') { S.logQ = el.value; clearTimeout(logTimer); logTimer = setTimeout(async () => { try { await loadLog(); renderKeepFocus(); } catch (err) { toast(err.message, true); } }, 300); }
 });
 $app.addEventListener('change', async e => {
@@ -2357,6 +2389,7 @@ $app.addEventListener('click', async e => {
       case 't-who': S.tWho = el.dataset.v; render(); return;
       case 't-search': S.searchOpen = !S.searchOpen; S.q = ''; S.results = null; render(); if (S.searchOpen) document.getElementById('t-q').focus(); return;
       case 't-edit': S.edit = { kind: 'task', id: num }; go('taak'); return;
+      case 't-reopen': await rpc('cd_task_reopen', { p_id: num }); await loadTasks(); render(); toast('De taak staat weer open bij iedereen.'); return;
       case 't-toggle': await rpc('cd_task_action', { p_id: num, p_action: 'toggle' }); break;
       case 't-archive': await rpc('cd_task_action', { p_id: num, p_action: 'archive' }); toast('Gearchiveerd.'); break;
       case 't-restore': await rpc('cd_task_action', { p_id: num, p_action: 'restore' }); toast('Teruggezet.'); break;

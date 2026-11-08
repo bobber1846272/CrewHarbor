@@ -812,3 +812,14 @@ details summary { cursor: pointer; font-weight: 600; min-height: 32px; display: 
 @media (max-width: 700px) { .avp-row { grid-template-columns: 1fr 1fr; } .avp-row strong { grid-column: 1 / -1; } .avp-row > span:empty { display: none; } }
 .mday.vast { opacity: .85; }
 .mday .av-state small { font-weight: 400; opacity: .8; }
+
+/* afgeronde taken openklappen */
+.task-det { background: #fff; border: 1px solid var(--line, #D8E1E3); border-radius: 12px; }
+.task-det > summary { list-style: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 16px; cursor: pointer; }
+.task-det > summary::-webkit-details-marker { display: none; }
+.task-det > summary::before { content: "›"; font-size: 18px; line-height: 1; color: var(--muted, #4A5F6E); transition: transform .15s; }
+.task-det[open] > summary::before { transform: rotate(90deg); }
+.task-det > summary .item-title { flex: 1 1 220px; min-width: 0; text-decoration: line-through; color: var(--muted, #4A5F6E); }
+.task-det[open] > summary .item-title { text-decoration: none; color: inherit; font-weight: 600; }
+.task-det-body { display: flex; flex-direction: column; gap: 12px; padding: 0 16px 16px 40px; }
+.task-det-body .kv { margin: 0; }
