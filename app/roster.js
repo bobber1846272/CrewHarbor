@@ -142,7 +142,8 @@ function rosterToolbar(R) {
   return deptBar(R) + '<div class="ro-tools">' +
     '<div class="ro-palette">' + (tpls.length ? '<span class="small muted">Sleep naar een vakje:</span>' + tpls.map(t => { const i = tpls.indexOf(t) % 6;
       const dp = deptOf(t.departmentId, R), fn = funcOf(t.functionId, R);
-      return '<span class="shift t' + i + ' ro-drag" draggable="true" data-tpl-drag="' + t.id + '"' + (dp ? ' style="box-shadow:inset 4px 0 0 ' + esc(dp.color) + '"' : '') + ' title="Sleep naar een medewerker en dag">' + esc(t.name) + '<small>' + esc(t.start + '–' + t.end) + (fn ? ' · ' + esc(fn.name) : '') + '</small></span>'; }).join('')
+      const fc = fn && fn.color;
+      return '<span class="shift ' + (fc ? 'has-fc' : 't' + i) + ' ro-drag" draggable="true" data-tpl-drag="' + t.id + '" style="' + (dp ? 'box-shadow:inset 4px 0 0 ' + esc(dp.color) + ';' : '') + (fc ? '--fc:' + esc(fc) : '') + '"' + ' title="Sleep naar een medewerker en dag">' + esc(t.name) + '<small>' + esc(t.start + '–' + t.end) + (fn ? ' · ' + esc(fn.name) : '') + '</small></span>'; }).join('')
       + '<button class="ro-tpl-edit" data-act="tpl-open" title="Vaste diensten toevoegen of aanpassen">✎ Aanpassen</button>'
       : '<span class="small muted">Nog geen vaste diensten.</span><button class="btn small" data-act="tpl-open">+ Vaste dienst maken</button>') + '</div>' +
     '<div class="ro-actions">' +
@@ -239,9 +240,10 @@ function shiftChip(R, s, withName) {
   const label = (withName ? '<b>' + esc(s.memberName.split(' ')[0]) + '</b> ' : '') + esc(s.start + '–' + s.end) + (issues.length ? ' <span class="ro-warn" aria-label="Let op">!</span>' : '');
   const dp = deptOf(s.departmentId, R), fn = funcOf(s.functionId, R);
   const note = s.note || tp || fn || (dp && !(S.roFilter || {}).dept) ? '<small>' + (fn ? '<b class="func-tag">' + esc(fn.name) + '</b> ' : '') + esc([dp && !(S.roFilter || {}).dept ? dp.name : '', tp ? tp.t.name : '', s.note || ''].filter(Boolean).join(' · ')) + '</small>' : '';
-  const cls = 'shift' + (tp ? ' t' + tp.i : '') + (issues.length ? ' warn' : '') + (dp ? ' has-dept' : '');
+  const fc = fn && fn.color;
+  const cls = 'shift' + (tp && !fc ? ' t' + tp.i : '') + (fc ? ' has-fc' : '') + (issues.length ? ' warn' : '') + (dp ? ' has-dept' : '');
   const title = s.memberName + (s.note ? ' · ' + s.note : '') + (issues.length ? '\nLet op: ' + issues.join('; ') : '');
-  const st = dp ? ' style="--dept:' + esc(dp.color) + '"' : '';
+  const st = dp || fc ? ' style="' + (dp ? '--dept:' + esc(dp.color) + ';' : '') + (fc ? '--fc:' + esc(fc) : '') + '"' : '';
   return R.canPlan ? '<button class="' + cls + '"' + st + ' draggable="true" data-shift-drag="' + s.id + '" data-act="sh-edit" data-id="' + s.id + '" title="' + esc(title) + '">' + label + note + '</button>'
     : '<span class="' + cls + '"' + st + ' title="' + esc(s.memberName) + '">' + label + note + '</span>';
 }
@@ -261,11 +263,11 @@ const DEPT_COLORS = ['#1D9BAE', '#16A34A', '#F59E0B', '#DC2626', '#7C3AED', '#25
 function unitsEditor() {
   const E = S.roUnitsEdit;
   const dRow = (d, i) => '<div class="ue-row"><input type="color" value="' + esc(d.color) + '" data-ue="d|' + i + '|color" aria-label="Kleur"><input class="input" data-ue="d|' + i + '|name" value="' + esc(d.name) + '" maxlength="30" placeholder="Bijv. Kassa"><button class="icon-btn small" data-act="rx-ue-del" data-v="d|' + i + '" aria-label="Weghalen">' + ICON.x + '</button></div>';
-  const fRow = (f, i) => '<div class="ue-row"><input class="input" data-ue="f|' + i + '|name" value="' + esc(f.name) + '" maxlength="30" placeholder="Bijv. HOKA"><button class="icon-btn small" data-act="rx-ue-del" data-v="f|' + i + '" aria-label="Weghalen">' + ICON.x + '</button></div>';
+  const fRow = (f, i) => '<div class="ue-row">' + (f.color ? '<input type="color" value="' + esc(f.color) + '" data-ue="f|' + i + '|color" aria-label="Kleur"><button class="link-btn small" data-act="rx-ue-nocolor" data-v="' + i + '" title="Kleur weghalen">geen</button>' : '<button class="ue-nocol" data-act="rx-ue-color" data-v="' + i + '" title="Kleur geven">+ kleur</button>') + '<input class="input" data-ue="f|' + i + '|name" value="' + esc(f.name) + '" maxlength="30" placeholder="Bijv. HOKA"><button class="icon-btn small" data-act="rx-ue-del" data-v="f|' + i + '" aria-label="Weghalen">' + ICON.x + '</button></div>';
   return '<section class="card stack" style="gap:14px;max-width:none"><div class="item-top"><h2 style="margin:0">Afdelingen &amp; functies</h2><button class="icon-btn small" data-act="rx-units-x" aria-label="Sluiten">' + ICON.x + '</button></div>' +
     '<div class="ue-cols"><div class="stack" style="gap:8px"><strong>Afdelingen</strong><span class="small muted">Waar wordt gewerkt? Bijv. Kassa, Groente, Vers. Elke afdeling krijgt een kleur in het rooster.</span>' + E.departments.map(dRow).join('') +
       '<button class="btn small ghost" data-act="rx-ue-add" data-v="d">+ Afdeling</button></div>' +
-    '<div class="stack" style="gap:8px"><strong>Functies</strong><span class="small muted">Wat mag iemand doen? Bijv. HOKA of Sleutelhouder. Zet een functie op een dienst, dan kun je alleen mensen met die functie inplannen. Wie welke functie heeft, stel je in bij Mensen.</span>' + E.functions.map(fRow).join('') +
+    '<div class="stack" style="gap:8px"><strong>Functies</strong><span class="small muted">Wat mag iemand doen? Bijv. HOKA of Sleutelhouder. Zet een functie op een dienst, dan kun je alleen mensen met die functie inplannen. Wie welke functie heeft, stel je in bij Mensen. Geef je een functie een kleur, dan krijgen diensten met die functie die kleur in het rooster.</span>' + E.functions.map(fRow).join('') +
       '<button class="btn small ghost" data-act="rx-ue-add" data-v="f">+ Functie</button></div></div>' +
     (!E.departments.length && !E.functions.length ? '<button class="btn small" data-act="rx-ue-example">Voorbeeld supermarkt invullen</button>' : '') +
     '<div class="row"><button class="btn primary" data-act="rx-units-save">Opslaan</button><button class="btn ghost" data-act="rx-units-x">Annuleren</button></div></section>';
@@ -414,6 +416,8 @@ document.getElementById('app').addEventListener('click', async e => {
       case 'rx-units': { const dd = el.closest('details'); if (dd) dd.open = false; const U = UNITS(R); S.roUnitsEdit = { departments: U.departments.map(d => Object.assign({}, d)), functions: U.functions.map(f => Object.assign({}, f)) }; S.roHoursEdit = null; S.roNeedsEdit = null; S.roOpenPanel = false; S.roProposal = null; render(); return; }
       case 'rx-units-x': S.roUnitsEdit = null; render(); return;
       case 'rx-ue-add': { const E = S.roUnitsEdit; if (v === 'd') E.departments.push({ name: '', color: DEPT_COLORS[E.departments.length % DEPT_COLORS.length] }); else E.functions.push({ name: '' }); render(); const ins = document.querySelectorAll('[data-ue^="' + v + '|"][data-ue$="|name"]'); if (ins.length) ins[ins.length - 1].focus(); return; }
+      case 'rx-ue-color': { const F = S.roUnitsEdit.functions; F[Number(v)].color = DEPT_COLORS[(Number(v) + 3) % DEPT_COLORS.length]; render(); return; }
+      case 'rx-ue-nocolor': { S.roUnitsEdit.functions[Number(v)].color = ''; render(); return; }
       case 'rx-ue-del': { const [k, i] = v.split('|'); (k === 'd' ? S.roUnitsEdit.departments : S.roUnitsEdit.functions).splice(Number(i), 1); render(); return; }
       case 'rx-ue-example': {
         S.roUnitsEdit.departments = ['Kassa', 'Groente & fruit', 'Vers', 'Vries', 'DKW', 'Vakkenvullen'].map((n, i) => ({ name: n, color: DEPT_COLORS[i] }));

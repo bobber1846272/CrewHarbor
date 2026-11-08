@@ -1676,7 +1676,13 @@ function viewRoster() {
   if (dayView) return h + deptBar(RV) + rosterDayView(RV) + (R.canPlan && S.tplModal ? modal(templatesModal(R), 'tpl-x') : '');
   return h + (month ? '' : rosterToolbar(RV)) + (month ? rosterMonth(R) : rosterWeek(RV)) + (month ? '' : rosterLegend(R)) + (R.canPlan && S.tplModal ? modal(templatesModal(R), 'tpl-x') : '');
 }
-function tplOf(R, s) { const i = (R.templates || []).findIndex(t => t.start === s.start && t.end === s.end); return i < 0 ? null : { i: i % 6, t: R.templates[i] }; }
+function tplOf(R, s) {
+  const T = R.templates || []; const sameT = t => t.start === s.start && t.end === s.end;
+  let i = T.findIndex(t => sameT(t) && same(t.functionId || '', s.functionId || '') && same(t.departmentId || '', s.departmentId || ''));
+  if (i < 0) i = T.findIndex(t => sameT(t) && same(t.functionId || '', s.functionId || ''));
+  if (i < 0) i = T.findIndex(sameT);
+  return i < 0 ? null : { i: i % 6, t: T[i] };
+}
 function rosterMine(R) {
   const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
   const mine = R.shifts.filter(s => same(s.memberId, S.me.id));

@@ -1149,3 +1149,9 @@ table.ro2 tr.ro-group th { text-align: left; background: #F2F6F7; padding: 8px 1
 .ro-tpl-edit { border: 1px dashed #B9C6CC; background: transparent; color: #1D6E7B; font: inherit; font-size: 13px; font-weight: 600; border-radius: 10px; padding: 6px 10px; cursor: pointer; }
 .ro-tpl-edit:hover { background: #F1F8F9; border-color: #1D6E7B; }
 @media (max-width: 640px) { .tplm { padding: 18px; } .tplm-row { grid-template-columns: 1fr auto; } .tplm-tags { grid-column: 1 / -1; grid-row: 2; } .tplm-grid { grid-template-columns: 1fr 1fr; } }
+
+/* dienstkleur per functie */
+.shift.has-fc { background: color-mix(in srgb, var(--fc) 20%, #fff); border-color: color-mix(in srgb, var(--fc) 45%, #fff); color: color-mix(in srgb, var(--fc) 55%, #101820); }
+.shift.has-fc .func-tag { background: var(--fc); color: #fff; }
+.ue-nocol { flex: none; width: 64px; height: 38px; border: 1px dashed #B9C6CC; border-radius: 8px; background: #fff; color: #4A5F6E; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.ue-nocol:hover { border-color: #1D6E7B; color: #1D6E7B; }
