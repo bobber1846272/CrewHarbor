@@ -211,7 +211,9 @@ function orgBilling(o) {
     '<div class="fields4"><div class="field"><label for="ob-p-' + o.id + '">Pakket</label><select class="input" id="ob-p-' + o.id + '" name="planId">' + planOptions(o.planId) + '</select></div>' +
       '<div class="field"><label for="ob-s-' + o.id + '">Status</label><select class="input" id="ob-s-' + o.id + '" name="status">' + ['trial', 'active', 'past_due', 'canceled', 'free'].map(x => '<option value="' + x + '"' + ((b.status === 'expired' ? 'trial' : b.status) === x ? ' selected' : '') + '>' + BSTAT[x][0] + '</option>').join('') + '</select></div>' +
       '<div class="field"><label for="ob-t-' + o.id + '">Proefperiode (dagen vanaf nu)</label><input class="input" id="ob-t-' + o.id + '" name="trialDays" inputmode="numeric" placeholder="Niet wijzigen"></div></div>' +
-    '<div class="row"><button class="btn small dark" type="submit">Abonnement opslaan</button></div></form>' +
+    '<div class="row"><button class="btn small dark" type="submit">Abonnement opslaan</button>' +
+      (o.billingMethod === 'factuur' ? '<span class="badge green">Betaalt per factuur</span><button class="btn small ghost" type="button" data-act="inv-method" data-id="' + o.id + '" data-v="mollie">Terug naar incasso</button>'
+        : '<button class="btn small ghost" type="button" data-act="inv-method" data-id="' + o.id + '" data-v="factuur">Per factuur laten betalen</button>') + '</div></form>' +
     orgAddons(o);
 }
 function orgAddons(o) {
