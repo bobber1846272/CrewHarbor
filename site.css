@@ -211,3 +211,14 @@ textarea.input { resize: vertical; }
 .plan ul { align-content: start; }
 .plan .extras { display: block; }
 .plan .extras span { display: flex; justify-content: space-between; gap: 8px; }
+
+/* ---------- supportpagina ---------- */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sup-hero h1 { font-size: clamp(32px, 5vw, 46px); margin: 0 0 8px; }
+.sup-search .input { width: 100%; min-height: 56px; font-size: 18px; border-radius: 14px; padding: 0 18px; }
+.sup-ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 18px; }
+.sup-way { display: flex; flex-direction: column; gap: 2px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--ink); text-decoration: none; }
+.sup-way:hover { border-color: var(--accent); }
+.sup-way span { color: var(--muted); font-size: 15px; }
+.faq-cat { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); margin: 28px 0 10px; }
+.faq-cat:first-child { margin-top: 0; }
