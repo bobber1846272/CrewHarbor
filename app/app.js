@@ -956,17 +956,27 @@ function viewMembers() {
   const mm = can('members.manage');
   let h = '<header class="page-head"><div><h1>Mensen</h1><p>Iedereen logt in met zijn eigen e-mailadres en wachtwoord. Nieuwe mensen krijgen een uitnodiging per mail.</p></div>' +
     (mm ? '<div class="actions"><button class="btn" data-act="imp-open">' + ICON.upload + 'Importeren</button><button class="btn primary" data-act="m-new">' + ICON.plus + 'Medewerker toevoegen</button></div>' : '') + '</header>' + codeAlert() + linkAlert() + importPanel();
-  const actief = S.members.filter(u => !u.archived), archief = S.members.filter(u => u.archived);
-  if (S.mTab === 'archief' && !archief.length) S.mTab = 'actief';
-  h += '<div class="seg" role="tablist" aria-label="Medewerkers">' + [['actief', 'In dienst', actief.length], ['archief', 'Archief', archief.length]].map(t =>
-    '<button role="tab" data-act="m-tab" data-v="' + t[0] + '" class="' + (S.mTab === t[0] ? 'on' : '') + '" aria-selected="' + (S.mTab === t[0]) + '">' + t[1] + '<span class="cnt">' + t[2] + '</span></button>').join('') + '</div>';
+  const q = (S.mq || '').trim().toLowerCase(), mf = S.mFilter || {};
+  const hit = u => (!q || [u.name, u.email, u.roleName, u.personnelNo, contractShort(u)].some(x => String(x || '').toLowerCase().includes(q)))
+    && (!mf.role || (mf.role === 'eigenaar' ? u.isOwner : same(u.roleId, mf.role) && !u.isOwner))
+    && (!mf.ct || (mf.ct === 'vast' ? u.contractType === 'vast' : u.contractType !== 'vast'));
+  const allAct = S.members.filter(u => !u.archived), allArch = S.members.filter(u => u.archived);
+  const actief = allAct.filter(hit), archief = allArch.filter(hit);
+  if (S.mTab === 'archief' && !allArch.length) S.mTab = 'actief';
+  h += '<div class="m-tools"><div class="seg" role="tablist" aria-label="Medewerkers">' + [['actief', 'In dienst', allAct.length], ['archief', 'Archief', allArch.length]].map(t =>
+    '<button role="tab" data-act="m-tab" data-v="' + t[0] + '" class="' + (S.mTab === t[0] ? 'on' : '') + '" aria-selected="' + (S.mTab === t[0]) + '">' + t[1] + '<span class="cnt">' + t[2] + '</span></button>').join('') + '</div>' +
+    '<div class="m-search"><input class="input" type="search" id="m-q" data-in="mq" placeholder="Zoek op naam, e-mail, rol of personeelsnummer" value="' + esc(S.mq || '') + '" aria-label="Zoek medewerker"></div>' +
+    '<select class="input m-filter" data-in="mrole" aria-label="Filter op rol"><option value="">Alle rollen</option><option value="eigenaar"' + (mf.role === 'eigenaar' ? ' selected' : '') + '>Eigenaar</option>' +
+      ((S.roles && S.roles.roles) || []).filter(r => !r.isOwner).map(r => '<option value="' + r.id + '"' + (same(mf.role, r.id) ? ' selected' : '') + '>' + esc(r.name) + '</option>').join('') + '</select>' +
+    '<select class="input m-filter" data-in="mct" aria-label="Filter op contract"><option value="">Alle contracten</option><option value="vast"' + (mf.ct === 'vast' ? ' selected' : '') + '>Vast</option><option value="flex"' + (mf.ct === 'flex' ? ' selected' : '') + '>Flex / 0-uren</option></select>' +
+    (q || mf.role || mf.ct ? '<span class="small muted">' + (S.mTab === 'archief' ? archief.length + ' van ' + allArch.length : actief.length + ' van ' + allAct.length) + ' gevonden · <button class="link-btn" data-act="m-qclear">Wissen</button></span>' : '') + '</div>';
   if (S.mTab === 'archief') {
     h += '<div class="split"><div class="list"><div class="table-wrap"><table><thead><tr><th>Naam</th><th>Laatste rol</th><th>Uit dienst per</th><th>Reden</th></tr></thead><tbody>' +
       archief.map(u => {
         const cell = c => '<td><button class="rowbtn" data-act="m-sel" data-id="' + u.id + '">' + c + '</button></td>';
         return '<tr class="' + (same(S.mSel, u.id) ? 'sel' : '') + '">' + cell('<strong>' + esc(u.name) + '</strong>') + cell(esc(u.roleName)) +
           cell(u.leftOn ? esc(dayShort(u.leftOn) + ' ' + String(u.leftOn).slice(0, 4)) : '–') + cell('<span class="badge ' + reasonColor(u.leaveReason) + '">' + esc(u.leaveReasonLabel || '') + '</span>') + '</tr>';
-      }).join('') + '</tbody></table></div></div><aside class="detail card">' + viewArchivePanel() + '</aside></div>';
+      }).join('') + (archief.length ? '' : '<tr><td colspan="4" class="pad muted">Niemand gevonden.</td></tr>') + '</tbody></table></div></div><aside class="detail card">' + viewArchivePanel() + '</aside></div>';
     return h;
   }
   h += '<div class="split"><div class="list"><div class="table-wrap"><table><thead><tr><th>Naam</th><th>Rol</th><th>Contract</th><th>Status</th><th>Laatst ingelogd</th></tr></thead><tbody>' +
@@ -978,7 +988,7 @@ function viewMembers() {
         cell('<span class="small">' + esc(contractShort(u)) + '</span>') +
         cell(u.leaving ? leaveBadge(u) : !u.active ? '<span class="small muted">Gedeactiveerd</span>' : memberStatus(u) || '<span class="small" style="color:var(--green)">Actief</span>') +
         cell('<span class="small muted">' + (u.lastLogin ? esc(fmtDate(u.lastLogin)) : 'Nog nooit') + '</span>') + '</tr>';
-    }).join('') + '</tbody></table></div></div><aside class="detail card">' + viewMemberPanel() + '</aside></div>';
+    }).join('') + (actief.length ? '' : '<tr><td colspan="5" class="pad muted">Niemand gevonden met deze zoekopdracht.</td></tr>') + '</tbody></table></div></div><aside class="detail card">' + viewMemberPanel() + '</aside></div>';
   return h;
 }
 function roleOptions(selected) {
@@ -2426,6 +2436,7 @@ $app.addEventListener('input', e => {
   if (el.dataset.in === 'kq') { K.q = el.value; renderKeepFocus(); return; }
   if (el.dataset.in === 'kbq') { S.kbQ = el.value; clearTimeout(logTimer); logTimer = setTimeout(async () => { try { await loadKb(); renderKeepFocus(); } catch (err) { toast(err.message, true); } }, 300); }
   if (el.dataset.in === 'tarcq') { S.tArcQ = el.value; renderKeepFocus(); return; }
+  if (el.dataset.in === 'mq') { S.mq = el.value; renderKeepFocus(); return; }
   if (el.dataset.in === 'logq') { S.logQ = el.value; clearTimeout(logTimer); logTimer = setTimeout(async () => { try { await loadLog(); renderKeepFocus(); } catch (err) { toast(err.message, true); } }, 300); }
 });
 $app.addEventListener('change', async e => {
@@ -2449,6 +2460,7 @@ $app.addEventListener('change', async e => {
   }
   if (el.dataset.sh && S.shiftEdit) { S.shiftEdit[el.dataset.sh] = el.value; if (el.dataset.rerender) render(); }
   if (el.dataset.in === 'rowho') { S.rosterWho = el.value; render(); }
+  if (el.dataset.in === 'mrole' || el.dataset.in === 'mct') { S.mFilter = Object.assign({}, S.mFilter, { [el.dataset.in === 'mrole' ? 'role' : 'ct']: el.value }); render(); }
   if (el.dataset.avp) { avpSet(el); avpAutoSave(); }
   if (el.dataset.brAuto !== undefined) { S.brEdit = S.brEdit || JSON.parse(JSON.stringify(breakRules())); S.brEdit.auto = el.checked; render(); }
   if (el.dataset.in === 'rocompare') { S.rosterCompare = el.checked; render(); }
@@ -2732,6 +2744,7 @@ $app.addEventListener('click', async e => {
       case 'br-reset': S.brEdit = JSON.parse(JSON.stringify(BREAK_DEFAULT)); render(); return;
       case 'go-account': S.setTab = 'account'; if (route() === 'instellingen') { e.preventDefault(); render(); window.scrollTo(0, 0); } return;
       case 'set-tab': S.setTab = el.dataset.v; render(); return;
+      case 'm-qclear': S.mq = ''; S.mFilter = {}; render(); return;
       case 'pres-toggle': { S.presOpen = !S.presOpen; const pr = document.getElementById('presence'); if (pr) pr.outerHTML = viewPresence(); return; }
       case 'pres-out': S.presOutOpen = !el.parentElement.open; return;
       case 'pinw-mode': S.pinNew.mode = el.dataset.v; render(); return;

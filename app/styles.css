@@ -1057,3 +1057,7 @@ body:has(.av-bar2) .main { padding-bottom: 240px; }
 table.ro2 tr.ro-group th { text-align: left; background: #F2F6F7; padding: 8px 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-2); position: sticky; left: 0; }
 .ro-group-note { text-transform: none; letter-spacing: 0; font-weight: 600; color: #93370D; margin-left: 8px; }
 .ro-group-note.ok { color: #067647; }
+.m-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.m-search { flex: 1 1 260px; max-width: 420px; }
+.m-search .input { width: 100%; min-height: 40px; }
+.m-filter { width: auto; min-height: 40px; max-width: 200px; }
