@@ -30,7 +30,15 @@
   }
 
   const MAX = 500;
-  const curN = () => Math.max(1, Math.round(Number($('calc-num').value) || Number($('calc-n').value) || 1));
+  // schuif: kleine aantallen fijn, grote aantallen in grotere stappen
+  const STOPS = (() => { const a = []; for (let i = 1; i <= 20; i++) a.push(i); for (let i = 25; i <= 100; i += 5) a.push(i); for (let i = 110; i <= 200; i += 10) a.push(i); for (let i = 225; i <= 500; i += 25) a.push(i); a.push(501); return a; })();
+  const idxFor = n => { let best = 0; STOPS.forEach((v, i) => { if (Math.abs(v - n) < Math.abs(STOPS[best] - n)) best = i; }); return best; };
+  const curN = () => Math.max(1, Math.round(Number($('calc-num').value) || 1));
+  function paintSlider() {
+    const r = $('calc-n'); const pct = r.value / r.max * 100; const n = curN();
+    r.style.setProperty('--p', pct + '%');
+    r.setAttribute('aria-valuetext', n > MAX ? 'meer dan 500 medewerkers' : n + ' medewerker' + (n === 1 ? '' : 's'));
+  }
   function bestPlan(n) { return n > MAX ? null : PLANS.find(p => fitsN(p, n)) || null; }
   function renderPlans() {
     const n = curN();
@@ -63,8 +71,12 @@
       '<option value="maatwerk"' + (chosen === 'maatwerk' ? ' selected' : '') + '>Maatwerk (prijs op aanvraag)</option>' +
       '<option value=""' + (!PLANS.some(p => p.id === chosen) && chosen !== 'maatwerk' ? ' selected' : '') + '>Weet ik nog niet</option>';
   }
-  $('calc-n').addEventListener('input', () => { const v = Number($('calc-n').value); $('calc-num').value = v > MAX ? MAX + 1 : v; renderPlans(); });
-  $('calc-num').addEventListener('input', () => { const v = curN(); $('calc-n').value = Math.min(v, MAX + 1); renderPlans(); });
+  const r = $('calc-n'); r.max = STOPS.length - 1;
+  $('calc-ticks').innerHTML = [1, 10, 50, 100, 250, 501].map(v => '<span style="left:' + (idxFor(v) / (STOPS.length - 1) * 100) + '%">' + (v > MAX ? '500+' : v) + '</span>').join('');
+  r.addEventListener('input', () => { $('calc-num').value = STOPS[Number(r.value)]; paintSlider(); renderPlans(); });
+  $('calc-num').addEventListener('input', () => { r.value = idxFor(Math.min(curN(), MAX + 1)); paintSlider(); renderPlans(); });
+  document.querySelectorAll('.calc-step').forEach(b => b.addEventListener('click', () => { $('calc-num').value = Math.max(1, curN() + Number(b.dataset.step)); r.value = idxFor(Math.min(curN(), MAX + 1)); paintSlider(); renderPlans(); }));
+  r.value = idxFor(curN()); paintSlider();
   document.addEventListener('click', e => { const a = e.target.closest('[data-plan]'); if (a) { chosen = a.dataset.plan; renderPlans();
     if (chosen === 'maatwerk') { const em = $('a-emp'); if (em && curN() > MAX) em.value = 'Meer dan 500'; }
     setTimeout(() => $('a-company').focus(), 400); } });
