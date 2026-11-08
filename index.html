@@ -13,96 +13,142 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..750&display=swap">
-<link rel="stylesheet" href="site.css?v=7">
+<link rel="stylesheet" href="site.css?v=8">
 <script>
   // oude links (uitnodigingen, wachtwoord) gaan naar de app
   if (/^#\/[a-z]/.test(location.hash)) location.replace('app/' + location.hash);
 </script>
 </head>
-<body>
+<body class="v3">
 <a class="skip" href="#main">Naar de inhoud</a>
 <header class="top" id="top">
   <div class="wrap top-in">
     <a class="brand" href="./" aria-label="CrewHarbor, naar het begin"><span id="logo"></span></a>
-    <nav class="nav" aria-label="Hoofdmenu">
+    <nav class="nav" id="nav" aria-label="Hoofdmenu">
       <a href="#functies">Functies</a>
+      <a href="#hoe">Zo werkt het</a>
       <a href="#prijzen">Prijzen</a>
-      <a href="prijzen.html">Vergelijken</a>
       <a href="#veilig">Veiligheid</a>
       <a href="#vragen">Vragen</a>
       <a href="support.html">Support</a>
     </nav>
     <div class="top-act">
-      <a class="btn ghost-light hide-s" href="#aanvragen">Gratis proberen</a>
-      <a class="btn light" href="app/">Inloggen</a>
+      <a class="btn light hide-s" href="app/">Inloggen</a>
+      <a class="btn glow" href="#aanvragen">Gratis proberen</a>
+      <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav"><span></span></button>
     </div>
   </div>
 </header>
 
 <main id="main">
-  <section class="hero">
-    <div class="wrap hero-in">
-      <div class="hero-copy">
-        <p class="eyebrow">Voor kleine en middelgrote bedrijven</p>
-        <h1>De vaste haven voor je team.</h1>
-        <p class="lead">Terugbelverzoeken, taken, uren, prikklok, rooster en verlof. Alles wat je team op een dag nodig heeft, op één plek. In de browser en als app op Android.</p>
-        <div class="cta">
-          <a class="btn primary big" href="#aanvragen">30 dagen gratis proberen</a>
-          <a class="btn outline big" href="#prijzen">Bekijk de prijzen</a>
-        </div>
-        <p class="fine">Geen creditcard nodig om te beginnen. Opzeggen kan per maand.</p>
+  <!-- hero -->
+  <section class="hx">
+    <div class="hx-glow" aria-hidden="true"></div>
+    <div class="wrap hx-in">
+      <span class="pill-badge"><i></i> 30 dagen gratis, geen creditcard nodig</span>
+      <h1>De vaste haven<br><span class="grad">voor je team.</span></h1>
+      <p class="hx-lead">Terugbelverzoeken, taken, uren, prikklok, rooster en verlof. Alles wat je team op een dag nodig heeft, op één rustige plek.</p>
+      <div class="cta">
+        <a class="btn glow big" href="#aanvragen">Start gratis <span class="arr" aria-hidden="true">→</span></a>
+        <a class="btn ghost big" href="#prijzen">Bekijk de prijzen</a>
       </div>
-      <figure class="hero-shot">
-        <img src="img/app-overzicht.png" width="1440" height="900" alt="Het overzicht van CrewHarbor met open terugbelverzoeken, taken en het rooster van vandaag" fetchpriority="high">
-      </figure>
+      <div class="hx-chips" aria-hidden="true">
+        <span class="chip c1">Rooster</span><span class="chip c2">Prikklok</span><span class="chip c3">Verlof</span><span class="chip c4">Taken</span>
+      </div>
+      <div class="hx-stage">
+        <figure class="hx-shot">
+          <img src="img/app-overzicht.png" width="1440" height="900" alt="Het overzicht van CrewHarbor met open terugbelverzoeken, taken en het rooster van vandaag" fetchpriority="high">
+        </figure>
+        <div class="float f1" aria-hidden="true"><span class="dot ok"></span><div><b>Rooster verstuurd</b><small>Week 46 · 14 medewerkers</small></div></div>
+        <div class="float f2" aria-hidden="true"><div class="clock">08:02</div><div><b>Ingeklokt</b><small>Prikklok ingang</small></div></div>
+        <div class="float f3" aria-hidden="true"><div><b>Bezetting dinsdag</b><div class="bars"><span style="--v:100%"></span><span style="--v:75%"></span><span style="--v:100%"></span></div><small>09–13 3/3 · 13–17 3/4</small></div></div>
+      </div>
     </div>
-    <svg class="wave" viewBox="0 0 1440 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30c120 0 120-24 240-24s120 24 240 24 120-24 240-24 120 24 240 24 120-24 240-24 120 24 240 24v30H0z"/></svg>
   </section>
 
-  <section class="band" id="functies" aria-labelledby="f-h">
+  <!-- kernwaarden -->
+  <section class="facts" aria-label="In het kort">
+    <div class="wrap facts-in">
+      <div><strong>1</strong><span>plek voor al het werk</span></div>
+      <div><strong>15 min</strong><span>en je team kan aan de slag</span></div>
+      <div><strong>30 dagen</strong><span>gratis proberen</span></div>
+      <div><strong>AVG</strong><span>met verwerkersovereenkomst</span></div>
+    </div>
+  </section>
+
+  <!-- intro + functies -->
+  <section class="sec" id="functies" aria-labelledby="f-h">
     <div class="wrap">
-      <div class="sec-head">
-        <h2 id="f-h">Eén plek voor het werk van elke dag</h2>
+      <div class="split-head">
+        <h2 id="f-h">Minder gedoe.<br><span class="soft">Meer overzicht.</span></h2>
         <p>Geen losse lijstjes, Excel-roosters en WhatsApp-groepen meer. CrewHarbor zet het bij elkaar, en iedereen ziet alleen wat bij zijn rol hoort.</p>
       </div>
-      <div class="features">
-        <article class="feat"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></span>
-          <h3>Terugbelverzoeken</h3><p>Noteer een klant in tien seconden. Wijs toe aan een collega of zet het in de open pool. Te laat? Dan zie je het meteen.</p></article>
-        <article class="feat"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m8 12 3 3 5-6"/></svg></span>
-          <h3>Taken</h3><p>Eenmalig of terugkerend, voor één persoon of het hele team. Met deadlines, prioriteit en een teambord voor de leiding.</p></article>
-        <article class="feat"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-          <h3>Uren en prikklok</h3><p>Inklokken in de app of op een tablet bij de ingang, met pincode. Uren indienen, goedkeuren en vergelijken met het contract.</p></article>
-        <article class="feat"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>
-          <h3>Rooster</h3><p>Plan per week of maand, met vaste diensten en beschikbaarheid. Zet het rooster vast en iedereen krijgt een melding.</p></article>
-        <article class="feat"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 14a4 4 0 0 1 8 0"/><path d="M3 18h18M6 21h12M12 3v2M5.6 5.6 7 7M17 7l1.4-1.4"/></svg></span>
-          <h3>Verlof en ziekte</h3><p>Verlof aanvragen en goedkeuren, ziek- en betermelden. Het rooster en het urenoverzicht houden er rekening mee.</p></article>
-        <article class="feat"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M9 7h6"/></svg></span>
-          <h3>Kennisbank en documenten</h3><p>Werkinstructies en antwoorden op vaste vragen, en documenten met rechten per map. Nieuwe collega's vinden zelf hun weg.</p></article>
+
+      <div class="bento">
+        <article class="bx big dark rv">
+          <div class="bx-txt"><span class="kicker">Rooster</span><h3>Plannen in een paar klikken</h3><p>Sleep diensten in de week, zie meteen wie kan en wie nog uren over heeft. Met afdelingen, functies en bezetting per dienst.</p></div>
+          <div class="mini-week" aria-hidden="true">
+            <div class="mw-h"><span></span><span>ma</span><span>di</span><span>wo</span><span>do</span><span>vr</span></div>
+            <div class="mw-r"><span class="who"><i style="--c:#7FC4CF"></i>Sanne</span><b class="s a">08–16</b><b class="s a">08–16</b><b></b><b class="s b">12–21</b><b class="s a">08–16</b></div>
+            <div class="mw-r"><span class="who"><i style="--c:#EDE8DC"></i>Daan</span><b class="s b">12–21</b><b></b><b class="s b">12–21</b><b class="s b">12–21</b><b></b></div>
+            <div class="mw-r"><span class="who"><i style="--c:#F2B880"></i>Lotte</span><b></b><b class="s c">10–17</b><b class="s c">10–17</b><b></b><b class="s c">10–17</b></div>
+            <div class="mw-r"><span class="who"><i style="--c:#9BB7F0"></i>Milan</span><b class="s a">08–16</b><b class="s b">12–21</b><b></b><b class="s a">08–16</b><b class="s b">12–21</b></div>
+          </div>
+        </article>
+        <article class="bx cream rv">
+          <span class="kicker">Terugbelverzoeken</span><h3>Geen klant meer vergeten</h3>
+          <div class="mini-list" aria-hidden="true">
+            <div><i class="pri hi"></i><span>Mevr. de Vries<small>Vraag over levering</small></span><em>2 min</em></div>
+            <div><i class="pri"></i><span>Bakkerij Jansen<small>Offerte terugbellen</small></span><em>14 min</em></div>
+            <div class="done"><i class="pri"></i><span>Dhr. Bakker<small>Afgehandeld door Sanne</small></span><em>✓</em></div>
+          </div>
+        </article>
+        <article class="bx rv">
+          <span class="kicker">Uren &amp; prikklok</span><h3>Inklokken met een pincode</h3><p>Op een tablet bij de ingang of in de app. Geklokte uren zijn meteen goedgekeurd.</p>
+          <div class="mini-pin" aria-hidden="true"><b>08:02</b><span><i></i><i></i><i></i><i class="e"></i></span></div>
+        </article>
+        <article class="bx rv">
+          <span class="kicker">Verlof &amp; ziekte</span><h3>Aanvragen, goedkeuren, klaar</h3><p>Het rooster houdt er vanzelf rekening mee.</p>
+          <div class="mini-leave" aria-hidden="true"><span class="ok">Goedgekeurd</span><span>Vakantie · 12–19 aug</span></div>
+        </article>
+        <article class="bx rv">
+          <span class="kicker">Taken</span><h3>Eenmalig of terugkerend</h3><p>Met deadlines, prioriteit en een teambord voor de leiding.</p>
+        </article>
+        <article class="bx rv">
+          <span class="kicker">Kennisbank</span><h3>Nieuwe collega's vinden zelf hun weg</h3><p>Werkinstructies en documenten, met rechten per map.</p>
+        </article>
       </div>
-      <div class="extras">
-        <div class="extra"><strong>Salarisexport</strong><span>Goedgekeurde uren, verlof en ziekte naar Excel, Nmbrs, Loket.nl of AFAS.</span></div>
-        <div class="extra"><strong>Meerdere vestigingen</strong><span>Elke vestiging een eigen rooster, urenoverzicht en prikklok.</span></div>
-        <div class="extra"><strong>3CX-telefonie</strong><span>Hoeveel er gebeld wordt, hoe snel er wordt opgenomen en wat er gemist is.</span></div>
-        <div class="extra"><strong>Meldingen per mail</strong><span>Nieuw rooster, verlof goedgekeurd: iedereen hoort het meteen.</span></div>
+
+      <div class="addons">
+        <span class="addons-l">Uitbreidingen</span>
+        <div><strong>Salarisexport</strong><span>Excel, Nmbrs, Loket.nl of AFAS</span></div>
+        <div><strong>Meerdere vestigingen</strong><span>Eigen rooster en prikklok per vestiging</span></div>
+        <div><strong>3CX-telefonie</strong><span>Gesprekken en gemiste oproepen</span></div>
       </div>
     </div>
   </section>
 
-  <section class="band light" aria-labelledby="s-h">
+  <!-- zo werkt het -->
+  <section class="sec deep" id="hoe" aria-labelledby="s-h">
+    <div class="hx-glow small" aria-hidden="true"></div>
     <div class="wrap">
-      <div class="sec-head"><h2 id="s-h">Binnen een kwartier aan de slag</h2></div>
-      <ol class="steps">
-        <li><span class="num">1</span><h3>Vraag CrewHarbor aan</h3><p>Vul het formulier in. We zetten je bedrijf klaar en je krijgt een mail om je wachtwoord te kiezen.</p></li>
-        <li><span class="num">2</span><h3>Richt je bedrijf in</h3><p>Een korte wizard helpt je met je vestigingen en je team. Een lijst uit Excel inladen kan ook.</p></li>
-        <li><span class="num">3</span><h3>Nodig je team uit</h3><p>Iedereen krijgt een uitnodiging per mail en logt in met een eigen wachtwoord. Klaar.</p></li>
+      <div class="split-head light">
+        <h2 id="s-h">Binnen een kwartier<br><span class="soft">aan de slag.</span></h2>
+        <p>Geen installatie, geen gedoe. Je bedrijf staat klaar en je team logt in met een eigen wachtwoord.</p>
+      </div>
+      <ol class="steps3">
+        <li class="rv"><span class="no">01</span><h3>Vraag CrewHarbor aan</h3><p>Vul het formulier in. We zetten je bedrijf klaar en je krijgt een mail om je wachtwoord te kiezen.</p></li>
+        <li class="rv hl"><span class="no">02</span><h3>Richt je bedrijf in</h3><p>Een korte wizard helpt je met vestigingen, afdelingen en je team. Een lijst uit Excel inladen kan ook.</p><a class="btn dark" href="#aanvragen">Begin nu <span aria-hidden="true">→</span></a></li>
+        <li class="rv"><span class="no">03</span><h3>Nodig je team uit</h3><p>Iedereen krijgt een uitnodiging per mail en logt in met een eigen wachtwoord. Klaar.</p></li>
       </ol>
     </div>
   </section>
 
-  <section class="band" id="prijzen" aria-labelledby="p-h">
+  <!-- prijzen -->
+  <section class="sec tint" id="prijzen" aria-labelledby="p-h">
     <div class="wrap">
-      <div class="sec-head">
-        <h2 id="p-h">Eerlijke prijzen, per medewerker</h2>
+      <div class="split-head">
+        <h2 id="p-h">Eerlijke prijzen,<br><span class="soft">per medewerker.</span></h2>
         <p>Je betaalt alleen voor actieve medewerkers. De eerste 30 dagen zijn gratis, daarna per maand opzegbaar.</p>
       </div>
       <div class="calc">
@@ -121,31 +167,36 @@
         <button type="button" class="plans-arrow next" id="plans-next" aria-label="Volgende pakketten">&#8250;</button>
       </div>
       <div class="plans-dots" id="plans-dots"></div>
-      <p class="center plans-more"><a class="btn outline" href="prijzen.html">Vergelijk alle pakketten in een tabel</a></p>
+      <p class="center plans-more"><a class="btn outline" href="prijzen.html">Vergelijk alle pakketten in een tabel <span aria-hidden="true">→</span></a></p>
       <p class="fine center">Alle prijzen zijn exclusief btw. Je betaalt via iDEAL en daarna maandelijks automatisch, of per factuur.</p>
     </div>
   </section>
 
-  <section class="band dark" id="veilig" aria-labelledby="v-h">
-    <div class="wrap veilig">
-      <div>
-        <h2 id="v-h">Veilig, en netjes volgens de AVG</h2>
+  <!-- veilig -->
+  <section class="sec deep" id="veilig" aria-labelledby="v-h">
+    <div class="wrap">
+      <div class="split-head light">
+        <h2 id="v-h">Veilig, en netjes<br><span class="soft">volgens de AVG.</span></h2>
         <p>Jouw gegevens zijn van jou. We gebruiken ze nergens anders voor, en je kunt alles op elk moment downloaden.</p>
       </div>
-      <ul class="checks">
-        <li>Inloggen met eigen e-mailadres en wachtwoord, met tweestapsverificatie</li>
-        <li>Elk bedrijf ziet alleen zijn eigen gegevens; rechten per rol</li>
-        <li>Koppelingen en wachtwoorden worden versleuteld bewaard</li>
-        <li>Inloggeschiedenis en een volledig logboek</li>
-        <li>Zelf in te stellen bewaartermijnen, en een export van al je gegevens</li>
-        <li>Een verwerkersovereenkomst voor elke klant</li>
-      </ul>
+      <div class="safe">
+        <div class="rv"><span class="si">01</span><b>Eigen login</b><p>E-mailadres en wachtwoord, met tweestapsverificatie.</p></div>
+        <div class="rv"><span class="si">02</span><b>Alleen je eigen gegevens</b><p>Elk bedrijf is afgeschermd, met rechten per rol.</p></div>
+        <div class="rv"><span class="si">03</span><b>Versleuteld bewaard</b><p>Koppelingen en wachtwoorden zijn versleuteld.</p></div>
+        <div class="rv"><span class="si">04</span><b>Logboek</b><p>Inloggeschiedenis en een volledig logboek.</p></div>
+        <div class="rv"><span class="si">05</span><b>Jij bepaalt</b><p>Eigen bewaartermijnen en een export van alles.</p></div>
+        <div class="rv"><span class="si">06</span><b>Verwerkersovereenkomst</b><p>Voor elke klant, zonder extra kosten.</p></div>
+      </div>
     </div>
   </section>
 
-  <section class="band" id="vragen" aria-labelledby="q-h">
-    <div class="wrap narrow">
-      <div class="sec-head"><h2 id="q-h">Veelgestelde vragen</h2></div>
+  <!-- vragen -->
+  <section class="sec" id="vragen" aria-labelledby="q-h">
+    <div class="wrap qa">
+      <div class="qa-head">
+        <h2 id="q-h">Veelgestelde<br><span class="soft">vragen.</span></h2>
+        <p>Staat je vraag er niet bij? Kijk op de <a href="support.html">supportpagina</a> of mail naar <a href="mailto:support@crewharbor.nl">support@crewharbor.nl</a>.</p>
+      </div>
       <div class="faq">
         <details><summary>Wat gebeurt er na de proefperiode?</summary><p>Je krijgt een week van tevoren een seintje in CrewHarbor. Stel je een betaling in, dan ga je gewoon door. Doe je niets, dan nemen we contact met je op; er wordt niets automatisch afgeschreven.</p></details>
         <details><summary>Wie telt mee als medewerker?</summary><p>Iedereen met een actief account. Oud-medewerkers in het archief tellen niet mee. Komt er iemand bij of gaat er iemand weg, dan past het bedrag zich vanzelf aan.</p></details>
@@ -155,22 +206,25 @@
         <details><summary>Kunnen we CrewHarbor op onze eigen server draaien?</summary><p>Ja, voor het pakket Bedrijf kan CrewHarbor ook op een eigen server. Vraag ons naar de mogelijkheden.</p></details>
         <details><summary>Hoe zit het met de privacy van mijn medewerkers?</summary><p>Je bent zelf verantwoordelijk voor de gegevens van je medewerkers; CrewHarbor verwerkt ze in jouw opdracht. Daarvoor sluiten we een verwerkersovereenkomst. Lees ook onze <a href="app/privacy.html">privacyverklaring</a>.</p></details>
       </div>
-      <p class="fine center">Staat je vraag er niet bij? Kijk op de <a href="support.html">supportpagina</a> of mail naar <a href="mailto:support@crewharbor.nl">support@crewharbor.nl</a>.</p>
     </div>
   </section>
 
-  <section class="band light" id="aanvragen" aria-labelledby="a-h">
-    <div class="wrap ask">
-      <div class="ask-copy">
-        <h2 id="a-h">Probeer CrewHarbor 30 dagen gratis</h2>
-        <p>Vul je gegevens in. We zetten je bedrijf zo snel mogelijk klaar, meestal binnen één werkdag. Je krijgt dan een mail om je wachtwoord te kiezen.</p>
-        <ul class="checks dark-ink">
-          <li>Alle functies van je pakket</li>
-          <li>Hulp bij het inrichten</li>
-          <li>Geen creditcard nodig</li>
-        </ul>
-      </div>
-      <form class="card ask-form" id="ask" novalidate>
+  <!-- aanvragen -->
+  <section class="sec" id="aanvragen" aria-labelledby="a-h">
+    <div class="wrap">
+      <div class="cta-box">
+        <div class="hx-glow small" aria-hidden="true"></div>
+        <div class="cta-copy">
+          <span class="pill-badge"><i></i> Meestal binnen één werkdag klaar</span>
+          <h2 id="a-h">Probeer CrewHarbor<br><span class="grad">30 dagen gratis.</span></h2>
+          <p>Vul je gegevens in. We zetten je bedrijf klaar en je krijgt een mail om je wachtwoord te kiezen.</p>
+          <ul class="checks">
+            <li>Alle functies van je pakket</li>
+            <li>Hulp bij het inrichten</li>
+            <li>Geen creditcard nodig</li>
+          </ul>
+        </div>
+        <form class="ask-form" id="ask" novalidate>
         <div id="ask-msg" role="status" aria-live="polite"></div>
         <div class="fields2">
           <div class="field"><label for="a-company">Bedrijfsnaam</label><input class="input" id="a-company" name="company" autocomplete="organization" required></div>
@@ -185,26 +239,26 @@
         <button class="btn primary big" type="submit">Aanvragen</button>
         <p class="fine">Door aan te vragen ga je akkoord met onze <a href="app/privacy.html">privacyverklaring</a>.</p>
       </form>
+      </div>
     </div>
   </section>
 </main>
 
-<footer class="foot">
-  <div class="wrap foot-in">
-    <div><span id="logo2"></span><p>De vaste haven voor je team.<br>Een product van <strong>Spark Apps</strong>.</p></div>
-    <nav aria-label="Onderaan">
-      <a href="app/">Inloggen</a>
-      <a href="#prijzen">Prijzen</a>
-      <a href="prijzen.html">Pakketten vergelijken</a>
-      <a href="support.html">Support</a>
-      <a href="app/privacy.html">Privacyverklaring</a>
-      <a href="app/verwerkersovereenkomst.html">Verwerkersovereenkomst</a>
-    </nav>
+<footer class="foot v3f">
+  <div class="wrap">
+    <div class="foot-cols">
+      <div class="foot-brand"><span id="logo2"></span><p>De vaste haven voor je team.<br>Een product van <strong>Spark Apps</strong>.</p></div>
+      <nav aria-label="Product"><b>Product</b><a href="#functies">Functies</a><a href="#prijzen">Prijzen</a><a href="prijzen.html">Pakketten vergelijken</a><a href="app/">Inloggen</a></nav>
+      <nav aria-label="Hulp"><b>Hulp</b><a href="support.html">Support</a><a href="#vragen">Veelgestelde vragen</a><a href="mailto:support@crewharbor.nl">support@crewharbor.nl</a></nav>
+      <nav aria-label="Juridisch"><b>Juridisch</b><a href="app/privacy.html">Privacyverklaring</a><a href="app/verwerkersovereenkomst.html">Verwerkersovereenkomst</a></nav>
+    </div>
+    <div class="foot-word" aria-hidden="true">crewharbor</div>
   </div>
 </footer>
 
 <script src="app/config.js"></script>
 <script src="app/logo.js"></script>
-<script src="site.js?v=6"></script>
+<script src="site.js?v=7"></script>
+<script src="nav.js?v=1"></script>
 </body>
 </html>
