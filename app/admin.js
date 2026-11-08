@@ -168,7 +168,7 @@ function viewOverview() {
   const d = A.data, orgs = d.orgs;
   const B = o => o.billing || {};
   const paying = orgs.filter(o => B(o).status === 'active'), trial = orgs.filter(o => B(o).status === 'trial'), late = orgs.filter(o => ['past_due', 'expired'].includes(B(o).status));
-  const mrr = paying.reduce((n, o) => n + (Number(B(o).amountCents) || 0), 0);
+  const mrr = paying.reduce((n, o) => n + (B(o).period === 'jaar' ? (Number(B(o).chargeCents) || 0) / 12 : (Number(B(o).amountCents) || 0)), 0);
   const members = orgs.reduce((n, o) => n + (o.members || 0), 0);
   const soon = trial.filter(o => B(o).trialEndsAt && new Date(B(o).trialEndsAt) - Date.now() < 7 * 864e5).sort((a, b) => new Date(B(a).trialEndsAt) - new Date(B(b).trialEndsAt));
   const reqs = d.requests.filter(r => r.status === 'nieuw').slice(0, 5);
@@ -244,7 +244,8 @@ function viewBilling() {
     '<div class="fields4"><div class="field"><label>Prijzen afronden op</label><select class="input" name="roundCents">' +
       [[0, 'Niet afronden'], [100, 'Hele euro\u2019s'], [500, '€ 5'], [1000, '€ 10'], [10000, '€ 100']].map(o => '<option value="' + o[0] + '"' + (Number(PR.roundCents || 0) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
       '<div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" name="end99"' + (PR.end99 ? ' checked' : '') + '> Laten eindigen op ,99</label></div></div>' +
-    '<div class="fields4"><div class="field"><label>Schuif op website tot (medewerkers)</label><input class="input" type="number" min="5" max="5000" name="customFrom" value="' + (Number(PR.customFrom) || 500) + '"><div class="muted small">Daarboven ziet men \u201cMaatwerk\u201d.</div></div></div>' +
+    '<div class="fields4"><div class="field"><label>Jaarlijks betalen</label><select class="input" name="yearMonths">' + [[12, 'Geen korting (12 maanden)'], [11.5, '½ maand gratis'], [11, '1 maand gratis'], [10.5, '1½ maand gratis'], [10, '2 maanden gratis'], [9, '3 maanden gratis']].map(o => '<option value="' + o[0] + '"' + (Number(PR.yearMonths || 10) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select><div class="muted small">Wie per jaar betaalt, krijgt deze korting.</div></div>' +
+      '<div class="field"><label>Schuif op website tot (medewerkers)</label><input class="input" type="number" min="5" max="5000" name="customFrom" value="' + (Number(PR.customFrom) || 500) + '"><div class="muted small">Daarboven ziet men \u201cMaatwerk\u201d.</div></div></div>' +
     '<p class="small muted" style="margin:0">Voorbeeld: € 201,88 wordt met € 10 en ,99 → € 199,99. Afronden gaat naar het dichtstbijzijnde bedrag, voor pakketten én losse extra\u2019s.</p>' +
     '<div class="row"><button class="btn primary" type="submit">Prijzen opslaan</button></div></form>';
   h += '<section class="stack" style="gap:12px;max-width:none"><div class="section-title"><h2>Pakketten</h2><button class="btn small" data-act="plan-new">Pakket toevoegen</button></div>' +
@@ -274,7 +275,7 @@ function viewBilling() {
 function orgBilling(o) {
   const b = o.billing || {}; const st = BSTAT[b.status] || [b.status, ''];
   return '<form class="box" data-form="org-billing" data-id="' + o.id + '" novalidate><div class="item-top"><strong>Abonnement</strong><span class="badge ' + st[1] + '">' + esc(st[0]) + '</span></div>' +
-    '<p class="small muted" style="margin:0">' + esc(planName(o.planId)) + ' · ' + (b.members || 0) + ' actief · ' + eur(b.amountCents) + ' per maand excl. btw' +
+    '<p class="small muted" style="margin:0">' + esc(planName(o.planId)) + ' · ' + (b.members || 0) + ' actief · ' + eur(b.amountCents) + ' per maand excl. btw' + (b.period === 'jaar' ? ' · <strong>betaalt per jaar: ' + eur(b.chargeCents) + '</strong>' : '') +
       (b.trialEndsAt && b.status === 'trial' ? ' · proef tot ' + fmt(b.trialEndsAt) : '') + (b.hasSubscription ? ' · incasso loopt' : '') + (o.locations ? ' · ' + o.locations + ' vestiging' + (o.locations === 1 ? '' : 'en') : '') + '</p>' +
     '<div class="fields4"><div class="field"><label for="ob-p-' + o.id + '">Pakket</label><select class="input" id="ob-p-' + o.id + '" name="planId">' + planOptions(o.planId) + '</select></div>' +
       '<div class="field"><label for="ob-s-' + o.id + '">Status</label><select class="input" id="ob-s-' + o.id + '" name="status">' + ['trial', 'active', 'past_due', 'canceled', 'free'].map(x => '<option value="' + x + '"' + ((b.status === 'expired' ? 'trial' : b.status) === x ? ' selected' : '') + '>' + BSTAT[x][0] + '</option>').join('') + '</select></div>' +
@@ -808,7 +809,7 @@ $app.addEventListener('submit', async e => {
     }
     if (kind === 'pricing') {
       const money = k => Math.round(Number(v(k).replace(/\./g, '').replace(',', '.')) * 100);
-      const p = { memberCents: money('member'), addons: Object.fromEntries(FEAT.map(x => [x[0], money('a-' + x[0])])), roundCents: Number(v('roundCents')) || 0, end99: f.elements.end99.checked, customFrom: Number(v('customFrom')) || 500 };
+      const p = { memberCents: money('member'), addons: Object.fromEntries(FEAT.map(x => [x[0], money('a-' + x[0])])), roundCents: Number(v('roundCents')) || 0, end99: f.elements.end99.checked, customFrom: Number(v('customFrom')) || 500, yearMonths: Number(v('yearMonths')) || 10 };
       if (![p.memberCents, ...Object.values(p.addons)].every(n => isFinite(n) && n >= 0)) throw new Error('Vul geldige bedragen in.');
       await rpc('cd_admin_pricing_save', { p }); await refresh(); toast('Prijzen opgeslagen. Alle pakketprijzen zijn opnieuw berekend.'); return;
     }

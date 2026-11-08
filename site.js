@@ -28,6 +28,11 @@
     }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Er ging iets mis. Probeer het opnieuw.'); return j; });
   }
 
+  // jaarlijks betalen: hoeveel maanden gratis
+  function yearNote(ym) {
+    const f = 12 - (Number(ym) || 12);
+    document.querySelectorAll('.year-free').forEach(el => { el.textContent = f > 0 ? '(per jaar krijg je ' + String(f).replace('.', ',') + (f === 1 ? ' maand' : ' maanden') + ' gratis)' : ''; });
+  }
   // max van de schuif: in te stellen in Beheer (daarboven = maatwerk)
   let MAX = 150;
   let STOPS = [];
@@ -130,6 +135,7 @@
     Promise.all([api('plans').catch(() => null), rpc('cd_public_pricing').catch(() => null)]).then(([d, pr]) => {
       const n = curN();
       if (pr && Number(pr.customFrom) > 0) MAX = Number(pr.customFrom);
+      if (pr) yearNote(pr.yearMonths);
       if (d && d.plans && d.plans.length) PLANS = d.plans;
       renderCards(); setupSlider(Math.min(n, MAX)); updateFit(false); arrows();
     });

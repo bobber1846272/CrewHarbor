@@ -1293,3 +1293,10 @@ a.db-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
   .ov-tiles { grid-template-columns: 1fr 1fr; } .ov-cols { grid-template-columns: 1fr; } .ov-mini { grid-template-columns: 1fr 1fr; }
   .adm2 .adm-main { padding: 20px 16px 48px; }
 }
+
+.period-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.period-opt { display: grid; gap: 2px; text-align: left; padding: 14px 16px; border-radius: 14px; border: 1.5px solid var(--line); background: #fff; font: inherit; color: inherit; cursor: pointer; }
+.period-opt:hover { border-color: var(--accent); }
+.period-opt.on { border-color: var(--accent); background: #F1F8F9; box-shadow: inset 0 0 0 1px var(--accent); }
+.period-opt span { font-size: 15px; font-weight: 600; } .period-opt small { color: var(--muted); font-size: 13px; }
+@media (max-width: 560px) { .period-pick { grid-template-columns: 1fr; } }

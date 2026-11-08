@@ -7,7 +7,7 @@
   const eur = c => '€ ' + (c / 100).toLocaleString('nl-NL', { minimumFractionDigits: c % 100 === 0 ? 0 : 2, maximumFractionDigits: 2 });
   if (window.CH_LOGO) { $('logo').innerHTML = window.CH_LOGO(30); $('logo2').innerHTML = window.CH_LOGO(28); }
 
-  let MAX = 150;
+  let MAX = 150, YM = 12;
   let PLANS = [];
   const EXTRA = [['payroll', 'Salarisexport (Excel, Nmbrs, Loket.nl, AFAS)'], ['phone', 'Koppeling met 3CX-telefonie'], ['locations', 'Meerdere vestigingen']];
   // zelfde lijst als in Beheer → Pakketten (wat je daar aanvinkt, komt hier als ✓)
@@ -40,6 +40,7 @@
     const body = grp('Prijs') +
       row('Aantal medewerkers', p => p.custom ? 'meer dan ' + MAX : esc(rangeTxt(p))) +
       row('Prijs per maand', p => p.custom ? 'in overleg' : (p.fixed ? '' : 'vanaf ') + eur(p.monthCents)) +
+      (YM < 12 ? row('Per jaar betalen (' + String(12 - YM).replace('.', ',') + (12 - YM === 1 ? ' maand' : ' maanden') + ' gratis)', p => p.custom ? 'in overleg' : (p.fixed ? '' : 'vanaf ') + eur(Math.round(p.monthCents * YM))) : '') +
       row('Korting', p => !p.custom && Number(p.discountPct) > 0 ? String(p.discountPct).replace(/\.0+$/, '').replace('.', ',') + '%' : NO) +
       (base.length ? grp('Functies') + base.map(b => row(b, p => has(p, b) ? YES : NO)).join('') : '') +
       grp('Uitbreidingen') + EXTRA.map(([k, l]) => row(l, p => p.custom || (p.features || []).includes(k) ? YES
@@ -52,6 +53,7 @@
   const post = (url, body) => fetch(CFG.supabaseUrl + url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey }, body: JSON.stringify(body || {}) }).then(r => r.ok ? r.json() : null).catch(() => null);
   Promise.all([post('/functions/v1/crewdeck', { action: 'plans' }), post('/rest/v1/rpc/cd_public_pricing')]).then(([d, pr]) => {
     if (pr && Number(pr.customFrom) > 0) MAX = Number(pr.customFrom);
+    if (pr && Number(pr.yearMonths)) { YM = Number(pr.yearMonths); const f = 12 - YM; document.querySelectorAll('.year-free').forEach(el => { el.textContent = f > 0 ? '(per jaar krijg je ' + String(f).replace('.', ',') + (f === 1 ? ' maand' : ' maanden') + ' gratis)' : ''; }); }
     if (d && d.plans && d.plans.length) { PLANS = d.plans; render(); }
     else $('cmp').innerHTML = '<tbody><tr><td>De pakketten konden even niet geladen worden. Probeer het later opnieuw.</td></tr></tbody>';
   });
