@@ -157,6 +157,24 @@ const eur = c => '€ ' + (Math.round(c || 0) / 100).toFixed(2).replace('.', ','
 const planName = id => ((A.data.plans || []).find(p => p.id === id) || {}).name || id || '–';
 const BSTAT = { trial: ['Proefperiode', ''], active: ['Betaalt', 'green'], past_due: ['Betaling mislukt', 'red'], canceled: ['Opgezegd', 'orange'], free: ['Gratis', 'green'], expired: ['Proef voorbij', 'red'] };
 const FEAT = [['payroll', 'Salarisexport'], ['phone', '3CX-telefonie'], ['locations', 'Meerdere vestigingen']];
+// vaste lijst met wat een pakket kan bevatten (komt als opsomming op de website)
+const HL = [
+  ['Basis', ['Terugbelverzoeken en taken', 'Uren, in- en uitklokken en prikklok', 'Rooster, verlof en beschikbaarheid', 'Diensten ruilen tussen collega\u2019s', 'Afdelingen en functies in het rooster', 'Kennisbank en documenten', 'Meldingen per mail', 'Dashboard voor de eigenaar']],
+  ['Extra\u2019s', ['Salarisexport (Excel, Nmbrs, Loket.nl, AFAS)', 'Koppeling met 3CX-telefonie', 'Meerdere vestigingen met eigen rooster en prikklok']],
+  ['Service', ['Hulp bij het overstappen', 'Persoonlijke hulp bij de start', 'Betalen per factuur mogelijk', 'Voorrang bij support']]
+];
+const HL_ALL = HL.flatMap(g => g[1]);
+function prevPlan(p) { const L = (A.data.plans || []).filter(x => x.id && x.id !== p.id && !isFreePlan(x) && Number(x.sort) <= Number(p.sort)).sort((a, b) => Number(b.sort) - Number(a.sort) || String(b.id).localeCompare(String(a.id))); return L[0] || null; }
+function hlPicker(p) {
+  const H = p.highlights || []; const pv = prevPlan(p);
+  const allFrom = H.find(x => /^Alles uit /.test(x));
+  const own = H.filter(x => !HL_ALL.includes(x) && !/^Alles uit /.test(x));
+  const n = H.length;
+  return '<fieldset class="box hl-box"><legend class="legend" style="padding:0 4px">Wat zit erin <span class="small muted">(' + n + ' op de website)</span></legend>' +
+    (pv ? '<label class="check hl-all"><input type="checkbox" name="hl-all" value="' + esc(pv.name) + '"' + (allFrom ? ' checked' : '') + '> <span><strong>Alles uit ' + esc(pv.name) + '</strong> <span class="small muted">bovenaan, en daaronder alleen wat er extra bij komt</span></span></label>' : '') +
+    '<div class="hl-groups">' + HL.map(g => '<div class="hl-group"><span class="hl-h">' + g[0] + '</span>' + g[1].map(t => '<label class="check small"><input type="checkbox" name="hl" value="' + esc(t) + '"' + (H.includes(t) ? ' checked' : '') + '> ' + esc(t) + '</label>').join('') + '</div>').join('') + '</div>' +
+    '<div class="field"><label>Eigen regels <span class="small muted">(optioneel, één per regel)</span></label><textarea class="input" name="highlights" rows="2">' + esc(own.join('\n')) + '</textarea></div></fieldset>';
+}
 const isFreePlan = p => p && p.public === false && Number(p.discountPct) >= 100;
 const range = p => (p.minMembers || 1) + (p.maxMembers ? '–' + p.maxMembers : '+') + ' medewerkers';
 const planPriceTxt = p => isFreePlan(p) ? 'gratis, alleen in Beheer' : (p.fixed ? '' : 'vanaf ') + eur(p.monthCents) + '/mnd';
@@ -202,7 +220,7 @@ function viewBilling() {
         '<div class="field"><label>Max. vestigingen</label><input class="input" name="maxLocations" inputmode="numeric" value="' + esc(p.maxLocations || '') + '" placeholder="Onbeperkt"></div>' +
         '<div class="field"><label>Volgorde</label><input class="input" name="sort" inputmode="numeric" value="' + esc(p.sort) + '"></div>' +
       '</div><div class="field"><label>Korte omschrijving</label><input class="input" name="tagline" value="' + esc(p.tagline || '') + '"></div>' +
-      '<div class="field"><label>Wat zit erin (één per regel, voor de website)</label><textarea class="input" name="highlights" rows="4">' + esc((p.highlights || []).join('\n')) + '</textarea></div>' +
+      hlPicker(p) +
       '<div class="field"><label>Inbegrepen extra\u2019s (de rest kan de klant er los bij nemen)</label><div class="row">' + FEAT.map(f => '<label class="check"><input type="checkbox" name="f-' + f[0] + '"' + ((p.features || []).includes(f[0]) ? ' checked' : '') + '> ' + f[1] + '</label>').join('') + '</div></div>' +
       (p.isNew ? '' : '<p class="small muted" style="margin:0">Berekende prijs: <strong>' + esc(planPriceTxt(p)) + '</strong>' + (isFreePlan(p) ? '' : ' · losse extra\u2019s: ' + FEAT.filter(f => !(p.features || []).includes(f[0])).map(f => f[1] + ' +' + eur((p.addonCents || {})[f[0]] || 0)).join(', ')) + '</p>') +
       '<div class="row"><label class="check"><input type="checkbox" name="public"' + (p.public !== false ? ' checked' : '') + '> Live (op de website en te kiezen door klanten). Uit = verborgen, alleen in Beheer</label><label class="check"><input type="checkbox" name="popular"' + (p.popular ? ' checked' : '') + '> Meest gekozen</label></div>' +
@@ -700,7 +718,9 @@ $app.addEventListener('submit', async e => {
       const p = { id: v('id'), name: v('name'), tagline: v('tagline'),
         minMembers: Number(v('minMembers')) || 1, maxMembers: Number(v('maxMembers')) || 0, discountPct: Number(v('discountPct').replace(',', '.')) || 0,
         maxLocations: Number(v('maxLocations')) || 0, sort: Number(v('sort')) || 0,
-        highlights: f.elements.highlights.value.split('\n').map(x => x.trim()).filter(Boolean),
+        highlights: [].concat(f.elements['hl-all'] && f.elements['hl-all'].checked ? ['Alles uit ' + f.elements['hl-all'].value] : [],
+          HL_ALL.filter(t => [...f.querySelectorAll('input[name=hl]:checked')].some(x => x.value === t)),
+          f.elements.highlights.value.split('\n').map(x => x.trim()).filter(Boolean)),
         features: FEAT.map(x => x[0]).filter(k => f.elements['f-' + k].checked), public: f.elements.public.checked, popular: f.elements.popular.checked };
       if (p.discountPct < 0 || p.discountPct > 100) throw new Error('Korting is 0 tot 100 procent.');
       await rpc('cd_admin_plan_save', { p }); A.planNew = false; await refresh(); toast('Pakket opgeslagen.'); return;

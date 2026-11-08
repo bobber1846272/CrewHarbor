@@ -1227,3 +1227,11 @@ a.db-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
 .db-bill .btn { margin-left: auto; }
 @media (max-width: 900px) { .db-tiles { grid-template-columns: 1fr 1fr; } .db-cols { grid-template-columns: 1fr; } }
 .st-upd { margin: 6px 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+
+/* beheer: wat zit er in een pakket */
+.hl-box { display: grid; gap: 12px; margin: 0; }
+.hl-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.hl-group { display: grid; gap: 6px; align-content: start; }
+.hl-h { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.hl-all { padding: 10px 12px; border-radius: 10px; background: #F1F8F9; }
+@media (max-width: 800px) { .hl-groups { grid-template-columns: 1fr; } }
