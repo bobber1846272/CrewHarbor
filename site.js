@@ -15,7 +15,7 @@
     { id: 'bedrijf', name: 'Bedrijf', tagline: 'Voor bedrijven met meerdere vestigingen.', monthCents: 29835, minMembers: 51, maxMembers: null, fixed: false, discountPct: 10, features: ['payroll', 'phone', 'locations'], addonCents: {}, highlights: ['Alles uit Team', 'Meerdere vestigingen met eigen rooster en prikklok', 'Hulp bij het overstappen'] }
   ];
   const EXTRA = { payroll: 'Salarisexport', phone: '3CX-telefonie', locations: 'Meerdere vestigingen' };
-  const rangeTxt = p => p.maxMembers ? (p.minMembers > 1 ? p.minMembers + ' tot ' + p.maxMembers : 'tot ' + p.maxMembers) + ' medewerkers' : p.minMembers + ' of meer medewerkers';
+  const rangeTxt = p => p.maxMembers ? (p.minMembers > 1 ? p.minMembers + ' tot ' + p.maxMembers : 'tot ' + p.maxMembers) + ' medewerkers' : p.minMembers + ' tot 500 medewerkers';
   const fitsN = (p, n) => n >= (p.minMembers || 1) && (!p.maxMembers || n <= p.maxMembers);
   // pakket zonder bovengrens: prijs per medewerker boven de ondergrens
   const monthFor = (p, n) => p.fixed || !p.maxMembers && n <= (p.minMembers || 1) ? p.monthCents : Math.round(p.monthCents / (p.minMembers || 1) * n);
@@ -29,27 +29,45 @@
     }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Er ging iets mis. Probeer het opnieuw.'); return j; });
   }
 
+  const MAX = 500;
+  const curN = () => Math.max(1, Math.round(Number($('calc-num').value) || Number($('calc-n').value) || 1));
+  function bestPlan(n) { return n > MAX ? null : PLANS.find(p => fitsN(p, n)) || null; }
   function renderPlans() {
-    const n = Number($('calc-n').value) || 1;
-    $('calc-out').value = n >= 100 ? '100+' : n;
+    const n = curN();
+    const best = bestPlan(n);
+    $('calc-out').innerHTML = n > MAX
+      ? '<span class="calc-big">Meer dan 500 medewerkers?</span><span>Dan maken we een prijs op maat. <a href="#aanvragen" data-plan="maatwerk">Vraag maatwerk aan</a></span>'
+      : best ? '<span class="calc-label">Met ' + n + ' medewerker' + (n === 1 ? '' : 's') + ' past <strong>' + esc(best.name) + '</strong></span><span class="calc-big">' + eur(monthFor(best, n), false) + ' <small>per maand, excl. btw</small></span>' +
+        '<span class="calc-label">Dat is ' + eur(Math.round(monthFor(best, n) / n), true) + ' per medewerker</span>'
+      : '<span class="calc-label">Kies hieronder een pakket.</span>';
     $('plans').innerHTML = PLANS.map(p => {
-      const fits = fitsN(p, n);
+      const fits = best && best.id === p.id;
       const extras = Object.keys(EXTRA).filter(k => !(p.features || []).includes(k) && (p.addonCents || {})[k]);
-      return '<article class="plan' + (p.popular ? ' pop' : '') + (fits ? ' fits' : '') + '">' + (fits ? '<span class="tag">Past bij ' + n + ' medewerker' + (n === 1 ? '' : 's') + '</span>' : p.popular ? '<span class="tag">Meest gekozen</span>' : '') +
-        '<div><h3>' + esc(p.name) + '</h3><p class="tagline">' + esc(p.tagline) + '</p></div>' +
-        '<div class="price"><strong>' + (p.fixed ? '' : '<small>vanaf </small>') + eur(p.monthCents, false) + '</strong><span>per maand, excl. btw</span></div>' +
-        '<div class="est">Voor ' + esc(rangeTxt(p)) + (fits && !p.fixed && n > (p.minMembers || 1) ? '<br>Met ' + n + ' medewerkers: <strong>' + eur(monthFor(p, n), false) + '</strong> per maand' : '') +
-          (Number(p.discountPct) > 0 ? '<br><strong>' + String(p.discountPct).replace(/\.0+$/, '').replace('.', ',') + '% korting</strong> verwerkt in de prijs' : '') + '</div>' +
+      return '<article class="plan' + (fits ? ' fits' : best || n > MAX ? ' dim' : '') + '">' + (fits ? '<span class="tag">Past bij jou</span>' : p.popular && !best ? '<span class="tag">Meest gekozen</span>' : '') +
+        '<div><h3>' + esc(p.name) + '</h3><p class="range">' + esc(rangeTxt(p)) + '</p></div>' +
+        '<div class="price"><strong>' + (p.fixed ? '' : '<small>vanaf </small>') + eur(p.monthCents, false) + '</strong><span>per maand</span>' +
+          (Number(p.discountPct) > 0 ? '<em class="disc">' + String(p.discountPct).replace(/\.0+$/, '').replace('.', ',') + '% korting</em>' : '') + '</div>' +
+        '<p class="tagline">' + esc(p.tagline) + '</p>' +
         '<ul>' + (p.highlights || []).map(h => '<li>' + esc(h) + '</li>').join('') + '</ul>' +
-        (extras.length ? '<p class="tagline" style="margin:0">Los erbij: ' + extras.map(k => esc(EXTRA[k]) + ' +' + eur(p.addonCents[k], false)).join(', ') + ' per maand</p>' : '') +
-        '<a class="btn ' + (fits || p.popular ? 'primary' : 'outline') + '" href="#aanvragen" data-plan="' + esc(p.id) + '">Kies ' + esc(p.name) + '</a></article>';
-    }).join('');
+        (extras.length ? '<div class="extras">Los erbij te nemen:' + extras.map(k => '<span>' + esc(EXTRA[k]) + ' <b>+' + eur(p.addonCents[k], false) + ' p.m.</b></span>').join('') + '</div>' : '') +
+        '<a class="btn ' + (fits ? 'primary' : 'outline') + '" href="#aanvragen" data-plan="' + esc(p.id) + '">Kies ' + esc(p.name) + '</a></article>';
+    }).join('') +
+      '<article class="plan custom' + (n > MAX ? ' fits' : best ? ' dim' : '') + '">' + (n > MAX ? '<span class="tag">Past bij jou</span>' : '') +
+        '<div><h3>Maatwerk</h3><p class="range">Meer dan 500 medewerkers, of speciale wensen</p></div>' +
+        '<div class="price"><strong>Op aanvraag</strong><span>prijs in overleg</span></div>' +
+        '<p class="tagline">Voor grote organisaties of als je iets nodig hebt dat niet in een pakket zit.</p>' +
+        '<ul><li>Alles uit Bedrijf</li><li>Prijs en afspraken op maat</li><li>Persoonlijke hulp bij de start</li><li>Betalen per factuur mogelijk</li></ul>' +
+        '<a class="btn ' + (n > MAX ? 'primary' : 'outline') + '" href="#aanvragen" data-plan="maatwerk">Vraag maatwerk aan</a></article>';
     const sel = $('a-plan');
     sel.innerHTML = PLANS.map(p => '<option value="' + esc(p.id) + '"' + (p.id === chosen ? ' selected' : '') + '>' + esc(p.name) + ' (' + esc(rangeTxt(p)) + ', ' + (p.fixed ? '' : 'vanaf ') + eur(p.monthCents, false) + ' p.m.)</option>').join('') +
-      '<option value=""' + (!PLANS.some(p => p.id === chosen) ? ' selected' : '') + '>Weet ik nog niet</option>';
+      '<option value="maatwerk"' + (chosen === 'maatwerk' ? ' selected' : '') + '>Maatwerk (prijs op aanvraag)</option>' +
+      '<option value=""' + (!PLANS.some(p => p.id === chosen) && chosen !== 'maatwerk' ? ' selected' : '') + '>Weet ik nog niet</option>';
   }
-  $('calc-n').addEventListener('input', renderPlans);
-  $('plans').addEventListener('click', e => { const a = e.target.closest('[data-plan]'); if (a) { chosen = a.dataset.plan; renderPlans(); setTimeout(() => $('a-company').focus(), 400); } });
+  $('calc-n').addEventListener('input', () => { const v = Number($('calc-n').value); $('calc-num').value = v > MAX ? MAX + 1 : v; renderPlans(); });
+  $('calc-num').addEventListener('input', () => { const v = curN(); $('calc-n').value = Math.min(v, MAX + 1); renderPlans(); });
+  document.addEventListener('click', e => { const a = e.target.closest('[data-plan]'); if (a) { chosen = a.dataset.plan; renderPlans();
+    if (chosen === 'maatwerk') { const em = $('a-emp'); if (em && curN() > MAX) em.value = 'Meer dan 500'; }
+    setTimeout(() => $('a-company').focus(), 400); } });
   $('a-plan').addEventListener('change', e => { chosen = e.target.value; });
   renderPlans();
   if (CFG.supabaseUrl) api('plans').then(d => { if (d.plans && d.plans.length) { PLANS = d.plans; renderPlans(); } }).catch(() => { /* reserve blijft staan */ });

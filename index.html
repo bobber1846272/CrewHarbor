@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..750&display=swap">
-<link rel="stylesheet" href="site.css?v=2">
+<link rel="stylesheet" href="site.css?v=3">
 <script>
   // oude links (uitnodigingen, wachtwoord) gaan naar de app
   if (/^#\/[a-z]/.test(location.hash)) location.replace('app/' + location.hash);
@@ -105,7 +105,9 @@
       </div>
       <div class="calc">
         <label for="calc-n">Hoeveel medewerkers heb je?</label>
-        <div class="calc-row"><input type="range" id="calc-n" min="1" max="100" value="10" aria-describedby="calc-out"><output id="calc-out" for="calc-n">10</output></div>
+        <div class="calc-row"><span class="calc-min">1</span><input type="range" id="calc-n" min="1" max="501" value="10" aria-describedby="calc-out"><span class="calc-min">500+</span>
+          <input class="calc-num" type="number" id="calc-num" min="1" max="9999" value="10" aria-label="Aantal medewerkers"></div>
+        <div class="calc-out" id="calc-out" aria-live="polite"></div>
       </div>
       <div class="plans" id="plans" aria-live="polite"></div>
       <p class="fine center">Alle prijzen zijn exclusief btw. Je betaalt via iDEAL, daarna maandelijks automatisch.</p>
@@ -161,7 +163,7 @@
           <div class="field"><label for="a-name">Je naam</label><input class="input" id="a-name" name="contactName" autocomplete="name" required></div>
           <div class="field"><label for="a-email">E-mailadres</label><input class="input" id="a-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required></div>
           <div class="field"><label for="a-phone">Telefoon <span class="opt">(optioneel)</span></label><input class="input" id="a-phone" name="phone" type="tel" autocomplete="tel"></div>
-          <div class="field"><label for="a-emp">Aantal medewerkers</label><select class="input" id="a-emp" name="employees"><option>1–5</option><option selected>6–15</option><option>16–50</option><option>51–150</option><option>Meer dan 150</option></select></div>
+          <div class="field"><label for="a-emp">Aantal medewerkers</label><select class="input" id="a-emp" name="employees"><option>1–5</option><option selected>6–15</option><option>16–50</option><option>51–150</option><option>151–500</option><option>Meer dan 500</option></select></div>
           <div class="field"><label for="a-plan">Pakket</label><select class="input" id="a-plan" name="plan"></select></div>
         </div>
         <div class="field"><label for="a-msg">Wil je nog iets kwijt? <span class="opt">(optioneel)</span></label><textarea class="input" id="a-msg" name="message" rows="3" maxlength="1000"></textarea></div>
@@ -187,6 +189,6 @@
 
 <script src="app/config.js"></script>
 <script src="app/logo.js"></script>
-<script src="site.js?v=2"></script>
+<script src="site.js?v=3"></script>
 </body>
 </html>

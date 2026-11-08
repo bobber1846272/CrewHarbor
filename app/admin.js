@@ -254,7 +254,7 @@ function viewRequests() {
       '<div class="item-meta">Aangevraagd ' + fmt(r.createdAt, true) + (r.handledBy ? ' · verwerkt door ' + esc(r.handledBy) + ' op ' + fmt(r.handledAt) : '') + '</div></div>' + badge + '</div>' +
       '<dl class="dl"><div><dt>Contactpersoon</dt><dd>' + esc(r.contactName) + '</dd></div><div><dt>E-mail</dt><dd><a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a></dd></div>' +
       '<div><dt>Telefoon</dt><dd>' + (r.phone ? '<a href="tel:' + esc(r.phone) + '">' + esc(r.phone) + '</a>' : '–') + '</dd></div><div><dt>Medewerkers</dt><dd>' + esc(r.employees || '–') + '</dd></div>' +
-      (r.planId ? '<div><dt>Pakket</dt><dd>' + esc(planName(r.planId)) + '</dd></div>' : '') +
+      (r.custom ? '<div><dt>Pakket</dt><dd><span class="badge orange">Maatwerk-aanvraag</span></dd></div>' : r.planId ? '<div><dt>Pakket</dt><dd>' + esc(planName(r.planId)) + '</dd></div>' : '') +
       (r.message ? '<div class="full"><dt>Toelichting</dt><dd>' + esc(r.message) + '</dd></div>' : '') +
       (r.rejectReason ? '<div class="full"><dt>Reden afwijzing</dt><dd>' + esc(r.rejectReason) + '</dd></div>' : '') + '</dl>';
     if (r.status === 'nieuw') {
