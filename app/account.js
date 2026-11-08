@@ -59,7 +59,6 @@ function viewLoginEmail() {
       '<button class="btn primary" type="submit" id="l-submit">Inloggen</button>' +
       '<p class="switch" style="margin:0"><button type="button" class="linkbtn" data-act="ac-forgot">Wachtwoord vergeten?</button></p>' +
       '<p class="switch">Nieuw bij CrewHarbor? <a href="' + (/\/app\/?$/.test(location.pathname.replace(/index\.html$/, '')) && !(S.regInfo && S.regInfo.open) ? '../#aanvragen' : '#/registreren') + '">' + (S.regInfo && S.regInfo.request === false ? 'Registreer je bedrijf' : 'Vraag CrewHarbor aan') + '</a></p>' +
-      '<p class="small muted" style="margin:0;text-align:center">Log je nog in met een bedrijfscode en code? <button type="button" class="linkbtn" data-act="ac-legacy">Oude manier</button></p>' +
     '</form></section></div>';
 }
 function viewForgot() {
@@ -249,7 +248,6 @@ document.getElementById('app').addEventListener('click', async e => {
   const act = el.dataset.act, id = el.dataset.id;
   try {
     switch (act) {
-      case 'ac-legacy': S.legacyLogin = true; S.authError = null; render(); return;
       case 'ac-forgot': S.forgot = { email: (document.getElementById('l-email') || {}).value || '' }; S.authError = null; S.tok = null; location.hash = '#/vergeten'; render(); return;
       case 'ac-back': S.forgot = null; S.legacyLogin = false; S.authError = null; location.hash = '#/login'; render(); return;
       case 'ac-mfa-retry': await mfaPrepare(); return;

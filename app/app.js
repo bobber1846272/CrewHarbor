@@ -375,7 +375,7 @@ function render() {
   if (r === 'wachtwoord' || r === 'email') { document.title = 'CrewHarbor'; $app.innerHTML = viewToken(); return; }
   if (!S.me) {
     document.title = 'CrewHarbor';
-    $app.innerHTML = r === 'registreren' ? viewRegister() : r === 'vergeten' ? viewForgot() : S.legacyLogin ? viewLogin() : viewLoginEmail();
+    $app.innerHTML = r === 'registreren' ? viewRegister() : r === 'vergeten' ? viewForgot() : viewLoginEmail();
     return;
   }
   if (typeof needWizard === 'function' && needWizard()) { document.title = 'Welkom · CrewHarbor'; $app.innerHTML = viewWizard(); return; }
