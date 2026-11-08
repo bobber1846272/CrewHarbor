@@ -14,7 +14,7 @@ const SITE = (CFG.siteUrl || (location.origin + location.pathname.replace(/admin
 
 const A = {
   ready: false, data: null, screen: 'login', err: null, busy: false,
-  tab: 'aanvragen', reqFilter: 'nieuw', q: '',
+  tab: 'overzicht', reqFilter: 'nieuw', q: '',
   create: null, created: null, rejectFor: null, blockFor: null, editOrg: null, orgSel: null, codeFor: null, delFor: null, addAdmin: false,
   mfa: null, mail: null, mfaResetFor: null
 };
@@ -75,6 +75,7 @@ async function svc(action, body) {
 async function load() {
   A.data = await rpc('cd_admin_overview');
   [A.inv, A.sup, A.st] = await Promise.all([rpc('cd_admin_invoices').catch(() => A.inv || null), rpc('cd_admin_support').catch(() => A.sup || null), rpc('cd_status').catch(() => A.st || null)]);
+  A.sys = await rpc('cd_admin_system').catch(() => A.sys || null);
 }
 async function logout(msg) {
   try { await sb.auth.signOut({ scope: 'local' }); } catch (e) { /* */ }
@@ -135,23 +136,65 @@ function viewSetup() {
 }
 
 // ---------- paneel ----------
+const ADM_ICON = (() => { const i = d => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+  return { overzicht: i('<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>'),
+    aanvragen: i('<path d="M4 4h16v12H5.2L4 17.2z"/><path d="M8 9h8M8 12h5"/>'), bedrijven: i('<path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 21v-5h6v5M9 10h.01M15 10h.01"/>'),
+    facturen: i('<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>'), support: i('<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2-3 4M12 17h.01"/>'),
+    status: i('<path d="M3 12h4l3-8 4 16 3-8h4"/>'), betalen: i('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>'),
+    mail: i('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>'), beheerders: i('<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/>'),
+    logboek: i('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>') }; })();
 function viewPanel() {
   const d = A.data;
   const open = d.requests.filter(r => r.status === 'nieuw').length;
-  const tabs = [['aanvragen', 'Aanvragen', open], ['bedrijven', 'Bedrijven', d.orgs.length], ['facturen', 'Facturen', A.inv ? A.inv.invoices.filter(i => i.status === 'open' || i.status === 'vervallen').length : 0], ['support', 'Support', A.sup ? A.sup.filter(x => x.status === 'nieuw').length : 0], ['status', 'Status', A.st ? A.st.incidents.filter(i => !i.resolvedAt).length : 0], ['beheerders', 'Beheerders', 0], ['betalen', 'Pakketten', 0], ['mail', 'Mail', 0], ['logboek', 'Logboek', 0]];
-  const body = { aanvragen: viewRequests, bedrijven: viewOrgs, facturen: viewInvoices, support: viewSupport, status: viewStatus, beheerders: viewAdmins, betalen: viewBilling, mail: viewMail, logboek: viewLog }[A.tab]();
-  return '<div class="adm">' +
-    '<header class="adm-top"><div class="adm-brand"><span class="logo">' + LOGO(28) + '</span><span class="adm-sub">Beheer</span></div>' +
-      '<div class="adm-me"><span>' + esc(d.me.name) + '</span><button class="btn small ghost" data-act="logout">Uitloggen</button></div></header>' +
-    '<main class="adm-main">' +
-      '<div class="stats">' +
-        stat('Nieuwe aanvragen', open) + stat('Bedrijven', d.orgs.length) +
-        stat('Medewerkers', d.orgs.reduce((n, o) => n + (o.members || 0), 0)) + stat('Geblokkeerd', d.orgs.filter(o => o.blocked).length) + '</div>' +
-      '<div class="adm-bar"><div class="seg" role="tablist">' + tabs.map(t => '<button role="tab" aria-selected="' + (A.tab === t[0]) + '" class="' + (A.tab === t[0] ? 'on' : '') + '" data-act="tab" data-id="' + t[0] + '">' +
-        t[1] + (t[2] ? '<span class="cnt">' + t[2] + '</span>' : '') + '</button>').join('') + '</div>' +
-        '<button class="btn primary" data-act="new-org">+ Bedrijf aanmaken</button></div>' +
+  const stOpen = A.st ? A.st.incidents.filter(i => !i.resolvedAt).length : 0;
+  const groups = [
+    ['', [['overzicht', 'Overzicht', 0]]],
+    ['Klanten', [['aanvragen', 'Aanvragen', open], ['bedrijven', 'Bedrijven', 0], ['facturen', 'Facturen', A.inv ? A.inv.invoices.filter(i => i.status === 'open' || i.status === 'vervallen').length : 0], ['support', 'Support', A.sup ? A.sup.filter(x => x.status === 'nieuw').length : 0]]],
+    ['Systeem', [['status', 'Status', stOpen], ['betalen', 'Pakketten & betalen', 0], ['mail', 'Mail', 0]]],
+    ['Beheer', [['beheerders', 'Beheerders', 0], ['logboek', 'Logboek', 0]]]
+  ];
+  const title = groups.flatMap(g => g[1]).find(t => t[0] === A.tab) || ['', 'Beheer'];
+  const body = { overzicht: viewOverview, aanvragen: viewRequests, bedrijven: viewOrgs, facturen: viewInvoices, support: viewSupport, status: viewStatus, beheerders: viewAdmins, betalen: viewBilling, mail: viewMail, logboek: viewLog }[A.tab]();
+  return '<div class="adm2">' +
+    '<aside class="adm-side" aria-label="Beheer-menu"><div class="adm-brand"><span class="logo">' + LOGO(26) + '</span><span class="adm-sub">Beheer</span></div>' +
+      '<nav class="adm-nav">' + groups.map(g => (g[0] ? '<span class="adm-nav-h">' + g[0] + '</span>' : '') + g[1].map(t => '<button class="' + (A.tab === t[0] ? 'on' : '') + '" data-act="tab" data-id="' + t[0] + '"' + (A.tab === t[0] ? ' aria-current="page"' : '') + '>' +
+        (ADM_ICON[t[0]] || '') + '<span>' + t[1] + '</span>' + (t[2] ? '<span class="cnt' + (t[0] === 'status' ? ' red' : '') + '">' + t[2] + '</span>' : '') + '</button>').join('')).join('') + '</nav>' +
+      '<div class="adm-me"><span class="adm-av">' + esc((d.me.name || '?').slice(0, 1).toUpperCase()) + '</span><span class="adm-me-n">' + esc(d.me.name) + '<small>Platformbeheerder</small></span><button class="btn small ghost" data-act="logout">Uitloggen</button></div></aside>' +
+    '<main class="adm-main"><header class="adm-head"><h1>' + esc(title[1]) + '</h1><button class="btn primary" data-act="new-org">+ Bedrijf aanmaken</button></header>' +
       (A.created ? viewCreated() : '') + (A.create ? viewCreateForm() : '') + body +
     '</main></div>';
+}
+function viewOverview() {
+  const d = A.data, orgs = d.orgs;
+  const B = o => o.billing || {};
+  const paying = orgs.filter(o => B(o).status === 'active'), trial = orgs.filter(o => B(o).status === 'trial'), late = orgs.filter(o => ['past_due', 'expired'].includes(B(o).status));
+  const mrr = paying.reduce((n, o) => n + (Number(B(o).amountCents) || 0), 0);
+  const members = orgs.reduce((n, o) => n + (o.members || 0), 0);
+  const soon = trial.filter(o => B(o).trialEndsAt && new Date(B(o).trialEndsAt) - Date.now() < 7 * 864e5).sort((a, b) => new Date(B(a).trialEndsAt) - new Date(B(b).trialEndsAt));
+  const reqs = d.requests.filter(r => r.status === 'nieuw').slice(0, 5);
+  const sup = A.sup ? A.sup.filter(x => x.status === 'nieuw') : [];
+  const invOpen = A.inv ? A.inv.invoices.filter(i => i.status === 'open' || i.status === 'vervallen') : [];
+  const stOpen = A.st ? A.st.incidents.filter(i => !i.resolvedAt) : [];
+  const S2 = A.sys;
+  const tile = (label, big, sub, tab, cls) => '<button class="ov-tile' + (cls ? ' ' + cls : '') + '" data-act="tab" data-id="' + tab + '"><span class="ov-l">' + label + '</span><strong>' + big + '</strong><span class="ov-s">' + sub + '</span></button>';
+  let h = '<div class="ov-tiles">' +
+    tile('Inkomsten per maand', eur(mrr), paying.length + ' betalend · excl. btw', 'bedrijven') +
+    tile('Bedrijven', orgs.length, trial.length + ' in proef · ' + paying.length + ' betalend', 'bedrijven') +
+    tile('Medewerkers', members, 'actief bij alle klanten', 'bedrijven') +
+    tile('Status', stOpen.length ? stOpen.length + ' melding' + (stOpen.length === 1 ? '' : 'en') : 'Alles werkt', stOpen.length ? esc(stOpen[0].title) : (S2 ? 'mailwachtrij: ' + S2.mail.pending + ' · ' + S2.dbSize : 'live gecontroleerd'), 'status', stOpen.length ? 'bad' : 'good') + '</div>';
+  const todo = [];
+  if (reqs.length) todo.push([reqs.length, 'nieuwe aanvra' + (reqs.length === 1 ? 'ag' : 'gen'), 'aanvragen']);
+  if (sup.length) todo.push([sup.length, 'supportbericht' + (sup.length === 1 ? '' : 'en'), 'support']);
+  if (late.length) todo.push([late.length, 'bedrij' + (late.length === 1 ? 'f met' : 'ven met') + ' een betaalprobleem', 'bedrijven']);
+  if (invOpen.length) todo.push([invOpen.length, 'openstaande factu' + (invOpen.length === 1 ? 'ur' : 'ren'), 'facturen']);
+  if (S2 && S2.mail.failed) todo.push([S2.mail.failed, 'mail' + (S2.mail.failed === 1 ? '' : 's') + ' niet verstuurd', 'mail']);
+  if (S2) S2.jobs.filter(j => j.lastStatus === 'failed').forEach(j => todo.push(['!', 'Taak ' + j.name + ' is mislukt', 'status']));
+  h += '<div class="ov-cols"><section class="card"><h2>Actie nodig</h2>' + (todo.length ? '<div class="ov-list">' + todo.map(t => '<button class="ov-row" data-act="tab" data-id="' + t[2] + '"><b class="ov-n">' + t[0] + '</b><span>' + t[1] + '</span><span class="ov-go">→</span></button>').join('') + '</div>' : '<p class="ov-ok">✓ Niets te doen. Alles is bijgewerkt.</p>') + '</section>' +
+    '<section class="card"><h2>Proefperiode loopt af</h2>' + (soon.length ? '<div class="ov-list">' + soon.map(o => '<button class="ov-row" data-act="ov-org" data-id="' + o.id + '"><span><strong>' + esc(o.name) + '</strong><span class="small muted"> · ' + (o.members || 0) + ' medewerkers</span></span><span class="small muted" style="margin-left:auto">' + esc(new Date(B(o).trialEndsAt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })) + '</span></button>').join('') + '</div>' : '<p class="muted" style="margin:0">Geen proefperiodes die deze week aflopen.</p>') + '</section></div>';
+  h += '<div class="ov-cols"><section class="card"><div class="item-top"><h2 style="margin:0">Nieuwe aanvragen</h2><button class="btn small ghost" data-act="tab" data-id="aanvragen">Alles</button></div>' + (reqs.length ? '<div class="ov-list">' + reqs.map(r => '<button class="ov-row" data-act="tab" data-id="aanvragen"><span><strong>' + esc(r.company) + '</strong><span class="small muted"> · ' + esc(r.contactName) + (r.employees ? ' · ' + esc(r.employees) : '') + '</span></span><span class="small muted" style="margin-left:auto">' + esc(new Date(r.createdAt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })) + '</span></button>').join('') + '</div>' : '<p class="muted" style="margin:0">Geen nieuwe aanvragen.</p>') + '</section>' +
+    '<section class="card"><div class="item-top"><h2 style="margin:0">Laatst gebeurd</h2><button class="btn small ghost" data-act="tab" data-id="logboek">Logboek</button></div><div class="ov-log">' + (d.log || []).slice(0, 6).map(l => '<div><span class="small muted">' + esc(new Date(l.at).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + '</span><span>' + esc(l.text) + '</span></div>').join('') + '</div></section></div>';
+  if (S2) h += '<section class="card"><h2>Gebruik</h2><div class="ov-mini">' + [['Inlogs vandaag', S2.activity.logins24h], ['Inlogs 7 dagen', S2.activity.logins7d], ['Actieve bedrijven (7 d)', S2.activity.activeOrgs7d], ['Nu ingeklokt', S2.activity.clockedIn], ['Diensten', S2.counts.shifts], ['Urenregels', S2.counts.hours], ['Mails vandaag', S2.mail.sent24h], ['Database', S2.dbSize]].map(x => '<div><span>' + x[0] + '</span><strong>' + x[1] + '</strong></div>').join('') + '</div></section>';
+  return h;
 }
 const eur = c => '€ ' + (Math.round(c || 0) / 100).toFixed(2).replace('.', ',');
 const planName = id => ((A.data.plans || []).find(p => p.id === id) || {}).name || id || '–';
@@ -315,7 +358,7 @@ function viewStatus() {
     (i.resolvedAt ? '<div class="row"><button class="btn small ghost" data-act="st-reopen" data-id="' + i.id + '">Weer openen</button><button class="btn small ghost" data-act="st-del" data-id="' + i.id + '">Verwijderen</button></div>'
       : '<form class="stack" data-form="st-upd" data-id="' + i.id + '" style="gap:8px;max-width:none" novalidate><textarea class="input" name="update" rows="2" maxlength="1000" placeholder="Update, bijv. We hebben de oorzaak gevonden en werken aan een oplossing."></textarea>' +
         '<div class="row"><button class="btn small" type="submit" name="act" value="upd">Update plaatsen</button><button class="btn small primary" type="submit" name="act" value="resolve">Opgelost</button><button class="btn small ghost" type="button" data-act="st-del" data-id="' + i.id + '">Verwijderen</button></div></form>') + '</div>';
-  return '<section class="card"><div class="item-top"><h2 style="margin:0">Statuspagina</h2><a class="btn small ghost" href="../status.html" target="_blank" rel="noopener">Bekijk statuspagina ↗</a></div>' +
+  return statusLive() + statusSystem() + '<section class="card"><div class="item-top"><h2 style="margin:0">Statuspagina · meldingen</h2><a class="btn small ghost" href="../status.html" target="_blank" rel="noopener">Bekijk statuspagina ↗</a></div>' +
     '<p class="small muted">Klanten zien hier of alles werkt. De pagina controleert zelf live of de website, de app en de database bereikbaar zijn. Storingen en onderhoud meld je hieronder.</p>' +
     (open.length ? '<h3>Nu bezig</h3><div class="stack" style="gap:10px;max-width:none">' + open.map(card).join('') + '</div>' : '<p><span class="badge green">Geen storingen</span></p>') +
     '<details class="box" style="margin-top:14px"' + (open.length ? '' : ' open') + '><summary><strong>+ Storing of onderhoud melden</strong></summary><form class="stack" data-form="st-new" style="gap:10px;max-width:none;margin-top:10px" novalidate>' +
@@ -325,6 +368,41 @@ function viewStatus() {
       '<div class="field"><label for="st-msg">Eerste bericht</label><textarea class="input" id="st-msg" name="update" rows="2" maxlength="1000" placeholder="Bijv. We onderzoeken het probleem."></textarea></div>' +
       '<div><button class="btn primary" type="submit">Melden</button></div></form></details>' +
     (done.length ? '<h3 style="margin-top:18px">Afgelopen 90 dagen</h3><div class="stack" style="gap:10px;max-width:none">' + done.map(card).join('') + '</div>' : '') + '</section>';
+}
+// live controles, net als op de openbare statuspagina, maar met meer details
+const ST_TESTS = [
+  ['website', 'Website', 'crewharbor.nl, de voorkant', () => fetch('../site.css?check=' + Date.now(), { cache: 'no-store' }).then(r => r.ok)],
+  ['app', 'App en inloggen', 'De app-bestanden', () => fetch('config.js?check=' + Date.now(), { cache: 'no-store' }).then(r => r.ok)],
+  ['api', 'Database en gegevens', 'Supabase REST (cd_status)', () => rpc('cd_status').then(d => !!d)],
+  ['auth', 'Inlogdienst', 'Supabase Auth', () => fetch(CFG.supabaseUrl + '/auth/v1/health', { headers: { apikey: CFG.supabaseKey } }).then(r => r.ok)],
+  ['prikklok', 'Prikklok en edge function', 'functions/v1/crewdeck', () => fetch(CFG.supabaseUrl + '/functions/v1/crewdeck', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey }, body: JSON.stringify({ action: 'plans' }) }).then(r => r.ok)]
+];
+async function runStatusChecks() {
+  A.live = A.live || {}; A.liveBusy = true; render();
+  await Promise.all(ST_TESTS.map(async t => { const t0 = performance.now();
+    try { const ok = await Promise.race([t[3](), new Promise((_, no) => setTimeout(() => no(new Error('Geen antwoord binnen 8 seconden')), 8000))]); A.live[t[0]] = { ok: !!ok, ms: Math.round(performance.now() - t0), err: ok ? null : 'Fout antwoord' }; }
+    catch (e) { A.live[t[0]] = { ok: false, ms: null, err: e.message }; } }));
+  try { A.sys = await rpc('cd_admin_system'); } catch (e) { A.sys = null; }
+  A.liveAt = new Date(); A.liveBusy = false; render();
+}
+function statusLive() {
+  const L = A.live || {};
+  if (!A.liveAt && !A.liveBusy) setTimeout(runStatusChecks, 0);
+  const ms = n => n == null ? '' : n + ' ms';
+  const all = ST_TESTS.every(t => L[t[0]] && L[t[0]].ok);
+  return '<section class="card"><div class="item-top"><h2 style="margin:0">Live controle</h2><div class="row"><span class="small muted">' + (A.liveBusy ? 'Bezig…' : A.liveAt ? 'Om ' + A.liveAt.toLocaleTimeString('nl-NL') : '') + '</span><button class="btn small" data-act="st-check"' + (A.liveBusy ? ' disabled' : '') + '>Opnieuw controleren</button></div></div>' +
+    (A.liveAt ? '<p class="st-sum ' + (all ? 'ok' : 'bad') + '">' + (all ? '✓ Alle onderdelen reageren' : '✕ Niet alles reageert, zie hieronder') + '</p>' : '') +
+    '<div class="st-grid">' + ST_TESTS.map(t => { const r = L[t[0]]; const cls = !r ? 'wait' : r.ok ? (r.ms > 1500 ? 'slow' : 'ok') : 'bad';
+      return '<div class="st-item ' + cls + '"><span class="st-led"></span><div><strong>' + t[1] + '</strong><span class="small muted">' + t[2] + '</span>' + (r && r.err ? '<span class="small" style="color:#B42318">' + esc(r.err) + '</span>' : '') + '</div><b>' + (!r ? '…' : r.ok ? ms(r.ms) : 'Storing') + '</b></div>'; }).join('') + '</div>' +
+    '<p class="small muted" style="margin:10px 0 0">Groen = werkt, oranje = traag (meer dan 1,5 seconde), rood = reageert niet. Bekijk ook de <a href="../status.html" target="_blank" rel="noopener">openbare statuspagina ↗</a>.</p></section>';
+}
+function statusSystem() {
+  const S2 = A.sys; if (!S2) return '';
+  const when = t => t ? new Date(t).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'nog niet gedraaid';
+  const JOB = { 'crewharbor-mail': 'Mails versturen', 'crewharbor-facturen': 'Maandelijkse facturen', 'crewharbor-opruimen': 'Oude gegevens opruimen', 'crewharbor-fotos-opruimen': 'Foto’s van oud-medewerkers opruimen' };
+  return '<div class="ov-cols"><section class="card"><h2>Automatische taken</h2><div class="st-jobs">' + S2.jobs.map(j => '<div class="st-job"><span class="st-led ' + (!j.active ? 'wait' : j.lastStatus === 'failed' ? 'bad' : j.lastStatus ? 'ok' : 'wait') + '"></span><div><strong>' + esc(JOB[j.name] || j.name) + '</strong><span class="small muted">' + esc(j.schedule) + ' · laatst: ' + esc(when(j.lastAt)) + (j.fails7d ? ' · ' + j.fails7d + '× mislukt deze week' : '') + '</span>' + (j.lastStatus === 'failed' && j.lastMsg ? '<span class="small" style="color:#B42318">' + esc(j.lastMsg) + '</span>' : '') + '</div></div>').join('') + '</div></section>' +
+    '<section class="card"><h2>Mail en database</h2><div class="ov-mini two">' + [['In de wachtrij', S2.mail.pending], ['Niet verstuurd', S2.mail.failed], ['Verstuurd vandaag', S2.mail.sent24h], ['Laatst verstuurd', when(S2.mail.lastSent)], ['Database', S2.dbSize], ['Mislukte inlogs vandaag', S2.activity.failed24h]].map(x => '<div><span>' + x[0] + '</span><strong>' + esc(String(x[1])) + '</strong></div>').join('') + '</div>' +
+      (S2.mail.lastError ? '<p class="small" style="margin:10px 0 0;color:#B42318">Laatste mailfout: ' + esc(S2.mail.lastError) + '</p>' : '') + '</section></div>';
 }
 function viewMail() {
   const m = A.mail;
@@ -562,6 +640,8 @@ $app.addEventListener('click', async e => {
         A.inv = await rpc('cd_admin_org_method', { p_org: id, p_method: to }); await load(); render(); toast('Betaalwijze aangepast.'); break;
       }
       case 'inv-filter': A.invFilter = b.dataset.v; render(); break;
+      case 'st-check': runStatusChecks(); break;
+      case 'ov-org': A.tab = 'bedrijven'; A.orgSel = id; render(); break;
       case 'st-del': if (!confirm('Deze melding verwijderen van de statuspagina?')) return; A.st = await rpc('cd_admin_status_delete', { p_id: Number(id) }); render(); break;
       case 'st-reopen': A.st = await rpc('cd_admin_status_save', { p_id: Number(id), p: { reopen: true, update: 'Het probleem is terug. We kijken ernaar.' } }); render(); break;
       case 'sup-done': case 'sup-new': case 'sup-del': {

@@ -1235,3 +1235,61 @@ a.db-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
 .hl-h { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
 .hl-all { padding: 10px 12px; border-radius: 10px; background: #F1F8F9; }
 @media (max-width: 800px) { .hl-groups { grid-template-columns: 1fr; } }
+
+/* ---------- Beheer v2: zijbalk zoals de app ---------- */
+.adm2 { display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: 100vh; background: var(--bg, #F3F6F7); }
+.adm-side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 14px; padding: 18px 14px; background: var(--navy); color: #fff; overflow-y: auto; }
+.adm-side .adm-brand { padding: 4px 8px 10px; display: flex; align-items: flex-end; gap: 10px; }
+.adm-side .adm-sub { font-size: 13px; font-weight: 700; color: var(--nav-text, #B9C6D3); text-transform: uppercase; letter-spacing: .08em; }
+.adm-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.adm-nav-h { margin: 14px 10px 4px; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #7F95A8; }
+.adm-nav button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 10px; background: transparent; color: #C8D3DE; font: inherit; font-size: 14.5px; font-weight: 500; text-align: left; cursor: pointer; }
+.adm-nav button:hover { background: rgba(255,255,255,.07); color: #fff; }
+.adm-nav button.on { background: rgba(127,196,207,.16); color: #fff; font-weight: 650; box-shadow: inset 3px 0 0 #7FC4CF; }
+.adm-nav .cnt { margin-left: auto; min-width: 22px; padding: 0 7px; height: 20px; border-radius: 99px; background: #F79009; color: #fff; font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+.adm-nav .cnt.red { background: #D92D20; }
+.adm-side .adm-me { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; padding: 12px 8px 4px; border-top: 1px solid rgba(255,255,255,.1); color: #fff; }
+.adm-av { width: 34px; height: 34px; border-radius: 50%; background: #7FC4CF; color: #0D2340; display: grid; place-items: center; font-weight: 800; }
+.adm-me-n { display: grid; font-size: 14px; font-weight: 650; } .adm-me-n small { font-size: 12px; font-weight: 500; color: #9FB3C4; }
+.adm-side .adm-me .btn { grid-column: 1 / -1; background: rgba(255,255,255,.08); color: #fff; }
+.adm2 .adm-main { max-width: 1180px; width: 100%; margin: 0; padding: 26px 34px 64px; }
+.adm-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.adm-head h1 { margin: 0; font-size: 28px; letter-spacing: -.02em; }
+/* overzicht */
+.ov-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.ov-tile { display: grid; gap: 4px; text-align: left; padding: 18px 20px; border-radius: 16px; background: #fff; border: 1px solid var(--line); cursor: pointer; font: inherit; color: inherit; transition: border-color .15s, transform .15s; }
+.ov-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
+.ov-tile strong { font-size: 28px; letter-spacing: -.02em; line-height: 1.15; }
+.ov-l { font-size: 13px; font-weight: 600; color: var(--muted); } .ov-s { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-tile.good { background: linear-gradient(160deg, #F1FAF4, #fff); } .ov-tile.good strong { color: #1F7A4D; font-size: 22px; }
+.ov-tile.bad { background: linear-gradient(160deg, #FEF3F2, #fff); border-color: #FDA29B; } .ov-tile.bad strong { color: #B42318; font-size: 22px; }
+.ov-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.ov-cols .card, .adm2 .card { max-width: none; }
+.ov-list { display: grid; gap: 8px; }
+.ov-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.ov-row:hover { border-color: var(--accent); }
+.ov-n { min-width: 30px; height: 30px; padding: 0 8px; border-radius: 99px; background: #FEF0C7; color: #93370D; display: grid; place-items: center; }
+.ov-go { margin-left: auto; color: var(--accent); font-weight: 700; }
+.ov-ok { margin: 0; color: #1F7A4D; font-weight: 600; }
+.ov-log { display: grid; gap: 8px; font-size: 14px; } .ov-log div { display: grid; grid-template-columns: 120px 1fr; gap: 10px; }
+.ov-mini { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.ov-mini.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ov-mini div { padding: 12px 14px; border-radius: 12px; background: var(--bg, #F3F6F7); display: grid; gap: 2px; }
+.ov-mini span { font-size: 12.5px; color: var(--muted); } .ov-mini strong { font-size: 18px; }
+/* status in beheer */
+.st-sum { margin: 10px 0 0; font-weight: 700; } .st-sum.ok { color: #1F7A4D; } .st-sum.bad { color: #B42318; }
+.st-grid { display: grid; gap: 8px; margin-top: 12px; }
+.st-item { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: #fff; }
+.st-item > div, .st-job > div { display: grid; }
+.st-led { width: 12px; height: 12px; border-radius: 50%; background: #9FB3C4; }
+.st-item.ok .st-led, .st-led.ok { background: #1F9D5B; box-shadow: 0 0 0 4px rgba(31,157,91,.16); }
+.st-item.slow .st-led { background: #D98E04; box-shadow: 0 0 0 4px rgba(217,142,4,.16); }
+.st-item.bad .st-led, .st-led.bad { background: #D92D20; box-shadow: 0 0 0 4px rgba(217,45,32,.16); }
+.st-item.bad { border-color: #FDA29B; background: #FFFBFA; }
+.st-jobs { display: grid; gap: 10px; } .st-job { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; } .st-job .st-led { margin-top: 5px; }
+@media (max-width: 900px) {
+  .adm2 { grid-template-columns: 1fr; } .adm-side { position: static; height: auto; }
+  .adm-nav { flex-direction: row; flex-wrap: wrap; } .adm-nav-h { display: none; } .adm-nav button { width: auto; }
+  .ov-tiles { grid-template-columns: 1fr 1fr; } .ov-cols { grid-template-columns: 1fr; } .ov-mini { grid-template-columns: 1fr 1fr; }
+  .adm2 .adm-main { padding: 20px 16px 48px; }
+}
