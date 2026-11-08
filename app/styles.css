@@ -1091,3 +1091,13 @@ table.ro2 tr.ro-group th { text-align: left; background: #F2F6F7; padding: 8px 1
 .pub-pill.on { background: #DCFAE6; color: #067647; border: 1px solid #ABEFC6; }
 .ro-title .btn.small { min-height: 30px; padding: 4px 12px; font-size: 13px; }
 .ro-title .link-btn { font-size: 13px; color: var(--muted); }
+
+/* bezetting: functie en afdeling per vaste dienst */
+.ro-needs .nd-name { display: grid; gap: 2px; min-width: 170px; font-weight: 500; }
+.ro-needs .nd-name .muted { font-size: 12.5px; }
+.nd-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+.nd-tag { font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: var(--accent-soft, #DDF0F2); color: var(--accent, #1D6E7B); }
+.nd-tag.dept { background: color-mix(in srgb, var(--dept) 18%, #fff); color: #24323F; border-left: 3px solid var(--dept); border-radius: 6px; }
+.nd-tag.any { background: #EEF2F4; color: #5B6B78; font-weight: 600; }
+.ro-needs thead th { position: sticky; top: 0; background: #fff; z-index: 1; }
+.ro-needs th.pad { position: sticky; left: 0; background: #fff; z-index: 1; }

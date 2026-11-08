@@ -13,11 +13,23 @@ function coverage(R, d) {
     const n = Number(N[k]) || 0; if (!n) return;
     let h;
     if (k === 'dag') h = new Set(dayShifts.map(s => String(s.memberId))).size;
-    else { const t = (R.templates || []).find(x => String(x.id) === k); if (!t) return; h = dayShifts.filter(s => s.start === t.start && s.end === t.end).length; }
+    else { const t = (R.templates || []).find(x => String(x.id) === k); if (!t) return; h = dayShifts.filter(s => tplMatch(R, t, s)).length; }
     need += n; have += Math.min(h, n);
     items.push({ key: k, tpl: k === 'dag' ? null : (R.templates || []).find(x => String(x.id) === k), need: n, have: h });
   });
   return { need, have, items };
+}
+// telt een dienst mee voor deze vaste dienst? Zelfde tijden, zelfde afdeling (als ingesteld) en zelfde functie.
+// Een vaste dienst zonder functie telt diensten zonder functie, of met een functie waarvoor geen eigen vaste dienst op die tijden is.
+function tplMatch(R, t, s) {
+  if (s.start !== t.start || s.end !== t.end) return false;
+  if (t.departmentId && !same(s.departmentId, t.departmentId)) return false;
+  if (t.functionId) return same(s.functionId, t.functionId);
+  return !s.functionId || !(R.templates || []).some(o => o !== t && o.functionId && o.start === t.start && o.end === t.end && same(o.functionId, s.functionId) && (!o.departmentId || same(o.departmentId, s.departmentId)));
+}
+function tplTags(R, t) {
+  const f = t.functionId && funcOf(t.functionId, R), dp = t.departmentId && deptOf(t.departmentId, R);
+  return (dp ? '<span class="nd-tag dept" style="--dept:' + esc(dp.color || '#7FC4CF') + '">' + esc(dp.name) + '</span>' : '') + (f ? '<span class="nd-tag func">' + esc(f.name) + '</span>' : '');
 }
 // openingstijden en gaten
 const hhmm = m => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
@@ -171,8 +183,9 @@ function rosterWeek(R) {
       if (!o && Object.keys(R.opening || {}).length) x += '<span class="ro-gap closed">Dicht</span>';
       else if (o) x += G.length ? '<span class="ro-gap" title="' + esc('Nog niemand (genoeg) ingepland: ' + G.map(gapTxt).join(', ')) + '">Gat ' + esc(gapTxt(G[0])) + (G.length > 1 ? ' +' + (G.length - 1) : '') + '</span>' : '<span class="ro-gap ok" title="Open ' + hhmm(o.from) + '–' + hhmm(o.to) + '">✓ ' + hhmm(o.from) + '–' + hhmm(o.to) + '</span>';
       if (c.need) x += '<span class="ro-covs">' + c.items.map(it => { const cls = it.have >= it.need ? 'ok' : it.have ? 'half' : 'bad';
-        const lab = it.tpl ? it.tpl.start.replace(/:00$/, '') + '–' + it.tpl.end.replace(/:00$/, '') : 'Mensen';
-        return '<span class="ro-cov2 ' + cls + '" title="' + esc((it.tpl ? it.tpl.name + ' ' + it.tpl.start + '–' + it.tpl.end : 'Mensen') + ': ' + Math.min(it.have, it.need) + ' van ' + it.need + ' ingepland' + (it.have > it.need ? ' (+' + (it.have - it.need) + ' extra)' : '')) + '"><span>' + esc(lab) + '</span><b>' + Math.min(it.have, it.need) + '/' + it.need + '</b></span>'; }).join('') + '</span>';
+        const fn = it.tpl && it.tpl.functionId && funcOf(it.tpl.functionId, R);
+        const lab = it.tpl ? (fn ? fn.name + ' ' : '') + it.tpl.start.replace(/:00$/, '') + '–' + it.tpl.end.replace(/:00$/, '') : 'Mensen';
+        return '<span class="ro-cov2 ' + cls + '" title="' + esc((it.tpl ? it.tpl.name + (fn ? ' (' + fn.name + ')' : '') + ' ' + it.tpl.start + '–' + it.tpl.end : 'Mensen') + ': ' + Math.min(it.have, it.need) + ' van ' + it.need + ' ingepland' + (it.have > it.need ? ' (+' + (it.have - it.need) + ' extra)' : '')) + '"><span>' + esc(lab) + '</span><b>' + Math.min(it.have, it.need) + '/' + it.need + '</b></span>'; }).join('') + '</span>';
     }
     return x;
   };
@@ -267,11 +280,16 @@ function hoursEditor() {
     '<div class="row"><button class="btn primary" data-act="rx-hours-save">Opslaan</button><button class="btn ghost" data-act="rx-hours-x">Annuleren</button></div></section>';
 }
 function needsEditor(R) {
-  const E = S.roNeedsEdit; const cols = (R.templates || []).length ? R.templates.map(t => [String(t.id), t.name + ' ' + t.start + '–' + t.end]) : [['dag', 'Aantal mensen']];
+  const E = S.roNeedsEdit; const T = (R.templates || []).slice().sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end) || String(a.name).localeCompare(String(b.name)));
+  const rows = T.length ? T.map(t => ({ key: String(t.id), label: t.name + ' ' + t.start + '–' + t.end,
+    th: '<div class="nd-name"><strong>' + esc(t.name) + '</strong><span class="muted">' + esc(t.start + '–' + t.end) + '</span>' + (tplTags(R, t) ? '<span class="nd-tags">' + tplTags(R, t) + '</span>' : '<span class="nd-tags"><span class="nd-tag any">Iedereen</span></span>') + '</div>' }))
+    : [{ key: 'dag', label: 'Aantal mensen', th: '<strong>Aantal mensen</strong>' }];
+  const hasFunc = T.some(t => t.functionId);
   return '<section class="card stack" style="gap:12px;max-width:none"><div class="item-top"><h2 style="margin:0">Bezetting: hoeveel mensen heb je nodig?</h2><button class="icon-btn small" data-act="rx-needs-x" aria-label="Sluiten">' + ICON.x + '</button></div>' +
-    '<p class="small muted" style="margin:0">' + ((R.templates || []).length ? 'Per vaste dienst en per dag. Een dienst telt mee als begin- en eindtijd gelijk zijn aan de vaste dienst.' : 'Per dag. Maak vaste diensten aan om het per dienst in te stellen.') + ' Leeg of 0 = niet bijhouden.</p>' +
+    '<p class="small muted" style="margin:0">' + (T.length ? 'Per vaste dienst en per dag. Een dienst telt mee als de tijden gelijk zijn' + (hasFunc ? ' én de functie klopt. Zo kun je bijvoorbeeld 1 Hoka en 3 gewone mensen apart bijhouden' : '') + '.' : 'Per dag. Maak vaste diensten aan om het per dienst in te stellen.') + ' Leeg of 0 = niet bijhouden.</p>' +
+    (T.length && !hasFunc ? '<p class="small" style="margin:0">Tip: geef een vaste dienst een <strong>functie</strong> (bij Vaste diensten), dan kun je per functie aangeven hoeveel mensen je nodig hebt.</p>' : '') +
     '<div class="table-wrap"><table class="roster ro-needs"><thead><tr><th></th>' + WD.map(w => '<th>' + w.slice(0, 2) + '</th>').join('') + '</tr></thead><tbody>' +
-    cols.map(c => '<tr><th class="pad" style="text-align:left">' + esc(c[1]) + '</th>' + [1, 2, 3, 4, 5, 6, 7].map(wd => '<td><input class="input" inputmode="numeric" data-need="' + wd + '|' + c[0] + '" value="' + esc(((E[wd] || {})[c[0]]) || '') + '" aria-label="' + esc(c[1] + ' ' + WD[wd - 1]) + '"></td>').join('') + '</tr>').join('') +
+    rows.map(c => '<tr><th class="pad" style="text-align:left">' + c.th + '</th>' + [1, 2, 3, 4, 5, 6, 7].map(wd => '<td><input class="input" inputmode="numeric" data-need="' + wd + '|' + c.key + '" value="' + esc(((E[wd] || {})[c.key]) || '') + '" aria-label="' + esc(c.label + ' ' + WD[wd - 1]) + '"></td>').join('') + '</tr>').join('') +
     '</tbody></table></div><div class="row"><button class="btn primary" data-act="rx-needs-save">Opslaan</button><button class="btn ghost" data-act="rx-needs-x">Annuleren</button></div></section>';
 }
 function openList(R) {
@@ -298,7 +316,7 @@ function openSpots(R) {
   if (!L.length && !GL.length) return h + '<p style="margin:0">Alles is gevuld. 🎉</p></section>';
   h += L.map(o => {
     const c = candidates(R, o.d, o.item.tpl).slice(0, 8);
-    return '<div class="ro-open"><div><strong>' + esc(dayShort(o.d)) + ' · ' + esc(o.item.tpl ? o.item.tpl.name + ' ' + o.item.tpl.start + '–' + o.item.tpl.end : 'Mensen') + '</strong><span class="badge orange">nog ' + o.missing + ' nodig</span></div>' +
+    return '<div class="ro-open"><div><strong>' + esc(dayShort(o.d)) + ' · ' + esc(o.item.tpl ? o.item.tpl.name + ' ' + o.item.tpl.start + '–' + o.item.tpl.end : 'Mensen') + '</strong>' + (o.item.tpl ? tplTags(R, o.item.tpl) : '') + '<span class="badge orange">nog ' + o.missing + ' nodig</span></div>' +
       '<div class="who-list">' + (c.length ? c.map(x => '<button class="who-chip ' + (x.kan ? 'kan' : 'leeg') + '" data-act="rx-fill" data-id="' + x.p.id + '" data-v="' + o.d + '|' + (o.item.tpl ? o.item.tpl.id : '') + '"><strong>' + esc(x.p.name) + '</strong><small>' + (x.kan ? 'kan' : 'niet ingevuld') + (x.left != null ? ' · nog ' + fmtHM(Math.max(0, x.left)) + ' u' : '') + '</small></button>').join('') : '<span class="small muted">Niemand beschikbaar.</span>') + '</div></div>';
   }).join('');
   return h + '<p class="small muted" style="margin:0">Klik op een naam om diegene meteen in te plannen. Groen = heeft aangegeven te kunnen.</p></section>';
