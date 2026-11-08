@@ -16,7 +16,7 @@ const PERM_GROUPS = [
     ['callbacks.edit_all', 'Verzoeken van collega’s bewerken'], ['callbacks.delete', 'Verzoeken verwijderen']]],
   ['Taken', [['tasks.create', 'Taken aanmaken'], ['tasks.assign', 'Taken aan anderen geven'], ['tasks.view_all', 'Taken van collega’s zien'],
     ['tasks.edit_all', 'Taken van collega’s bewerken'], ['tasks.delete', 'Taken verwijderen'], ['tasks.archive', 'Taakarchief: afgeronde taken van iedereen bekijken en aanpassen']]],
-  ['Uren', [['hours.view_all', 'Uren van iedereen zien'], ['hours.approve', 'Uren en verlof goedkeuren'], ['hours.plan', 'Rooster plannen'], ['hours.kiosk', 'Prikklok instellen'], ['hours.kiosk_exit', 'Prikklok verlaten met eigen code']]],
+  ['Uren', [['hours.view_all', 'Uren van iedereen zien'], ['hours.approve', 'Uren en verlof goedkeuren'], ['hours.plan', 'Rooster plannen'], ['hours.kiosk', 'Prikklok instellen'], ['hours.kiosk_exit', 'Prikklok verlaten met eigen code'], ['hours.clocked', 'Zien wie ingeklokt is en sinds hoe laat']]],
   ['Kennis & documenten', [['kb.edit', 'Kennisbank bewerken'], ['docs.upload', 'Documenten uploaden'], ['docs.manage', 'Mappen en documenten beheren']]],
   ['Teamleiding', [['team.board', 'Teambord'], ['reports.view', 'Cijfers'], ['phone.view', 'Telefonie bekijken'], ['audit.view', 'Logboek']]],
   ['Beheer', [['members.manage', 'Medewerkers beheren'], ['roles.manage', 'Rollen en rechten beheren'], ['org.manage', 'Bedrijfsinstellingen']]]
@@ -298,7 +298,7 @@ async function onRoute() {
 
 async function loadRoute() {
   const r = route();
-  const jobs = [loadCounts()];
+  const jobs = [loadCounts(), loadPresence()];
   if (r === 'overzicht' && can('reports.view')) jobs.push(rpc('cd_stats', { p_days: 7 }).then(s => { S.weekStats = s; }));
   if (r === 'terugbellen') jobs.push(loadCallbacks(), loadColleagues());
   if (r === 'taken') jobs.push(loadTasks());
@@ -384,7 +384,7 @@ function render() {
   const views = { overzicht: viewHome, terugbellen: viewCallbacks, verzoek: viewCallbackForm, taken: viewTasks, taak: viewTaskForm, team: viewTeam,
     cijfers: viewStats, logboek: viewLog, mensen: viewMembers, rollen: viewRoles, instellingen: viewSettings,
     uren: viewHours, rooster: viewRoster, prikklok: viewKioskAdmin, verlof: viewAbsence, beschikbaar: viewAvailability, meldingen: viewNotifications, goedkeuren: viewApprove, urenoverzicht: viewReport, telefonie: viewPhone, kennisbank: viewKb, documenten: viewDocs };
-  $app.innerHTML = '<div class="shell">' + viewNav(r) + '<main class="main' + (r === 'team' || r === 'rooster' ? ' wide' : '') + '" id="main">' + (views[r] || viewHome)() + '</main></div>';
+  $app.innerHTML = '<div class="shell">' + viewNav(r) + '<main class="main' + (r === 'team' || r === 'rooster' ? ' wide' : '') + '" id="main">' + (views[r] || viewHome)() + '</main>' + viewPresence() + '</div>';
   updateTitle();
 }
 function renderKeepFocus() {
@@ -1081,6 +1081,37 @@ function viewSettings() {
   if (S.me.isOwner) h += billingCard();
   h += (can('org.manage') ? breakRulesCard() : '') + locationsCard() + payrollSettingsCard() + mailPrefsCard();
   return h + securityCards() + (S.me.isOwner ? pinWindowCard() : '') + '</div>';
+}
+// ---------- status van collega's (rechterbalk) ----------
+const PRES = { beschikbaar: ['Beschikbaar', '#23A55A'], niet_storen: ['Niet storen', '#F23F43'], afwezig: ['Afwezig', '#F0B232'], lunch: ['Lunch', '#3B82F6'] };
+const PRES_ORDER = ['beschikbaar', 'lunch', 'afwezig', 'niet_storen'];
+async function loadPresence() {
+  if (!S.me || (typeof isMobileApp === 'function' && isMobileApp())) return;
+  try { S.presence = await rpc('cd_presence'); } catch (e) { S.presence = null; }
+}
+function presRow(p, inside) {
+  const st = PRES[p.status] || PRES.beschikbaar;
+  const col = inside ? st[1] : '#9AA4B2';
+  const since = p.since ? (p.sinceDate ? dayShort(p.sinceDate) + ' ' : '') + p.since : '';
+  return '<li class="pres-row' + (inside ? '' : ' off') + '"><span class="pres-av">' + avatar(p.id, p.name) + '<i style="background:' + col + '" aria-hidden="true"></i></span>' +
+    '<span class="pres-txt"><strong>' + esc(p.name) + (same(p.id, S.me.id) ? ' <span class="muted">(jij)</span>' : '') + '</strong>' +
+    '<span>' + (inside ? esc(st[0]) + (since ? ' · in sinds ' + esc(since) : '') : 'Niet ingeklokt') + '</span></span></li>';
+}
+function viewPresence() {
+  const P = S.presence; if (!P) return '';
+  const open = !!S.presOpen;
+  const inside = P.people.filter(p => p.in).sort((a, b) => PRES_ORDER.indexOf(a.status) - PRES_ORDER.indexOf(b.status) || a.name.localeCompare(b.name));
+  const out = P.people.filter(p => !p.in);
+  const me = PRES[P.me] || PRES.beschikbaar;
+  let h = '<aside class="presence' + (open ? ' open' : '') + '" id="presence" aria-label="Status van collega\'s">' +
+    '<button class="pres-fab" data-act="pres-toggle" aria-expanded="' + open + '" title="Collega\'s">' + NI.mensen + '<b>' + inside.length + '</b></button>' +
+    '<div class="pres-panel"><div class="pres-me"><span class="pres-av">' + avatar(S.me.id, S.me.name) + '<i style="background:' + me[1] + '"></i></span>' +
+    '<div class="field" style="flex:1;min-width:0;gap:2px"><label for="pres-me" class="small muted">Jouw status</label><select class="input" id="pres-me">' +
+    PRES_ORDER.map(k => '<option value="' + k + '"' + (k === P.me ? ' selected' : '') + '>' + PRES[k][0] + '</option>').join('') + '</select></div>' +
+    '<button class="icon-btn pres-close" data-act="pres-toggle" aria-label="Sluiten">' + ICON.x + '</button></div>';
+  h += '<h3 class="pres-h">Ingeklokt — ' + inside.length + '</h3>' + (inside.length ? '<ul class="pres-list">' + inside.map(p => presRow(p, true)).join('') + '</ul>' : '<p class="small muted pres-empty">Nu is er niemand ingeklokt.</p>');
+  if (out.length) h += '<details class="pres-out"' + (S.presOutOpen ? ' open' : '') + '><summary class="pres-h" data-act="pres-out">Niet ingeklokt — ' + out.length + '</summary><ul class="pres-list">' + out.map(p => presRow(p, false)).join('') + '</ul></details>';
+  return h + '</div></aside>';
 }
 // ---------- danger zone: eigen pincode bij de prikklok ----------
 function pinD(v) { const x = new Date(v + 'T12:00'); return x.getDate() + ' ' + MONTHS[x.getMonth()]; }
@@ -2286,6 +2317,10 @@ $app.addEventListener('change', async e => {
     catch (err) { toast(err.message, true); }
     render(); return;
   }
+  if (el.id === 'pres-me') {
+    try { S.presence = await rpc('cd_presence_set', { p_status: el.value }); toast('Je status is nu: ' + PRES[el.value][0] + '.'); } catch (err) { toast(err.message, true); }
+    const pr = document.getElementById('presence'); if (pr) pr.outerHTML = viewPresence(); return;
+  }
   if (el.dataset.sh && S.shiftEdit) { S.shiftEdit[el.dataset.sh] = el.value; if (el.dataset.rerender) render(); }
   if (el.dataset.in === 'rowho') { S.rosterWho = el.value; render(); }
   if (el.dataset.avp && el.dataset.rerender) { avpSet(el); render(); }
@@ -2540,6 +2575,8 @@ $app.addEventListener('click', async e => {
       case 'br-add': { S.brEdit = S.brEdit || JSON.parse(JSON.stringify(breakRules())); const k = el.dataset.v; S.brEdit[k] = (S.brEdit[k] || []).concat([{ fromMin: 360, breakMin: 30 }]); render(); return; }
       case 'br-del': { S.brEdit = S.brEdit || JSON.parse(JSON.stringify(breakRules())); const [k, i] = el.dataset.v.split('|'); S.brEdit[k].splice(Number(i), 1); render(); return; }
       case 'br-reset': S.brEdit = JSON.parse(JSON.stringify(BREAK_DEFAULT)); render(); return;
+      case 'pres-toggle': { S.presOpen = !S.presOpen; const pr = document.getElementById('presence'); if (pr) pr.outerHTML = viewPresence(); return; }
+      case 'pres-out': S.presOutOpen = !el.parentElement.open; return;
       case 'pinw-mode': S.pinNew.mode = el.dataset.v; render(); return;
       case 'pinw-add': {
         const P = S.pinNew; const dagen = P.mode === 'dagen';
@@ -2885,8 +2922,9 @@ setInterval(async () => {
     if (['overzicht', 'terugbellen', 'taken', 'team', 'uren', 'goedkeuren', 'rooster', 'verlof'].includes(r) && !typing && !editing && !S.absForm && !S.absReject && !document.hidden) {
       const y = window.scrollY; await loadRoute(); render(); window.scrollTo(0, y);
     } else {
-      await loadCounts();
+      await Promise.all([loadCounts(), loadPresence()]);
       const nav = document.querySelector('.nav'); if (nav && !typing) nav.outerHTML = viewNav(r);
+      const pr = document.getElementById('presence'); if (pr && !typing) pr.outerHTML = viewPresence();
     }
   } catch (e) { /* stil */ }
 }, 20000);
