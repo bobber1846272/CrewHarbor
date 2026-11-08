@@ -1536,7 +1536,7 @@ async function loadRoster() {
 function shiftForm(R) {
   const E = S.shiftEdit;
   const p = R.people.find(x => same(x.id, E.memberId));
-  return '<section class="card stack" style="gap:14px;max-width:none"><h2 style="margin:0">' + (E.id ? 'Dienst wijzigen' : 'Dienst inplannen') + '</h2>' +
+  return '<section class="card stack" style="gap:14px;max-width:none"><div class="item-top"><h2 style="margin:0">' + (E.id ? 'Dienst wijzigen' : 'Dienst inplannen') + '</h2><button class="icon-btn small" data-act="sh-cancel" aria-label="Sluiten">' + ICON.x + '</button></div>' +
     '<div class="fields4"><div class="field"><label for="sh-member">Medewerker</label><select class="input" id="sh-member" data-sh="memberId" data-rerender="1">' +
       R.people.map(x => { const off = blockedAbs(R, x.id, E.date); return '<option value="' + x.id + '"' + (same(x.id, E.memberId) ? ' selected' : '') + (off && !same(x.id, E.memberId) ? ' disabled' : '') + '>' + esc(x.name) +
         (off ? ' (' + esc(off.kind === 'ziek' ? 'ziek' : off.kindLabel.toLowerCase()) + ')' : '') + (x.leavingOn ? ' (weg na ' + esc(dayShort(x.leavingOn)) + ')' : '') + '</option>'; }).join('') + '</select></div>' +
@@ -1551,6 +1551,11 @@ function shiftForm(R) {
     '<button class="btn small ghost" data-act="sh-cancel">Annuleren</button><button class="btn primary small" data-act="sh-save">' + (E.id ? 'Opslaan' : 'Inplannen') + '</button></div></section>';
 }
 // goedgekeurd verlof of ziek: niet in te plannen
+// pop-up: legt een venster over de pagina; klik ernaast of Esc sluit het
+function modal(inner, closeAct) {
+  return '<div class="modal-wrap"><div class="modal-back" data-act="' + closeAct + '" aria-hidden="true"></div><div class="modal" role="dialog" aria-modal="true">' + inner + '</div></div>';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { const b = document.querySelector('.modal-wrap .modal-back'); if (b) { e.preventDefault(); b.click(); } } });
 function blockedAbs(R, memberId, d) { const a = absFor(R.absences, memberId, d); return a && a.status === 'goedgekeurd' ? a : null; }
 // overzicht voor de roostermaker: wie kan er op deze dag?
 function whoCanWork(R, E) {
@@ -1608,7 +1613,7 @@ function viewRoster() {
   if (mineView) return h + rosterMine(R);
   if (!month) h += publishBanner(R);
   h += rosterPanels(R);
-  if (S.shiftEdit) h += shiftForm(R);
+  if (S.shiftEdit) h += modal(shiftForm(R), 'sh-cancel');
   if (!R.people.length) return h + '<div class="empty">Nog geen actieve medewerkers.</div>';
   if (dayView) return h + rosterDayView(R) + (R.canPlan ? templatesCard(R) : '');
   return h + (month ? '' : rosterToolbar(R)) + (month ? rosterMonth(R) : rosterWeek(R)) + (month ? '' : rosterLegend(R)) + (R.canPlan ? templatesCard(R) : '');
@@ -2630,16 +2635,16 @@ $app.addEventListener('click', async e => {
         const mid = raw || (rosterFiltered(S.roster).people[0] || {}).id;
         S.shiftEdit = { id: null, memberId: mid, date: el.dataset.v, start: prev && !prev.id ? prev.start : '09:00', end: prev && !prev.id ? prev.end : '17:00', note: prev && !prev.id ? prev.note : '',
           locationId: S.locFilter || memberLoc(mid) || (prev && !prev.id ? prev.locationId : '') || '' };
-        render(); window.scrollTo(0, 0); return;
+        S.roMenu = null; render(); return;
       }
-      case 'sh-edit': { const s2 = S.roster.shifts.find(x => same(x.id, raw)); S.shiftEdit = Object.assign({}, s2, { memberId: s2.memberId, note: s2.note || '' }); render(); window.scrollTo(0, 0); return; }
+      case 'sh-edit': { const s2 = S.roster.shifts.find(x => same(x.id, raw)); S.shiftEdit = Object.assign({}, s2, { memberId: s2.memberId, note: s2.note || '' }); render(); return; }
       case 'sh-cancel': S.shiftEdit = null; render(); return;
       case 'sh-save': {
         const E = S.shiftEdit;
         const saved = await rpc('cd_shift_save', { p_id: E.id || null, p: { memberId: E.memberId, date: E.date, start: E.start, end: E.end, note: E.note } });
         if (LOCS().length && saved && (saved.locationId || '') !== (E.locationId || '')) await rpc('cd_shift_location', { p_id: saved.id, p_location: E.locationId || null });
         toast(E.id ? 'Dienst gewijzigd.' : 'Dienst ingepland.');
-        if (E.id || S.rosterView === 'maand') S.shiftEdit = null; else S.shiftEdit = Object.assign({}, E, { date: addDays(E.date, 1) <= addDays(S.rosterWeek, 6) ? addDays(E.date, 1) : E.date });
+        S.shiftEdit = null;
         break;
       }
       case 'sh-del': {

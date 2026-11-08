@@ -167,10 +167,10 @@ function rosterPanels(R) {
   if (!R.canPlan) return '';
   let h = '';
   if (S.roUndo && Date.now() - S.roUndo.at < 120000) h += '<div class="ro-undo" role="status"><span>' + esc(S.roUndo.label) + '</span><button class="btn small" data-act="rx-undo">Ongedaan maken</button><button class="icon-btn small" data-act="rx-undo-x" aria-label="Sluiten">' + ICON.x + '</button></div>';
-  if (S.roNeedsEdit) h += needsEditor(R);
-  if (S.roHoursEdit) h += hoursEditor();
-  if (S.roOpenPanel) h += openSpots(R);
-  if (S.roProposal) h += proposalPanel(R);
+  if (S.roNeedsEdit) h += modal(needsEditor(R), 'rx-needs-x');
+  else if (S.roHoursEdit) h += modal(hoursEditor(), 'rx-hours-x');
+  else if (S.roOpenPanel) h += modal(openSpots(R), 'rx-open-x');
+  else if (S.roProposal) h += modal(proposalPanel(R), 'rx-propose-x');
   return h;
 }
 function hoursEditor() {
@@ -311,13 +311,13 @@ document.getElementById('app').addEventListener('click', async e => {
       }
       case 'rx-undo-x': S.roUndo = null; render(); return;
       case 'rx-day': S.rosterView = 'dag'; S.rosterDay = v; S.roMenu = null; if (mondayOf(v) !== S.rosterWeek) { S.rosterWeek = mondayOf(v); await roReload(); } else render(); return;
-      case 'rx-needs': S.roNeedsEdit = JSON.parse(JSON.stringify(R.needs || {})); S.roOpenPanel = false; S.roProposal = null; render(); return;
+      case 'rx-needs': S.roNeedsEdit = JSON.parse(JSON.stringify(R.needs || {})); S.roHoursEdit = null; S.roOpenPanel = false; S.roProposal = null; render(); return;
       case 'rx-needs-x': S.roNeedsEdit = null; render(); return;
       case 'rx-needs-save': {
         el.disabled = true; const v2 = await rpc('cd_roster_needs_save', { p: S.roNeedsEdit });
         S.roster.needs = v2; S.roNeedsEdit = null; render(); toast('Bezetting opgeslagen. Boven elke dag zie je nu hoeveel plekken gevuld zijn.'); return;
       }
-      case 'rx-hours': S.roHoursEdit = JSON.parse(JSON.stringify(R.opening || {})); S.roNeedsEdit = null; render(); return;
+      case 'rx-hours': S.roHoursEdit = JSON.parse(JSON.stringify(R.opening || {})); S.roNeedsEdit = null; S.roOpenPanel = false; S.roProposal = null; render(); return;
       case 'rx-hours-x': S.roHoursEdit = null; render(); return;
       case 'rx-hours-copy': { const m = S.roHoursEdit['1'] || { open: false }; [2, 3, 4, 5].forEach(wd => { S.roHoursEdit[wd] = Object.assign({}, m); }); render(); return; }
       case 'rx-hours-save': {
@@ -330,7 +330,7 @@ document.getElementById('app').addEventListener('click', async e => {
         roUndo('Ingepland: ' + s.memberName + ' ' + dayShort(d) + ' ' + a + '–' + b, async () => { await rpc('cd_shift_delete', { p_id: s.id }); });
         await roReload(); return;
       }
-      case 'rx-open': S.roOpenPanel = !S.roOpenPanel; S.roProposal = null; S.roNeedsEdit = null; render(); return;
+      case 'rx-open': S.roOpenPanel = !S.roOpenPanel; S.roProposal = null; S.roNeedsEdit = null; S.roHoursEdit = null; render(); return;
       case 'rx-open-x': S.roOpenPanel = false; render(); return;
       case 'rx-fill': {
         const [d, tid] = v.split('|'); const t = tid ? R.templates.find(x => same(x.id, tid)) : (R.templates[0] || { start: '09:00', end: '17:00' });
@@ -338,7 +338,7 @@ document.getElementById('app').addEventListener('click', async e => {
         roUndo('Ingepland: ' + s.memberName + ' ' + dayShort(d), async () => { await rpc('cd_shift_delete', { p_id: s.id }); });
         await roReload(); return;
       }
-      case 'rx-propose': S.roProposal = makeProposal(R); S.roOpenPanel = false; S.roNeedsEdit = null; render(); return;
+      case 'rx-propose': S.roProposal = makeProposal(R); S.roOpenPanel = false; S.roNeedsEdit = null; S.roHoursEdit = null; render(); return;
       case 'rx-propose-x': S.roProposal = null; render(); return;
       case 'rx-propose-apply': {
         const todo = S.roProposal.filter(s => !s.off); if (!todo.length) return;
