@@ -173,6 +173,10 @@ function viewBilling() {
     '<p class="small muted" style="margin:0">Bedragen per medewerker per maand, exclusief btw. Een pakket kost: bovengrens medewerkers × (prijs per medewerker + inbegrepen extra\u2019s), min de korting van het pakket. Losse extra\u2019s rekenen op dezelfde manier.</p>' +
     '<div class="fields4"><div class="field"><label>Prijs per medewerker (€)</label>' + euroIn('member', PR.memberCents) + '</div>' +
     FEAT.map(f => '<div class="field"><label>' + f[1] + ' (€ per medewerker)</label>' + euroIn('a-' + f[0], (PR.addons || {})[f[0]]) + '</div>').join('') + '</div>' +
+    '<div class="fields4"><div class="field"><label>Prijzen afronden op</label><select class="input" name="roundCents">' +
+      [[0, 'Niet afronden'], [100, 'Hele euro\u2019s'], [500, '€ 5'], [1000, '€ 10']].map(o => '<option value="' + o[0] + '"' + (Number(PR.roundCents || 0) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
+      '<div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" name="end99"' + (PR.end99 ? ' checked' : '') + '> Laten eindigen op ,99</label></div></div>' +
+    '<p class="small muted" style="margin:0">Voorbeeld: € 201,88 wordt met € 10 en ,99 → € 199,99. Afronden gaat naar het dichtstbijzijnde bedrag, voor pakketten én losse extra\u2019s.</p>' +
     '<div class="row"><button class="btn primary" type="submit">Prijzen opslaan</button></div></form>';
   h += '<section class="stack" style="gap:12px;max-width:none"><div class="section-title"><h2>Pakketten</h2><button class="btn small" data-act="plan-new">Pakket toevoegen</button></div>' +
     '<p class="small muted" style="margin:0">Elk pakket is voor een aantal medewerkers en heeft een vaste maandprijs (zonder bovengrens: per echte medewerker, minstens de ondergrens). Wijzigingen staan meteen op de website; lopende abonnementen krijgen het nieuwe bedrag bij hun volgende betaling.</p>' +
@@ -563,7 +567,7 @@ $app.addEventListener('submit', async e => {
     }
     if (kind === 'pricing') {
       const money = k => Math.round(Number(v(k).replace(/\./g, '').replace(',', '.')) * 100);
-      const p = { memberCents: money('member'), addons: Object.fromEntries(FEAT.map(x => [x[0], money('a-' + x[0])])) };
+      const p = { memberCents: money('member'), addons: Object.fromEntries(FEAT.map(x => [x[0], money('a-' + x[0])])), roundCents: Number(v('roundCents')) || 0, end99: f.elements.end99.checked };
       if (![p.memberCents, ...Object.values(p.addons)].every(n => isFinite(n) && n >= 0)) throw new Error('Vul geldige bedragen in.');
       await rpc('cd_admin_pricing_save', { p }); await refresh(); toast('Prijzen opgeslagen. Alle pakketprijzen zijn opnieuw berekend.'); return;
     }
