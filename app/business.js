@@ -48,7 +48,20 @@ function billingBanner() {
   if (b.status === 'trial' && days != null && days <= 7) return '<div class="alert info"><span>Je proefperiode loopt nog ' + days + ' dag' + (days === 1 ? '' : 'en') + '. <a href="#/instellingen">Stel je abonnement in</a> om daarna gewoon door te gaan.</span></div>';
   return '';
 }
-function planPrice(p) { return eur(p.priceCents) + ' per medewerker per maand' + (p.minCents ? ', minimaal ' + eur(p.minCents) : ''); }
+const EXTRA_LABEL = { payroll: 'Salarisexport', phone: '3CX-telefonie', locations: 'Meerdere vestigingen' };
+function planRange(p) { return p.maxMembers ? ((p.minMembers || 1) > 1 ? p.minMembers + ' tot ' + p.maxMembers : 'tot ' + p.maxMembers) + ' medewerkers' : (p.minMembers || 1) + ' of meer medewerkers'; }
+function planPrice(p) { return (p.fixed ? '' : 'vanaf ') + eur(p.monthCents != null ? p.monthCents : p.priceCents) + ' per maand · ' + planRange(p); }
+function addonsBlock(B) {
+  const pl = B.plan; if (!pl) return '';
+  const extra = Object.keys(EXTRA_LABEL).filter(k => !(pl.features || []).includes(k));
+  if (!extra.length) return '';
+  const on = S.addonSel || B.addons || [];
+  const changed = S.addonSel && (S.addonSel.slice().sort().join() !== (B.addons || []).slice().sort().join());
+  return '<fieldset class="plan-pick"><legend class="legend">Losse extra\u2019s</legend>' + extra.map(k =>
+    '<label class="check"><input type="checkbox" data-biz="addon" value="' + k + '"' + (on.includes(k) ? ' checked' : '') + '> <span><strong>' + EXTRA_LABEL[k] + '</strong> ' +
+    '<span class="small muted">+' + eur((pl.addonCents || {})[k] || 0) + ' per maand</span></span></label>').join('') + '</fieldset>' +
+    (changed ? '<div><button class="btn dark" data-act="bz-addons">Extra\u2019s opslaan</button></div>' : '');
+}
 function billingCard() {
   const B = S.billing;
   if (!B) return '';
@@ -63,11 +76,11 @@ function billingCard() {
     h += '<p class="small muted" style="margin:0">Je gebruikt CrewHarbor zonder kosten, zoals afgesproken met CrewHarbor.</p>';
   }
   h += '<fieldset class="plan-pick"><legend class="legend">Kies je pakket</legend>' + (B.plans || []).map(p => {
-    const fits = (!p.maxMembers || B.members <= p.maxMembers) && (!p.maxLocations || (B.locations || 0) <= p.maxLocations);
+    const fits = (!p.maxMembers || B.members <= p.maxMembers) && (!p.maxLocations || (B.locations || 0) <= p.maxLocations || (B.addons || []).includes('locations'));
     return '<label class="plan-opt' + (same(sel, p.id) ? ' on' : '') + (fits ? '' : ' disabled') + '"><input type="radio" name="plan" value="' + esc(p.id) + '" data-biz="plan"' + (same(sel, p.id) ? ' checked' : '') + (fits ? '' : ' disabled') + '>' +
       '<span><strong>' + esc(p.name) + (B.plan && same(B.plan.id, p.id) ? ' <span class="badge">Huidig</span>' : '') + '</strong><small>' + esc(planPrice(p)) + '</small>' +
       '<small class="muted">' + esc((p.highlights || []).slice(0, 3).join(' · ')) + '</small>' + (fits ? '' : '<small style="color:var(--red)">Past niet bij je huidige aantal medewerkers of vestigingen.</small>') + '</span></label>';
-  }).join('') + '</fieldset>';
+  }).join('') + '</fieldset>' + addonsBlock(B);
   const changed = B.plan && sel && !same(sel, B.plan.id);
   const running = B.hasSubscription && B.status === 'active';
   if (running) {
@@ -500,6 +513,14 @@ document.getElementById('app').addEventListener('click', async e => {
         S.planSel = null; await loadSession(); S.billing = await rpc('cd_billing'); await loadBusiness(); render();
         toast(d.warning ? 'Pakket gewijzigd. Let op: ' + d.warning : 'Pakket gewijzigd.', !!d.warning); return;
       }
+      case 'bz-addons': {
+        el.disabled = true;
+        await rpc('cd_addons_save', { p_addons: S.addonSel || [] });
+        // loopt er een incasso, dan meteen het maandbedrag bij Mollie aanpassen
+        if (S.billing.hasSubscription && S.billing.status === 'active' && S.billing.plan) { try { await svc('billing-plan', { planId: S.billing.plan.id }); } catch (e) { /* volgt bij de volgende betaling */ } }
+        S.addonSel = null; await loadSession(); S.billing = await rpc('cd_billing'); await loadBusiness(); render();
+        toast('Extra\u2019s opgeslagen. Nieuw bedrag: ' + eur(S.billing.amountCents) + ' per maand excl. btw.'); return;
+      }
       case 'bz-cancel': {
         if (!confirm('Je abonnement opzeggen? Er wordt daarna niets meer afgeschreven. Neem contact op met CrewHarbor als je je gegevens wilt laten verwijderen.')) return;
         el.disabled = true;
@@ -578,6 +599,11 @@ document.getElementById('app').addEventListener('change', async e => {
     render(); return;
   }
   if (el.dataset.biz === 'plan') { S.planSel = el.value; render(); return; }
+  if (el.dataset.biz === 'addon') {
+    const cur = new Set(S.addonSel || (S.billing && S.billing.addons) || []);
+    if (el.checked) cur.add(el.value); else cur.delete(el.value);
+    S.addonSel = [...cur]; render(); return;
+  }
   if (el.dataset.biz === 'pyfmt') { S.payFmt = el.value; render(); return; }
   if (el.dataset.biz === 'mailpref') {
     try {

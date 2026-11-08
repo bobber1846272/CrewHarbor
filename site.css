@@ -171,3 +171,7 @@ textarea.input { resize: vertical; }
 }
 .ch-logo .lt { fill: var(--logo-top); }
 .ch-logo .lw { fill: var(--logo-water); }
+
+/* prijsmodel: pakket dat past bij het gekozen aantal medewerkers */
+.plan.fits { border: 2px solid var(--accent); padding: 27px; box-shadow: 0 16px 40px rgba(13, 35, 64, .12); }
+.plan .price small { font-size: 15px; font-weight: 600; color: var(--muted); }

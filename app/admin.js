@@ -156,7 +156,11 @@ const eur = c => '€ ' + (Math.round(c || 0) / 100).toFixed(2).replace('.', ','
 const planName = id => ((A.data.plans || []).find(p => p.id === id) || {}).name || id || '–';
 const BSTAT = { trial: ['Proefperiode', ''], active: ['Betaalt', 'green'], past_due: ['Betaling mislukt', 'red'], canceled: ['Opgezegd', 'orange'], free: ['Gratis', 'green'], expired: ['Proef voorbij', 'red'] };
 const FEAT = [['payroll', 'Salarisexport'], ['phone', '3CX-telefonie'], ['locations', 'Meerdere vestigingen']];
-function planOptions(sel) { return (A.data.plans || []).map(p => '<option value="' + esc(p.id) + '"' + (p.id === sel ? ' selected' : '') + '>' + esc(p.name) + ' · ' + (p.public === false && !p.priceCents && !p.minCents ? 'gratis, alleen in Beheer' : eur(p.priceCents) + '/mw') + '</option>').join(''); }
+const isFreePlan = p => p && p.public === false && Number(p.discountPct) >= 100;
+const range = p => (p.minMembers || 1) + (p.maxMembers ? '–' + p.maxMembers : '+') + ' medewerkers';
+const planPriceTxt = p => isFreePlan(p) ? 'gratis, alleen in Beheer' : (p.fixed ? '' : 'vanaf ') + eur(p.monthCents) + '/mnd';
+const euroIn = (name, cents) => '<input class="input" name="' + name + '" inputmode="decimal" value="' + ((cents || 0) / 100).toFixed(2).replace('.', ',') + '">';
+function planOptions(sel) { return (A.data.plans || []).map(p => '<option value="' + esc(p.id) + '"' + (p.id === sel ? ' selected' : '') + '>' + esc(p.name) + ' · ' + range(p) + ' · ' + planPriceTxt(p) + '</option>').join(''); }
 function viewBilling() {
   const M = A.mollie;
   let h = '<section class="card"><div class="item-top"><h2 style="margin:0">Betalen met Mollie</h2>' + (M ? (M.hasKey ? '<span class="badge green">' + (M.mode === 'live' ? 'Live' : 'Testmodus') + '</span>' : '<span class="badge orange">Nog niet gekoppeld</span>') : '') + '</div>' +
@@ -164,25 +168,32 @@ function viewBilling() {
     '<form class="box" data-form="mollie" novalidate><div class="field"><label for="ml-key">API-sleutel</label><input class="input" id="ml-key" name="key" type="password" autocomplete="off" placeholder="' + (M && M.hasKey ? 'Opgeslagen · leeg laten om te houden' : 'test_…') + '"></div>' +
     (M && M.webhookUrl ? '<p class="small muted" style="margin:0">Webhook (stelt CrewHarbor zelf in): <code style="overflow-wrap:anywhere">' + esc(M.webhookUrl) + '</code></p>' : '') +
     '<div class="row"><button class="btn primary" type="submit">Opslaan en testen</button>' + (M && M.hasKey ? '<button class="btn ghost" type="button" data-act="mollie-remove">Ontkoppelen</button>' : '') + '</div></form></section>';
+  const PR = A.data.pricing || { memberCents: 0, addons: {} };
+  h += '<form class="card stack" data-form="pricing" style="gap:12px" novalidate><div class="item-top"><h2 style="margin:0">Prijzen</h2></div>' +
+    '<p class="small muted" style="margin:0">Bedragen per medewerker per maand, exclusief btw. Een pakket kost: bovengrens medewerkers × (prijs per medewerker + inbegrepen extra\u2019s), min de korting van het pakket. Losse extra\u2019s rekenen op dezelfde manier.</p>' +
+    '<div class="fields4"><div class="field"><label>Prijs per medewerker (€)</label>' + euroIn('member', PR.memberCents) + '</div>' +
+    FEAT.map(f => '<div class="field"><label>' + f[1] + ' (€ per medewerker)</label>' + euroIn('a-' + f[0], (PR.addons || {})[f[0]]) + '</div>').join('') + '</div>' +
+    '<div class="row"><button class="btn primary" type="submit">Prijzen opslaan</button></div></form>';
   h += '<section class="stack" style="gap:12px;max-width:none"><div class="section-title"><h2>Pakketten</h2><button class="btn small" data-act="plan-new">Pakket toevoegen</button></div>' +
-    '<p class="small muted" style="margin:0">Prijzen zijn per actieve medewerker per maand, exclusief btw. Wijzigingen staan meteen op de website; lopende abonnementen krijgen het nieuwe bedrag bij hun volgende wijziging.</p>' +
-    (A.data.plans || []).concat(A.planNew ? [{ id: '', name: '', priceCents: 0, minCents: 0, features: [], highlights: [], sort: 9, public: true, isNew: true }] : []).map(p =>
+    '<p class="small muted" style="margin:0">Elk pakket is voor een aantal medewerkers en heeft een vaste maandprijs (zonder bovengrens: per echte medewerker, minstens de ondergrens). Wijzigingen staan meteen op de website; lopende abonnementen krijgen het nieuwe bedrag bij hun volgende betaling.</p>' +
+    (A.data.plans || []).concat(A.planNew ? [{ id: '', name: '', minMembers: 1, maxMembers: 10, discountPct: 0, monthCents: 0, features: [], highlights: [], sort: 9, public: true, isNew: true }] : []).map(p =>
       '<details class="card plan-card" style="max-width:none;padding:0"' + (p.isNew || (A.planOpen || {})[p.id] ? ' open' : '') + '>' +
       '<summary class="plan-sum" data-act="plan-toggle" data-id="' + esc(p.id) + '"><span class="plan-chev" aria-hidden="true">›</span><h3 style="margin:0">' + (p.isNew ? 'Nieuw pakket' : esc(p.name)) + '</h3>' +
-        (p.isNew ? '' : '<span class="small muted">' + (!p.priceCents && !p.minCents ? 'gratis' : eur(p.priceCents) + '/mw' + (p.minCents ? ' · min. ' + eur(p.minCents) : '')) + '</span>') +
+        (p.isNew ? '' : '<span class="small muted">' + esc(range(p)) + ' · <strong>' + esc(planPriceTxt(p)) + '</strong>' + (Number(p.discountPct) > 0 && Number(p.discountPct) < 100 ? ' · ' + String(p.discountPct).replace('.00', '') + '% korting' : '') + '</span>') +
         '<span class="plan-badges">' + (p.popular ? '<span class="badge green">Meest gekozen</span>' : '') + (p.isNew ? '' : p.public === false ? '<span class="badge orange">Verborgen</span>' : '<span class="badge green">Live</span>') + '</span></summary>' +
       '<form class="stack" data-form="plan" data-id="' + esc(p.id) + '" style="gap:12px;max-width:none;padding:0 20px 20px" novalidate>' +
       '<div class="fields4">' +
         '<div class="field"><label>Code</label><input class="input" name="id" value="' + esc(p.id) + '"' + (p.isNew ? '' : ' readonly') + ' autocapitalize="none"></div>' +
         '<div class="field"><label>Naam</label><input class="input" name="name" value="' + esc(p.name) + '"></div>' +
-        '<div class="field"><label>Prijs per medewerker (€)</label><input class="input" name="price" inputmode="decimal" value="' + (p.priceCents / 100).toFixed(2).replace('.', ',') + '"></div>' +
-        '<div class="field"><label>Minimaal per maand (€)</label><input class="input" name="min" inputmode="decimal" value="' + (p.minCents / 100).toFixed(2).replace('.', ',') + '"></div>' +
-        '<div class="field"><label>Max. medewerkers</label><input class="input" name="maxMembers" inputmode="numeric" value="' + esc(p.maxMembers || '') + '" placeholder="Onbeperkt"></div>' +
+        '<div class="field"><label>Vanaf medewerkers</label><input class="input" name="minMembers" inputmode="numeric" value="' + esc(p.minMembers || 1) + '"></div>' +
+        '<div class="field"><label>Tot en met medewerkers</label><input class="input" name="maxMembers" inputmode="numeric" value="' + esc(p.maxMembers || '') + '" placeholder="Geen maximum"></div>' +
+        '<div class="field"><label>Korting (%)</label><input class="input" name="discountPct" inputmode="decimal" value="' + esc(String(p.discountPct || 0).replace('.00', '').replace('.', ',')) + '"></div>' +
         '<div class="field"><label>Max. vestigingen</label><input class="input" name="maxLocations" inputmode="numeric" value="' + esc(p.maxLocations || '') + '" placeholder="Onbeperkt"></div>' +
         '<div class="field"><label>Volgorde</label><input class="input" name="sort" inputmode="numeric" value="' + esc(p.sort) + '"></div>' +
       '</div><div class="field"><label>Korte omschrijving</label><input class="input" name="tagline" value="' + esc(p.tagline || '') + '"></div>' +
       '<div class="field"><label>Wat zit erin (één per regel, voor de website)</label><textarea class="input" name="highlights" rows="4">' + esc((p.highlights || []).join('\n')) + '</textarea></div>' +
-      '<div class="row">' + FEAT.map(f => '<label class="check"><input type="checkbox" name="f-' + f[0] + '"' + ((p.features || []).includes(f[0]) ? ' checked' : '') + '> ' + f[1] + '</label>').join('') + '</div>' +
+      '<div class="field"><label>Inbegrepen extra\u2019s (de rest kan de klant er los bij nemen)</label><div class="row">' + FEAT.map(f => '<label class="check"><input type="checkbox" name="f-' + f[0] + '"' + ((p.features || []).includes(f[0]) ? ' checked' : '') + '> ' + f[1] + '</label>').join('') + '</div></div>' +
+      (p.isNew ? '' : '<p class="small muted" style="margin:0">Berekende prijs: <strong>' + esc(planPriceTxt(p)) + '</strong>' + (isFreePlan(p) ? '' : ' · losse extra\u2019s: ' + FEAT.filter(f => !(p.features || []).includes(f[0])).map(f => f[1] + ' +' + eur((p.addonCents || {})[f[0]] || 0)).join(', ')) + '</p>') +
       '<div class="row"><label class="check"><input type="checkbox" name="public"' + (p.public !== false ? ' checked' : '') + '> Live (op de website en te kiezen door klanten). Uit = verborgen, alleen in Beheer</label><label class="check"><input type="checkbox" name="popular"' + (p.popular ? ' checked' : '') + '> Meest gekozen</label></div>' +
       '<div class="row"><button class="btn primary" type="submit">Opslaan</button>' + (p.isNew ? '<button class="btn ghost" type="button" data-act="plan-cancel">Annuleren</button>' : '') + '</div></form></details>').join('') + '</section>';
   return h;
@@ -195,7 +206,17 @@ function orgBilling(o) {
     '<div class="fields4"><div class="field"><label for="ob-p-' + o.id + '">Pakket</label><select class="input" id="ob-p-' + o.id + '" name="planId">' + planOptions(o.planId) + '</select></div>' +
       '<div class="field"><label for="ob-s-' + o.id + '">Status</label><select class="input" id="ob-s-' + o.id + '" name="status">' + ['trial', 'active', 'past_due', 'canceled', 'free'].map(x => '<option value="' + x + '"' + ((b.status === 'expired' ? 'trial' : b.status) === x ? ' selected' : '') + '>' + BSTAT[x][0] + '</option>').join('') + '</select></div>' +
       '<div class="field"><label for="ob-t-' + o.id + '">Proefperiode (dagen vanaf nu)</label><input class="input" id="ob-t-' + o.id + '" name="trialDays" inputmode="numeric" placeholder="Niet wijzigen"></div></div>' +
-    '<div class="row"><button class="btn small dark" type="submit">Abonnement opslaan</button></div></form>';
+    '<div class="row"><button class="btn small dark" type="submit">Abonnement opslaan</button></div></form>' +
+    orgAddons(o);
+}
+function orgAddons(o) {
+  const pl = (A.data.plans || []).find(p => p.id === o.planId) || { features: [] };
+  const extra = FEAT.filter(f => !(pl.features || []).includes(f[0]));
+  if (!extra.length) return '';
+  return '<form class="box" data-form="org-addons" data-id="' + o.id + '" novalidate><div class="item-top"><strong>Losse extra\u2019s</strong></div>' +
+    '<div class="row">' + extra.map(f => '<label class="check"><input type="checkbox" name="x-' + f[0] + '"' + ((o.addons || []).includes(f[0]) ? ' checked' : '') + '> ' + f[1] +
+      ' <span class="small muted">+' + eur((pl.addonCents || {})[f[0]] || 0) + '/mnd</span></label>').join('') + '</div>' +
+    '<div class="row"><button class="btn small" type="submit">Extra\u2019s opslaan</button></div></form>';
 }
 function viewMail() {
   const m = A.mail;
@@ -532,12 +553,23 @@ $app.addEventListener('submit', async e => {
     }
     if (kind === 'plan') {
       const money = k => Math.round(Number(v(k).replace(/\./g, '').replace(',', '.')) * 100);
-      const p = { id: v('id'), name: v('name'), tagline: v('tagline'), priceCents: money('price'), minCents: money('min') || 0,
-        maxMembers: Number(v('maxMembers')) || 0, maxLocations: Number(v('maxLocations')) || 0, sort: Number(v('sort')) || 0,
+      const p = { id: v('id'), name: v('name'), tagline: v('tagline'),
+        minMembers: Number(v('minMembers')) || 1, maxMembers: Number(v('maxMembers')) || 0, discountPct: Number(v('discountPct').replace(',', '.')) || 0,
+        maxLocations: Number(v('maxLocations')) || 0, sort: Number(v('sort')) || 0,
         highlights: f.elements.highlights.value.split('\n').map(x => x.trim()).filter(Boolean),
         features: FEAT.map(x => x[0]).filter(k => f.elements['f-' + k].checked), public: f.elements.public.checked, popular: f.elements.popular.checked };
-      if (!isFinite(p.priceCents) || p.priceCents < 0) throw new Error('Vul een geldige prijs in.');
+      if (p.discountPct < 0 || p.discountPct > 100) throw new Error('Korting is 0 tot 100 procent.');
       await rpc('cd_admin_plan_save', { p }); A.planNew = false; await refresh(); toast('Pakket opgeslagen.'); return;
+    }
+    if (kind === 'pricing') {
+      const money = k => Math.round(Number(v(k).replace(/\./g, '').replace(',', '.')) * 100);
+      const p = { memberCents: money('member'), addons: Object.fromEntries(FEAT.map(x => [x[0], money('a-' + x[0])])) };
+      if (![p.memberCents, ...Object.values(p.addons)].every(n => isFinite(n) && n >= 0)) throw new Error('Vul geldige bedragen in.');
+      await rpc('cd_admin_pricing_save', { p }); await refresh(); toast('Prijzen opgeslagen. Alle pakketprijzen zijn opnieuw berekend.'); return;
+    }
+    if (kind === 'org-addons') {
+      const r = await rpc('cd_admin_org_addons', { p_org: id, p_addons: FEAT.map(x => x[0]).filter(k => f.elements['x-' + k] && f.elements['x-' + k].checked) });
+      await refresh(); toast('Extra\u2019s opgeslagen. Nieuw maandbedrag: ' + eur(r.amountCents) + ' excl. btw.'); return;
     }
     if (kind === 'org-billing') {
       const r = await svc('admin-org-billing', { orgId: id, planId: v('planId'), status: v('status'), trialDays: v('trialDays') });
