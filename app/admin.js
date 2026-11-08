@@ -200,11 +200,12 @@ const eur = c => '€ ' + (Math.round(c || 0) / 100).toFixed(2).replace('.', ','
 const planName = id => ((A.data.plans || []).find(p => p.id === id) || {}).name || id || '–';
 const BSTAT = { trial: ['Proefperiode', ''], active: ['Betaalt', 'green'], past_due: ['Betaling mislukt', 'red'], canceled: ['Opgezegd', 'orange'], free: ['Gratis', 'green'], expired: ['Proef voorbij', 'red'] };
 const FEAT = [['payroll', 'Salarisexport'], ['phone', '3CX-telefonie'], ['locations', 'Meerdere vestigingen']];
-// vaste lijst met wat een pakket kan bevatten (komt als opsomming op de website)
+// vaste lijst met wat een pakket kan bevatten (komt als opsomming op de website én in de vergelijkingstabel)
+// LET OP: dezelfde lijst staat in prijzen.js (website)
 const HL = [
   ['Basis', ['Terugbelverzoeken en taken', 'Uren, in- en uitklokken en prikklok', 'Rooster, verlof en beschikbaarheid', 'Diensten ruilen tussen collega\u2019s', 'Afdelingen en functies in het rooster', 'Kennisbank en documenten', 'Meldingen per mail', 'Dashboard voor de eigenaar']],
   ['Extra\u2019s', ['Salarisexport (Excel, Nmbrs, Loket.nl, AFAS)', 'Koppeling met 3CX-telefonie', 'Meerdere vestigingen met eigen rooster en prikklok']],
-  ['Service', ['Hulp bij het overstappen', 'Persoonlijke hulp bij de start', 'Betalen per factuur mogelijk', 'Voorrang bij support']]
+  ['Service', ['30 dagen gratis proberen', 'Per maand opzegbaar', 'Hulp bij het overstappen', 'Persoonlijke hulp bij de start', 'Betalen per factuur mogelijk', 'Voorrang bij support']]
 ];
 const HL_ALL = HL.flatMap(g => g[1]);
 function prevPlan(p) { const L = (A.data.plans || []).filter(x => x.id && x.id !== p.id && !isFreePlan(x) && Number(x.sort) <= Number(p.sort)).sort((a, b) => Number(b.sort) - Number(a.sort) || String(b.id).localeCompare(String(a.id))); return L[0] || null; }
