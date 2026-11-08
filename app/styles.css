@@ -823,3 +823,10 @@ details summary { cursor: pointer; font-weight: 600; min-height: 32px; display: 
 .task-det[open] > summary .item-title { text-decoration: none; color: inherit; font-weight: 600; }
 .task-det-body { display: flex; flex-direction: column; gap: 12px; padding: 0 16px 16px 40px; }
 .task-det-body .kv { margin: 0; }
+
+/* zijmenu blijft staan; je naam, geluid en uitloggen altijd onderin beeld */
+@media (min-width: 701px) {
+  .nav { position: sticky; top: 0; align-self: flex-start; height: 100vh; height: 100dvh; overflow: hidden; }
+  .nav-links { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #2A4466 transparent; margin: 0 -6px; padding: 0 6px; }
+  .nav-user { flex: none; margin-top: 0; padding-top: 14px; border-top: 1px solid #1E3858; }
+}
