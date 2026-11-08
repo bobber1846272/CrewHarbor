@@ -281,16 +281,26 @@ function hoursEditor() {
 }
 function needsEditor(R) {
   const E = S.roNeedsEdit; const T = (R.templates || []).slice().sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end) || String(a.name).localeCompare(String(b.name)));
-  const rows = T.length ? T.map(t => ({ key: String(t.id), label: t.name + ' ' + t.start + '–' + t.end,
-    th: '<div class="nd-name"><strong>' + esc(t.name) + '</strong><span class="muted">' + esc(t.start + '–' + t.end) + '</span>' + (tplTags(R, t) ? '<span class="nd-tags">' + tplTags(R, t) + '</span>' : '<span class="nd-tags"><span class="nd-tag any">Iedereen</span></span>') + '</div>' }))
-    : [{ key: 'dag', label: 'Aantal mensen', th: '<strong>Aantal mensen</strong>' }];
   const hasFunc = T.some(t => t.functionId);
-  return '<section class="card stack" style="gap:12px;max-width:none"><div class="item-top"><h2 style="margin:0">Bezetting: hoeveel mensen heb je nodig?</h2><button class="icon-btn small" data-act="rx-needs-x" aria-label="Sluiten">' + ICON.x + '</button></div>' +
-    '<p class="small muted" style="margin:0">' + (T.length ? 'Per vaste dienst en per dag. Een dienst telt mee als de tijden gelijk zijn' + (hasFunc ? ' én de functie klopt. Zo kun je bijvoorbeeld 1 Hoka en 3 gewone mensen apart bijhouden' : '') + '.' : 'Per dag. Maak vaste diensten aan om het per dienst in te stellen.') + ' Leeg of 0 = niet bijhouden.</p>' +
-    (T.length && !hasFunc ? '<p class="small" style="margin:0">Tip: geef een vaste dienst een <strong>functie</strong> (bij Vaste diensten), dan kun je per functie aangeven hoeveel mensen je nodig hebt.</p>' : '') +
-    '<div class="table-wrap"><table class="roster ro-needs"><thead><tr><th></th>' + WD.map(w => '<th>' + w.slice(0, 2) + '</th>').join('') + '</tr></thead><tbody>' +
-    rows.map(c => '<tr><th class="pad" style="text-align:left">' + c.th + '</th>' + [1, 2, 3, 4, 5, 6, 7].map(wd => '<td><input class="input" inputmode="numeric" data-need="' + wd + '|' + c.key + '" value="' + esc(((E[wd] || {})[c.key]) || '') + '" aria-label="' + esc(c.label + ' ' + WD[wd - 1]) + '"></td>').join('') + '</tr>').join('') +
-    '</tbody></table></div><div class="row"><button class="btn primary" data-act="rx-needs-save">Opslaan</button><button class="btn ghost" data-act="rx-needs-x">Annuleren</button></div></section>';
+  const val = (wd, k) => ((E[wd] || {})[k]) || '';
+  const cells = (key, label) => [1, 2, 3, 4, 5, 6, 7].map(wd => '<td class="nd-cell' + (wd > 5 ? ' we' : '') + '"><input class="input nd-in" inputmode="numeric" maxlength="2" placeholder="–" data-need="' + wd + '|' + key + '" value="' + esc(val(wd, key)) + '" aria-label="' + esc(label + ', ' + WD[wd - 1]) + '"></td>').join('');
+  const tot = key => [1, 2, 3, 4, 5, 6, 7].reduce((a, wd) => a + (Number(val(wd, key)) || 0), 0);
+  const row = (key, label, nameHtml) => '<tr><th class="nd-row">' + nameHtml + '</th>' + cells(key, label) +
+    '<td class="nd-tot"><b>' + (tot(key) || '–') + '</b><button type="button" class="nd-fill" data-act="rx-need-fill" data-v="' + esc(key) + '" title="Waarde van maandag op alle dagen zetten">Ma → alle</button></td></tr>';
+  const head = '<thead><tr><th class="nd-row"></th>' + WD.map((w, i) => '<th class="nd-day' + (i > 4 ? ' we' : '') + '">' + w.slice(0, 2) + '</th>').join('') + '<th class="nd-day">Week</th></tr></thead>';
+  let body = '';
+  if (!T.length) body = row('dag', 'Aantal mensen', '<strong>Aantal mensen</strong>');
+  else {
+    const groups = [];
+    T.forEach(t => { const k = t.start + '–' + t.end; let g = groups.find(x => x.k === k); if (!g) groups.push(g = { k, list: [] }); g.list.push(t); });
+    body = groups.map(g => '<tr class="nd-grp"><th colspan="9"><span class="nd-time">' + esc(g.k) + '</span></th></tr>' +
+      g.list.map(t => row(String(t.id), t.name + ' ' + t.start + '–' + t.end,
+        '<div class="nd-name"><strong>' + esc(t.name) + '</strong><span class="nd-tags">' + (tplTags(R, t) || '<span class="nd-tag any">Iedereen</span>') + '</span></div>')).join('')).join('');
+  }
+  return '<section class="card stack needs-ed" style="gap:16px;max-width:none"><div class="item-top"><div><h2 style="margin:0">Bezetting per dienst</h2><p class="muted" style="margin:4px 0 0">Hoeveel mensen heb je per dienst nodig? Leeg = niet bijhouden.</p></div><button class="icon-btn" data-act="rx-needs-x" aria-label="Sluiten">' + ICON.x + '</button></div>' +
+    (T.length && !hasFunc ? '<div class="nd-tip">Tip: geef een vaste dienst een <strong>functie</strong> (bij Vaste diensten). Dan kun je per functie aangeven hoeveel mensen je nodig hebt, bijvoorbeeld 1 Hoka en 3 gewone mensen.</div>' : '') +
+    '<div class="table-wrap nd-wrap"><table class="nd-table">' + head + '<tbody>' + body + '</tbody></table></div>' +
+    '<div class="row nd-foot"><button class="btn primary" data-act="rx-needs-save">Opslaan</button><button class="btn ghost" data-act="rx-needs-x">Annuleren</button><span class="small muted" style="margin-left:auto">Een dienst telt mee als de tijden gelijk zijn' + (hasFunc ? ' en de functie klopt' : '') + '.</span></div></section>';
 }
 function openList(R) {
   const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
@@ -423,6 +433,7 @@ document.getElementById('app').addEventListener('click', async e => {
       case 'rx-day': S.rosterView = 'dag'; S.rosterDay = v; S.roMenu = null; if (mondayOf(v) !== S.rosterWeek) { S.rosterWeek = mondayOf(v); await roReload(); } else render(); return;
       case 'rx-needs': { const dd = el.closest('details'); if (dd) dd.open = false; } S.roNeedsEdit = JSON.parse(JSON.stringify(R.needs || {})); S.roHoursEdit = null; S.roOpenPanel = false; S.roProposal = null; render(); return;
       case 'rx-needs-x': S.roNeedsEdit = null; render(); return;
+      case 'rx-need-fill': { const E = S.roNeedsEdit; const m = (E['1'] || {})[v] || ''; [2, 3, 4, 5, 6, 7].forEach(wd => { E[wd] = E[wd] || {}; E[wd][v] = m; }); render(); return; }
       case 'rx-needs-save': {
         el.disabled = true; const v2 = await rpc('cd_roster_needs_save', { p: S.roNeedsEdit });
         S.roster.needs = v2; S.roNeedsEdit = null; render(); toast('Bezetting opgeslagen. Boven elke dag zie je nu hoeveel plekken gevuld zijn.'); return;
@@ -482,7 +493,7 @@ document.getElementById('app').addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.ue && S.roUnitsEdit) { const [k, i, f] = el.dataset.ue.split('|'); (k === 'd' ? S.roUnitsEdit.departments : S.roUnitsEdit.functions)[Number(i)][f] = el.value; return; }
   if (el.dataset.oh && S.roHoursEdit && el.type !== 'checkbox') { const [wd, k] = el.dataset.oh.split('|'); S.roHoursEdit[wd] = Object.assign({ open: true }, S.roHoursEdit[wd], { [k]: el.value }); return; }
-  if (el.dataset.need && S.roNeedsEdit) { const [wd, k] = el.dataset.need.split('|'); S.roNeedsEdit[wd] = S.roNeedsEdit[wd] || {}; S.roNeedsEdit[wd][k] = el.value.replace(/\D/g, ''); return; }
+  if (el.dataset.need && S.roNeedsEdit) { const [wd, k] = el.dataset.need.split('|'); S.roNeedsEdit[wd] = S.roNeedsEdit[wd] || {}; S.roNeedsEdit[wd][k] = el.value.replace(/\D/g, ''); const tr = el.closest('tr'), b = tr && tr.querySelector('.nd-tot b'); if (b) { const t = [1, 2, 3, 4, 5, 6, 7].reduce((a, d) => a + (Number((S.roNeedsEdit[d] || {})[k]) || 0), 0); b.textContent = t || '–'; } return; }
   if (el.dataset.prop !== undefined && S.roProposal) { S.roProposal[Number(el.dataset.prop)].off = !el.checked; const b = document.querySelector('[data-act="rx-propose-apply"]'); if (b) b.textContent = S.roProposal.filter(s => !s.off).length + ' diensten inplannen'; return; }
   if (el.dataset.in === 'roq') { S.roFilter = Object.assign({}, S.roFilter, { q: el.value }); clearTimeout(S.roqT); S.roqT = setTimeout(() => { renderKeepFocus(); }, 250); return; }
 });
