@@ -43,7 +43,7 @@ const S = {
   kb: null, kbQ: '', kbCat: '', kbSel: null, kbArticle: null, kbEdit: null,
   docs: null, docFolder: null, folderEdit: null, uploading: null,
   mTab: 'actief', offboard: null, kiosks: null, kioskName: '',
-  rosterView: null, rosterMonth: null, rosterWho: '', rosterCompare: false, tplOpen: false, tplEdit: null,
+  rosterView: null, rosterMonth: null, rosterWho: '', rosterCompare: false, tplModal: false, tplEdit: null,
   abs: null, absForm: null, absReject: null, absPending: 0, av: null, avRoster: null, avMonth: null, avSel: {}, avEdit: null,
   notif: null, notifSeen: null, notifUnreadIds: null
 };
@@ -1673,8 +1673,8 @@ function viewRoster() {
   h += rosterPanels(RV);
   if (S.shiftEdit) h += modal(shiftForm(R), 'sh-cancel');
   if (!R.people.length) return h + '<div class="empty">Nog geen actieve medewerkers.</div>';
-  if (dayView) return h + deptBar(RV) + rosterDayView(RV) + (R.canPlan ? templatesCard(R) : '');
-  return h + (month ? '' : rosterToolbar(RV)) + (month ? rosterMonth(R) : rosterWeek(RV)) + (month ? '' : rosterLegend(R)) + (R.canPlan ? templatesCard(R) : '');
+  if (dayView) return h + deptBar(RV) + rosterDayView(RV) + (R.canPlan && S.tplModal ? modal(templatesModal(R), 'tpl-x') : '');
+  return h + (month ? '' : rosterToolbar(RV)) + (month ? rosterMonth(R) : rosterWeek(RV)) + (month ? '' : rosterLegend(R)) + (R.canPlan && S.tplModal ? modal(templatesModal(R), 'tpl-x') : '');
 }
 function tplOf(R, s) { const i = (R.templates || []).findIndex(t => t.start === s.start && t.end === s.end); return i < 0 ? null : { i: i % 6, t: R.templates[i] }; }
 function rosterMine(R) {
@@ -1713,24 +1713,27 @@ function publishBanner(R) {
   return '<div class="pub-bar"><span><strong>Concept</strong> · alleen planners zien deze week. Zet hem vast als hij klaar is; iedereen met een dienst krijgt dan een melding.</span>' +
     '<button class="btn small primary" data-act="ro-publish"' + (R.shifts.length ? '' : ' disabled') + '>Rooster vastzetten en versturen</button></div>';
 }
-function templatesCard(R) {
-  const open = !!S.tplOpen;
-  let h = '<section class="card tpl-card"><button class="tpl-head" data-act="tpl-toggle" aria-expanded="' + open + '"><span><strong>Vaste diensten</strong> <span class="small muted">' +
-    (R.templates.length ? R.templates.map(t => esc(t.name)).join(' · ') : 'Nog geen, bijvoorbeeld Ochtend 08:30–13:00') + '</span></span>' + ICON.chev + '</button>';
-  if (open) {
-    const E = S.tplEdit || { name: '', start: '', end: '', note: '' }; const U = UNITS(R);
-    h += '<div class="tpl-list">' + R.templates.map(t => { const d = deptOf(t.departmentId, R), f = funcOf(t.functionId, R);
-      return '<div class="tpl-item"><span class="shift"' + (d ? ' style="border-left:4px solid ' + esc(d.color) + '"' : '') + '>' + esc(t.name) + ' · ' + esc(t.start + '–' + t.end) + ((d || f || t.note) ? '<small>' + esc([d ? d.name : '', f ? f.name : '', t.note || ''].filter(Boolean).join(' · ')) + '</small>' : '') + '</span>' +
-      '<button class="icon-btn small" data-act="tpl-del" data-id="' + t.id + '" aria-label="' + esc(t.name) + ' verwijderen">' + ICON.trash + '</button></div>'; }).join('') + '</div>' +
-      '<div class="row" style="align-items:flex-end"><div class="field" style="flex:1 1 140px"><label for="tpl-name">Naam</label><input class="input" id="tpl-name" data-tpl="name" maxlength="40" value="' + esc(E.name) + '" placeholder="Ochtend"></div>' +
-      '<div class="field" style="flex:0 1 120px"><label for="tpl-start">Begin</label><input class="input" type="time" id="tpl-start" data-tpl="start" value="' + esc(E.start) + '"></div>' +
-      '<div class="field" style="flex:0 1 120px"><label for="tpl-end">Eind</label><input class="input" type="time" id="tpl-end" data-tpl="end" value="' + esc(E.end) + '"></div>' +
-      (U.departments.length ? '<div class="field" style="flex:1 1 130px"><label for="tpl-dept">Afdeling</label><select class="input" id="tpl-dept" data-tpl="departmentId"><option value="">—</option>' + U.departments.map(d => '<option value="' + d.id + '"' + (same(d.id, E.departmentId) ? ' selected' : '') + '>' + esc(d.name) + '</option>').join('') + '</select></div>' : '') +
-      (U.functions.length ? '<div class="field" style="flex:1 1 130px"><label for="tpl-func">Functie</label><select class="input" id="tpl-func" data-tpl="functionId"><option value="">—</option>' + U.functions.map(f => '<option value="' + f.id + '"' + (same(f.id, E.functionId) ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select></div>' : '') +
-      '<div class="field" style="flex:1 1 140px"><label for="tpl-note">Notitie</label><input class="input" id="tpl-note" data-tpl="note" maxlength="120" value="' + esc(E.note) + '" placeholder="Bijv. balie"></div>' +
-      '<button class="btn dark" data-act="tpl-save">Toevoegen</button></div>';
-  }
-  return h + '</section>';
+function templatesModal(R) {
+  const E = S.tplEdit || { name: '', start: '', end: '', note: '' }; const U = UNITS(R);
+  const T = R.templates.slice().sort((a, b) => a.start.localeCompare(b.start) || String(a.name).localeCompare(String(b.name)));
+  const editing = !!E.id;
+  const list = T.length ? '<div class="tplm-list">' + T.map(t => { const d = deptOf(t.departmentId, R), f = funcOf(t.functionId, R); const on = same(E.id, t.id);
+    return '<div class="tplm-row' + (on ? ' on' : '') + '"' + (d ? ' style="--dept:' + esc(d.color) + '"' : '') + '><div class="tplm-main"><strong>' + esc(t.name) + '</strong><span class="tplm-time">' + esc(t.start + '–' + t.end) + '</span></div>' +
+      '<div class="tplm-tags">' + (d ? '<span class="nd-tag dept" style="--dept:' + esc(d.color) + '">' + esc(d.name) + '</span>' : '') + (f ? '<span class="nd-tag func">' + esc(f.name) + '</span>' : '') + (!d && !f ? '<span class="nd-tag any">Iedereen</span>' : '') + (t.note ? '<span class="small muted">' + esc(t.note) + '</span>' : '') + '</div>' +
+      '<div class="tplm-act"><button class="btn small ghost" data-act="tpl-edit" data-id="' + t.id + '">' + (on ? 'Wordt aangepast' : 'Aanpassen') + '</button><button class="icon-btn small" data-act="tpl-del" data-id="' + t.id + '" aria-label="' + esc(t.name) + ' verwijderen">' + ICON.trash + '</button></div></div>'; }).join('') + '</div>'
+    : '<p class="muted" style="margin:0">Nog geen vaste diensten. Maak er hieronder een, bijvoorbeeld Ochtend 08:00–13:00.</p>';
+  const sel = (id, key, label, arr) => arr.length ? '<div class="field"><label for="' + id + '">' + label + '</label><select class="input" id="' + id + '" data-tpl="' + key + '"><option value="">' + (key === 'functionId' ? 'Iedereen' : '—') + '</option>' + arr.map(x => '<option value="' + x.id + '"' + (same(x.id, E[key]) ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('') + '</select></div>' : '';
+  return '<section class="card stack tplm" style="gap:16px;max-width:none"><div class="item-top"><div><h2 style="margin:0">Vaste diensten</h2><p class="muted" style="margin:4px 0 0">Diensten die vaak terugkomen. Je sleept ze in het rooster.</p></div><button class="icon-btn" data-act="tpl-x" aria-label="Sluiten">' + ICON.x + '</button></div>' +
+    list +
+    '<div class="tplm-form"><h3>' + (editing ? 'Vaste dienst aanpassen' : 'Nieuwe vaste dienst') + '</h3>' +
+      '<div class="tplm-grid"><div class="field span2"><label for="tpl-name">Naam</label><input class="input" id="tpl-name" data-tpl="name" maxlength="40" value="' + esc(E.name) + '" placeholder="Bijv. Ochtend"></div>' +
+      '<div class="field"><label for="tpl-start">Begin</label><input class="input" type="time" id="tpl-start" data-tpl="start" value="' + esc(E.start) + '"></div>' +
+      '<div class="field"><label for="tpl-end">Eind</label><input class="input" type="time" id="tpl-end" data-tpl="end" value="' + esc(E.end) + '"></div>' +
+      sel('tpl-dept', 'departmentId', 'Afdeling', U.departments) + sel('tpl-func', 'functionId', 'Functie nodig', U.functions) +
+      '<div class="field span2"><label for="tpl-note">Notitie <span class="opt">(optioneel)</span></label><input class="input" id="tpl-note" data-tpl="note" maxlength="120" value="' + esc(E.note || '') + '" placeholder="Bijv. balie"></div></div>' +
+      (!U.departments.length && !U.functions.length ? '<p class="small muted" style="margin:0">Afdelingen en functies stel je in bij <strong>Instellen → Afdelingen &amp; functies</strong>.</p>' : '') +
+      '<div class="row"><button class="btn primary" data-act="tpl-save">' + (editing ? 'Wijzigingen opslaan' : 'Toevoegen') + '</button>' + (editing ? '<button class="btn ghost" data-act="tpl-new">Annuleren</button>' : '') + '</div>' +
+      (editing ? '<p class="small muted" style="margin:0">Diensten die al in het rooster staan blijven zoals ze zijn.</p>' : '') + '</div></section>';
 }
 function rosterLegend(R) {
   return '<div class="legend-bar small muted"><span><span class="abs-chip verlof">Verlof</span> goedgekeurd</span><span><span class="abs-chip verlof pending">Verlof?</span> aangevraagd</span><span><span class="abs-chip ziek">Ziek</span></span>' +
@@ -2835,13 +2838,19 @@ $app.addEventListener('click', async e => {
       }
       case 'ro-unpublish': if (!confirm('Deze week terugzetten naar concept? Medewerkers zien hun diensten dan niet meer tot je hem opnieuw vastzet.')) return;
         await rpc('cd_roster_unpublish', { p_week: S.roster.weekStart }); toast('Week staat weer op concept.'); break;
-      case 'tpl-toggle': S.tplOpen = !S.tplOpen; render(); return;
+      case 'tpl-open': { const dd = el.closest('details'); if (dd) dd.open = false; } S.tplModal = true; S.tplEdit = null; render(); return;
+      case 'tpl-x': S.tplModal = false; S.tplEdit = null; render(); return;
+      case 'tpl-new': S.tplEdit = null; render(); return;
+      case 'tpl-edit': { const t = (S.roster.templates || []).find(x => same(x.id, num)); if (!t) return;
+        S.tplEdit = { id: t.id, name: t.name, start: t.start, end: t.end, note: t.note || '', departmentId: t.departmentId || '', functionId: t.functionId || '' }; render();
+        setTimeout(() => { const i = document.getElementById('tpl-name'); if (i) { i.focus(); i.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }, 30); return; }
       case 'tpl-save': {
         const E = S.tplEdit || {};
         if (!E.name || !E.start || !E.end) { toast('Vul een naam, begin- en eindtijd in.', true); return; }
-        await rpc('cd_shift_template_save', { p_id: null, p: E }); S.tplEdit = null; toast('Vaste dienst toegevoegd.'); break;
+        el.disabled = true;
+        await rpc('cd_shift_template_save', { p_id: E.id || null, p: E }); S.tplEdit = null; toast(E.id ? 'Vaste dienst aangepast.' : 'Vaste dienst toegevoegd.'); break;
       }
-      case 'tpl-del': if (!confirm('Deze vaste dienst verwijderen? Ingeplande diensten blijven staan.')) return; await rpc('cd_shift_template_delete', { p_id: num }); break;
+      case 'tpl-del': if (!confirm('Deze vaste dienst verwijderen? Ingeplande diensten blijven staan.')) return; await rpc('cd_shift_template_delete', { p_id: num }); if (S.tplEdit && same(S.tplEdit.id, num)) S.tplEdit = null; break;
 
       // verlof en ziek
       case 'abs-new': S.absForm = { kind: el.dataset.v, from: el.dataset.v === 'ziek' ? today() : '', to: '', note: '', memberId: '' }; S.absReject = null; render(); window.scrollTo(0, 0); return;

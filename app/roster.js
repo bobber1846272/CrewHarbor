@@ -143,7 +143,8 @@ function rosterToolbar(R) {
     '<div class="ro-palette">' + (tpls.length ? '<span class="small muted">Sleep naar een vakje:</span>' + tpls.map(t => { const i = tpls.indexOf(t) % 6;
       const dp = deptOf(t.departmentId, R), fn = funcOf(t.functionId, R);
       return '<span class="shift t' + i + ' ro-drag" draggable="true" data-tpl-drag="' + t.id + '"' + (dp ? ' style="box-shadow:inset 4px 0 0 ' + esc(dp.color) + '"' : '') + ' title="Sleep naar een medewerker en dag">' + esc(t.name) + '<small>' + esc(t.start + '–' + t.end) + (fn ? ' · ' + esc(fn.name) : '') + '</small></span>'; }).join('')
-      : '<span class="small muted">Tip: maak vaste diensten (onderaan), dan kun je ze in het rooster slepen.</span>') + '</div>' +
+      + '<button class="ro-tpl-edit" data-act="tpl-open" title="Vaste diensten toevoegen of aanpassen">✎ Aanpassen</button>'
+      : '<span class="small muted">Nog geen vaste diensten.</span><button class="btn small" data-act="tpl-open">+ Vaste dienst maken</button>') + '</div>' +
     '<div class="ro-actions">' +
       '<div class="seg small" role="group" aria-label="Contract">' + [['alle', 'Iedereen'], ['vast', 'Vaste uren'], ['flex', 'Flex']].map(o => { const n = o[0] === 'alle' ? R.people.length : R.people.filter(p => (p.contractType === 'vast') === (o[0] === 'vast')).length;
         return '<button class="' + ((F.ct || 'alle') === o[0] ? 'on' : '') + '" aria-pressed="' + ((F.ct || 'alle') === o[0]) + '" data-act="rx-ct" data-v="' + o[0] + '">' + o[1] + ' <span class="muted">' + n + '</span></button>'; }).join('') + '</div>' +
@@ -152,6 +153,7 @@ function rosterToolbar(R) {
       '<button class="btn small" data-act="rx-open">Open plekken</button>' +
       '<button class="btn small" data-act="rx-propose">Voorstel maken</button>' +
       '<details class="ro-more"><summary class="btn small">Instellen ▾</summary><div class="ro-menu">' +
+        '<button class="link-btn" data-act="tpl-open">Vaste diensten</button>' +
         '<button class="link-btn" data-act="rx-hours">Openingstijden</button>' +
         '<button class="link-btn" data-act="rx-needs">Bezetting per dienst</button>' +
         '<button class="link-btn" data-act="rx-units">Afdelingen &amp; functies</button></div></details>' +
