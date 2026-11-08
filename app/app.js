@@ -43,7 +43,7 @@ const S = {
   kb: null, kbQ: '', kbCat: '', kbSel: null, kbArticle: null, kbEdit: null,
   docs: null, docFolder: null, folderEdit: null, uploading: null,
   mTab: 'actief', offboard: null, kiosks: null, kioskName: '',
-  rosterView: 'week', rosterMonth: null, rosterWho: '', rosterCompare: false, tplOpen: false, tplEdit: null,
+  rosterView: null, rosterMonth: null, rosterWho: '', rosterCompare: false, tplOpen: false, tplEdit: null,
   abs: null, absForm: null, absReject: null, absPending: 0, av: null, avRoster: null, avMonth: null, avSel: {}, avEdit: null,
   notif: null, notifSeen: null, notifUnreadIds: null
 };
@@ -1573,11 +1573,12 @@ function shiftWarnings(R, E) {
 }
 function viewRoster() {
   const R = rosterFiltered(S.roster); if (!R) return '';
-  const month = S.rosterView === 'maand';
-  let h = '<header class="page-head"><div><h1>Rooster</h1><p>Wie wanneer werkt.' + (R.canPlan ? ' Klik op + om een dienst in te plannen, of op een dienst om hem te wijzigen.' : '') + '</p></div>' +
-    '<div class="actions">' + (R.canPlan && !month ? '<button class="btn" data-act="ro-copy">Vorige week kopiëren</button>' : '') + '</div></header>';
-  h += '<div class="roster-bar"><div class="seg" role="group" aria-label="Weergave">' + [['week', 'Week'], ['maand', 'Maand']].map(v =>
-    '<button data-act="ro-view" data-v="' + v[0] + '" class="' + (S.rosterView === v[0] ? 'on' : '') + '" aria-pressed="' + (S.rosterView === v[0]) + '">' + v[1] + '</button>').join('') + '</div>';
+  const view = S.rosterView || (R.canPlan ? 'week' : 'mijn');
+  const month = view === 'maand', mineView = view === 'mijn';
+  let h = '<header class="page-head"><div><h1>Rooster</h1><p>' + (mineView ? 'Jouw diensten van deze week.' : R.canPlan && !month ? 'Klik op <strong>+</strong> om iemand in te plannen. Klik op een dienst om hem te wijzigen.' : 'Wie wanneer werkt.') + '</p></div>' +
+    '<div class="actions">' + (R.canPlan && view === 'week' ? '<button class="btn" data-act="ro-copy">Vorige week kopiëren</button>' : '') + '</div></header>';
+  h += '<div class="roster-bar"><div class="seg" role="group" aria-label="Weergave">' + [['mijn', 'Mijn week'], ['week', 'Iedereen'], ['maand', 'Maand']].map(v =>
+    '<button data-act="ro-view" data-v="' + v[0] + '" class="' + (view === v[0] ? 'on' : '') + '" aria-pressed="' + (view === v[0]) + '">' + v[1] + '</button>').join('') + '</div>';
   if (month) {
     const cur = monthStart(today());
     h += '<div class="weeknav"><button class="icon-btn" data-act="ro-month" data-v="' + addMonths(S.rosterMonth, -1) + '" aria-label="Vorige maand">' + ICON.left + '</button>' +
@@ -1587,14 +1588,36 @@ function viewRoster() {
       R.people.map(p => '<option value="' + p.id + '"' + (same(S.rosterWho, p.id) ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select>';
   } else {
     h += weekNav('ro-week', R.weekStart);
-    if (R.canSeeWorked) h += '<label class="check compare-toggle"><input type="checkbox" data-in="rocompare"' + (S.rosterCompare ? ' checked' : '') + '> Vergelijk met gewerkt</label>';
+    if (R.canSeeWorked && !mineView) h += '<label class="check compare-toggle"><input type="checkbox" data-in="rocompare"' + (S.rosterCompare ? ' checked' : '') + '> Vergelijk met gewerkt</label>';
   }
-  h += locFilterSelect() + '</div>';
+  h += (mineView ? '' : locFilterSelect()) + '</div>';
+  if (mineView) return h + rosterMine(R);
   if (!month) h += publishBanner(R);
   if (S.shiftEdit) h += shiftForm(R);
-  if (R.canPlan) h += templatesCard(R);
   if (!R.people.length) return h + '<div class="empty">Nog geen actieve medewerkers.</div>';
-  return h + (month ? rosterMonth(R) : rosterWeek(R)) + (month ? '' : rosterLegend(R));
+  return h + (month ? rosterMonth(R) : rosterWeek(R)) + (month ? '' : rosterLegend(R)) + (R.canPlan ? templatesCard(R) : '');
+}
+function tplOf(R, s) { const i = (R.templates || []).findIndex(t => t.start === s.start && t.end === s.end); return i < 0 ? null : { i: i % 6, t: R.templates[i] }; }
+function rosterMine(R) {
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
+  const mine = R.shifts.filter(s => same(s.memberId, S.me.id));
+  const tot = mine.reduce((a, s) => a + spanMin(s.start, s.end), 0);
+  const meP = R.people.find(p => same(p.id, S.me.id)) || {};
+  const ch = meP.contractType === 'vast' ? Number(meP.contractHours) * 60 : 0;
+  let h = '<section class="card my-week-sum"><div><span class="small muted">Ingepland deze week</span><strong>' + fmtHM(tot) + ' uur</strong>' + (ch ? '<span class="small muted">van ' + fmtHM(ch) + ' contract</span>' : '') + '</div>' +
+    '<div><span class="small muted">Diensten</span><strong>' + mine.length + '</strong></div></section>';
+  h += '<div class="my-week">' + days.map(d => {
+    const list = mine.filter(s => s.date === d).sort((a, b) => a.start.localeCompare(b.start));
+    const ab = absFor(R.absences, S.me.id, d);
+    const others = R.shifts.filter(s => s.date === d && !same(s.memberId, S.me.id));
+    const names = [...new Set(others.map(s => s.memberName.split(' ')[0]))];
+    return '<div class="my-day' + (d === today() ? ' today' : '') + (d < today() ? ' past' : '') + (list.length ? ' has' : '') + '"><div class="my-day-date"><strong>' + esc(DAYS_FULL[pd(d).getDay()]) + '</strong><span>' + pd(d).getDate() + ' ' + esc(MONTHS[pd(d).getMonth()]) + '</span>' + (d === today() ? '<span class="badge green">Vandaag</span>' : '') + '</div>' +
+      '<div class="my-day-main">' + (ab ? absChip(ab) : '') +
+      (list.length ? list.map(s => { const tp = tplOf(R, s); return '<div class="my-shift' + (tp ? ' t' + tp.i : '') + '"><strong>' + esc(s.start + ' – ' + s.end) + '</strong><span>' + fmtHM(spanMin(s.start, s.end)) + ' uur' + (tp ? ' · ' + esc(tp.t.name) : '') + (s.note ? ' · ' + esc(s.note) : '') + '</span></div>'; }).join('')
+        : ab ? '' : '<span class="muted">Vrij</span>') +
+      (list.length && names.length ? '<div class="small muted">Ook aan het werk: ' + esc(names.slice(0, 6).join(', ')) + (names.length > 6 ? ' en ' + (names.length - 6) + ' anderen' : '') + '</div>' : '') + '</div></div>';
+  }).join('') + '</div>';
+  return h;
 }
 function weekPub(R, wk) { return (R.published || []).find(x => x.week === wk); }
 function publishBanner(R) {
@@ -1649,26 +1672,28 @@ function rosterWeek(R) {
       const mine = R.shifts.filter(s => same(s.memberId, p.id));
       const tot = mine.reduce((a, s) => a + spanMin(s.start, s.end), 0);
       const ch = p.contractType === 'vast' ? Number(p.contractHours) * 60 : 0;
-      return '<tr class="' + (same(p.id, S.me.id) ? 'me' : '') + '"><td class="pad"><strong>' + esc(p.name) + '</strong><div class="small muted">' + esc(contractShort(p)) + '</div>' + leaveTag(p.leavingOn, true) + '</td>' +
+      return '<tr class="' + (same(p.id, S.me.id) ? 'me' : '') + '"><td class="pad"><div class="ro-name">' + avatar(p.id, p.name, 'sm2') + '<div><strong>' + esc(p.name) + '</strong><div class="small muted">' + esc(contractShort(p)) + '</div></div></div>' + leaveTag(p.leavingOn, true) + '</td>' +
         days.map(d => {
           const gone = p.leavingOn && d > p.leavingOn;
           const dayShifts = mine.filter(s => s.date === d);
           const ab = absFor(R.absences, p.id, d);
           const av = R.canPlan ? (R.availability || []).find(x => same(x.memberId, p.id) && x.date === d) : null;
           return '<td class="rc' + (d === today() ? ' is-today' : '') + (gone ? ' gone' : '') + (ab && ab.status === 'goedgekeurd' ? ' absent' : '') + '">' +
-            (ab ? absChip(ab) : '') + (av ? '<span class="av-tag ' + av.status + (av.source === 'vast' ? ' vast' : '') + '" title="' + esc((av.source === 'vast' ? 'Vaste beschikbaarheid' : 'Doorgegeven voor deze dag') + (av.note ? ': ' + av.note : '')) + '"><span class="av-dot ' + av.status + '"></span>' + (av.status === 'kan' ? (av.start ? esc(av.start + '–' + av.end) : 'Kan') : 'Kan niet') + '</span>' : '') +
+            (ab ? absChip(ab) : '') + (av && !dayShifts.length ? '<span class="av-tag ' + av.status + (av.source === 'vast' ? ' vast' : '') + '" title="' + esc((av.source === 'vast' ? 'Vaste beschikbaarheid' : 'Doorgegeven voor deze dag') + (av.note ? ': ' + av.note : '')) + '"><span class="av-dot ' + av.status + '"></span>' + (av.status === 'kan' ? (av.start ? esc(av.start + '–' + av.end) : 'Kan') : 'Kan niet') + '</span>' : '') +
             dayShifts.map(s => shiftChip(R, s, false)).join('') + (S.rosterCompare ? workedCell(R, p, d, dayShifts) : '') +
             (gone ? '<span class="gone-txt">Uit dienst</span>' : ab && ab.status === 'goedgekeurd' ? '' : R.canPlan ? '<button class="cell-add" data-act="sh-new" data-id="' + p.id + '" data-v="' + d + '" aria-label="Dienst inplannen voor ' + esc(p.name) + ' op ' + esc(dayShort(d)) + '">+</button>' : '') + '</td>';
         }).join('') +
-        '<td class="pad"><strong>' + fmtHM(tot) + '</strong>' + (ch ? '<div class="small muted">van ' + fmtHM(ch) + '</div>' : '') +
+        '<td class="pad"><strong>' + fmtHM(tot) + '</strong>' + (ch ? '<div class="small muted">van ' + fmtHM(ch) + '</div><div class="ro-bar' + (tot > ch ? ' over' : '') + '"><span style="width:' + Math.min(100, tot / ch * 100) + '%"></span></div>' : '') +
           (S.rosterCompare ? '<div class="small" style="margin-top:4px">Gewerkt <strong>' + fmtHM((R.worked || []).filter(w => same(w.memberId, p.id)).reduce((a, w) => a + (w.minutes || 0), 0)) + '</strong></div>' : '') + '</td></tr>';
     }).join('') + '</tbody></table></div>';
 }
 function shiftChip(R, s, withName) {
+  const tp = tplOf(R, s);
   const label = (withName ? '<b>' + esc(s.memberName.split(' ')[0]) + '</b> ' : '') + esc(s.start + '–' + s.end);
-  const note = s.note ? '<small>' + esc(s.note) + '</small>' : '';
-  return R.canPlan ? '<button class="shift" data-act="sh-edit" data-id="' + s.id + '" title="' + esc(s.memberName + (s.note ? ' · ' + s.note : '')) + '">' + label + note + '</button>'
-    : '<span class="shift" title="' + esc(s.memberName) + '">' + label + note + '</span>';
+  const note = s.note || tp ? '<small>' + esc([tp ? tp.t.name : '', s.note || ''].filter(Boolean).join(' · ')) + '</small>' : '';
+  const cls = 'shift' + (tp ? ' t' + tp.i : '');
+  return R.canPlan ? '<button class="' + cls + '" data-act="sh-edit" data-id="' + s.id + '" title="' + esc(s.memberName + (s.note ? ' · ' + s.note : '')) + '">' + label + note + '</button>'
+    : '<span class="' + cls + '" title="' + esc(s.memberName) + '">' + label + note + '</span>';
 }
 function rosterMonth(R) {
   const m = S.rosterMonth, last = monthEnd(m);
