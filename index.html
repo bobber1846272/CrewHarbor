@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..750&display=swap">
-<link rel="stylesheet" href="site.css?v=5">
+<link rel="stylesheet" href="site.css?v=6">
 <script>
   // oude links (uitnodigingen, wachtwoord) gaan naar de app
   if (/^#\/[a-z]/.test(location.hash)) location.replace('app/' + location.hash);
@@ -111,7 +111,6 @@
             <input type="range" id="calc-n" min="0" max="100" value="9" step="1" aria-describedby="calc-out" aria-valuetext="10 medewerkers">
             <div class="calc-ticks" id="calc-ticks" aria-hidden="true"></div>
           </div>
-          <div class="calc-numwrap"><button type="button" class="calc-step" data-step="-1" aria-label="Eén minder">−</button><input class="calc-num" type="number" id="calc-num" min="1" max="9999" value="10" aria-label="Aantal medewerkers"><button type="button" class="calc-step" data-step="1" aria-label="Eén meer">+</button></div>
         </div>
         <div class="calc-out" id="calc-out" aria-live="polite"></div>
       </div>
@@ -198,6 +197,6 @@
 
 <script src="app/config.js"></script>
 <script src="app/logo.js"></script>
-<script src="site.js?v=4"></script>
+<script src="site.js?v=5"></script>
 </body>
 </html>
