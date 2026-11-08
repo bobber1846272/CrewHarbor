@@ -391,7 +391,13 @@ function render() {
   const views = { overzicht: viewHome, terugbellen: viewCallbacks, verzoek: viewCallbackForm, taken: viewTasks, taak: viewTaskForm, team: viewTeam,
     cijfers: viewStats, logboek: viewLog, mensen: viewMembers, rollen: viewRoles, instellingen: viewSettings,
     uren: viewHours, rooster: viewRoster, prikklok: viewKioskAdmin, verlof: viewAbsence, beschikbaar: viewAvailability, meldingen: viewNotifications, goedkeuren: viewApprove, urenoverzicht: viewReport, telefonie: viewPhone, kennisbank: viewKb, documenten: viewDocs };
+  // scrollpositie bewaren bij opnieuw tekenen van dezelfde pagina (bijv. na slepen in het rooster)
+  const keep = S.lastRoute === r ? ['.roster-scroll', '.nav', '.pres-panel', '.tl', '.month-grid'].map(q => { const el = document.querySelector(q); return el ? [q, el.scrollTop, el.scrollLeft] : null; }).filter(Boolean) : [];
+  const wy = window.scrollY, wx = window.scrollX;
   $app.innerHTML = '<div class="shell">' + viewNav(r) + '<main class="main' + (r === 'team' || r === 'rooster' ? ' wide' : '') + '" id="main">' + (views[r] || viewHome)() + '</main>' + viewPresence() + '</div>';
+  keep.forEach(([q, t, l]) => { const el = document.querySelector(q); if (el) { el.scrollTop = t; el.scrollLeft = l; } });
+  if (S.lastRoute === r && (window.scrollY !== wy || window.scrollX !== wx)) window.scrollTo(wx, wy);
+  S.lastRoute = r;
   updateTitle();
 }
 function renderKeepFocus() {
