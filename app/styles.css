@@ -776,3 +776,13 @@ details summary { cursor: pointer; font-weight: 600; min-height: 32px; display: 
 .nav-group-items { padding: 0 0 6px; }
 .nav-group-items a { padding-left: 14px; }
 .nav-group-btn .nav-count { background: var(--accent); }
+
+/* Mijn uren: goedgekeurd vs nog niet goedgekeurd, en de indienbalk blijft in beeld */
+.stat-sub { display: block; margin-top: 4px; font-size: 12px; color: var(--muted, #4A5F6E); line-height: 1.35; }
+.progress.two { display: flex; }
+.progress.two span { border-radius: 0; }
+.progress.two span:first-child { border-radius: 99px 0 0 99px; }
+.progress.two span.pending { background: repeating-linear-gradient(45deg, #9ED3DB 0 6px, #C7E7EC 6px 12px); }
+.submit-bar.sticky { position: sticky; bottom: 16px; z-index: 20; box-shadow: 0 10px 30px rgba(13, 35, 64, .18); }
+.saved-tag { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: #067647; margin-right: 6px; }
+.saved-tag svg { width: 14px; height: 14px; }

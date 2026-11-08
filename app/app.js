@@ -546,7 +546,7 @@ function viewHome() {
 }
 
 // ----- terugbellen -----
-function stat(label, n, color) { return '<div class="stat"><span>' + label + '</span><strong' + (color ? ' style="color:' + color + '"' : '') + '>' + n + '</strong></div>'; }
+function stat(label, n, color, sub) { return '<div class="stat"><span>' + label + '</span><strong' + (color ? ' style="color:' + color + '"' : '') + '>' + n + '</strong>' + (sub ? '<small class="stat-sub">' + sub + '</small>' : '') + '</div>'; }
 function dd(label, val) { return '<div><dt>' + label + '</dt><dd>' + esc(val) + '</dd></div>'; }
 function viewCallbacks() {
   const searching = S.cbQ.trim().length >= 2;
@@ -1292,10 +1292,18 @@ function viewHours() {
   if (self && mon === mondayOf(today())) h += clockCard();
   if (self && H.published === false && !can('hours.plan')) h += '<p class="small muted" style="margin:0">Het rooster voor deze week is nog niet vastgezet. Je diensten verschijnen hier zodra het klaar is.</p>';
   const diff = H.totalMin - ch;
-  h += '<div class="stats">' + stat('Gewerkt', fmtHM(H.totalMin)) + stat('Ingepland', fmtHM(planned)) +
+  // alleen goedgekeurde uren tellen als "Goedgekeurd"; de rest staat er klein onder
+  const sumOf = st => H.entries.filter(e => st.includes(e.status)).reduce((a, e) => a + (e.minutes || 0), 0);
+  const okMin = sumOf(['goedgekeurd']), waitMin = sumOf(['ingediend']), draftMin = sumOf(['concept', 'afgekeurd', 'open']);
+  const subTxt = [waitMin ? fmtHM(waitMin) + ' wacht op goedkeuring' : '', draftMin ? fmtHM(draftMin) + ' nog niet ingediend' : ''].filter(Boolean).join(' · ');
+  h += '<div class="stats">' + stat('Goedgekeurd', fmtHM(okMin), null, subTxt) + stat('Ingepland', fmtHM(planned)) +
     stat('Contract', ct === 'flex' ? 'Flex' : (ch ? fmtHM(ch) : '–')) +
     stat(ct === 'flex' || !ch ? 'Verschil' : (diff >= 0 ? 'Boven contract' : 'Nog te gaan'), ct === 'flex' || !ch ? '–' : fmtHM(Math.abs(diff)), ct === 'vast' && ch && diff > 0 ? 'var(--orange)' : null) + '</div>';
-  if (ct === 'vast' && ch) h += '<div class="progress" role="progressbar" aria-label="Gewerkt van contract" aria-valuemin="0" aria-valuemax="' + ch + '" aria-valuenow="' + H.totalMin + '"><span style="width:' + Math.min(100, H.totalMin / ch * 100) + '%"></span></div>';
+  if (ct === 'vast' && ch) {
+    const okW = Math.min(100, okMin / ch * 100), restW = Math.max(0, Math.min(100 - okW, (H.totalMin - okMin) / ch * 100));
+    h += '<div class="progress two" role="progressbar" aria-label="Uren van contract (goedgekeurd en nog niet goedgekeurd)" aria-valuemin="0" aria-valuemax="' + ch + '" aria-valuenow="' + okMin + '">' +
+      '<span style="width:' + okW + '%"></span><span class="pending" style="width:' + restW + '%"></span></div>';
+  }
   h += '<div class="days">' + [0, 1, 2, 3, 4, 5, 6].map(i => {
     const d = addDays(mon, i);
     const es = H.entries.filter(e => e.date === d);
@@ -1314,8 +1322,8 @@ function viewHours() {
     const todo = H.entries.filter(e => ['concept', 'afgekeurd'].includes(e.status));
     const sent = H.entries.filter(e => e.status === 'ingediend').length;
     if (todo.length) {
-      h += '<section class="card submit-bar"><div><strong>' + todo.length + (todo.length === 1 ? ' regel' : ' regels') + ' nog niet ingediend · ' + fmtHM(todo.reduce((a, e) => a + (e.minutes || 0), 0)) + '</strong>' +
-        '<p class="small muted" style="margin:2px 0 0">Na indienen kan je teamleider de uren goedkeuren. Daarna kun je ze niet meer wijzigen.</p></div>' +
+      h += '<section class="card submit-bar sticky" aria-label="Week indienen"><div><strong>' + todo.length + (todo.length === 1 ? ' regel' : ' regels') + ' nog niet ingediend · ' + fmtHM(todo.reduce((a, e) => a + (e.minutes || 0), 0)) + '</strong>' +
+        '<p class="small muted" style="margin:2px 0 0"><span class="saved-tag">' + ICON.check + ' Opgeslagen als concept</span> Klaar? Dien de week in, dan kan je teamleider hem goedkeuren. Daarna kun je niets meer wijzigen.</p></div>' +
         '<button class="btn primary" data-act="h-submit">Week indienen</button></section>';
     } else if (sent) {
       h += '<div class="alert info">' + '<span>Deze week is ingediend en wacht op goedkeuring.</span></div>';
