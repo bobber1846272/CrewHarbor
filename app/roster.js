@@ -19,6 +19,25 @@ function coverage(R, d) {
   });
   return { need, have, items };
 }
+// openingstijden en gaten
+const hhmm = m => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+function openFor(R, d) {
+  const o = (R.opening || {})[String(isoDow(d))];
+  if (!o || !o.open) return null;
+  const f = toMin(o.from); let t = toMin(o.to); if (t <= f) t += 1440;
+  return { from: f, to: t, min: Number(o.min) || 1 };
+}
+function gaps(R, d) {
+  const o = openFor(R, d); if (!o) return [];
+  const list = R.shifts.filter(s => s.date === d).map(s => { const a = toMin(s.start); let b = toMin(s.end); if (b <= a) b += 1440; return [a, b]; });
+  const out = [];
+  for (let m = o.from; m < o.to; m += 15) {
+    const n = list.filter(([a, b]) => a < m + 15 && b > m).length;
+    if (n < o.min) { const last = out[out.length - 1]; if (last && last.to === m && last.have === n) last.to = m + 15; else out.push({ from: m, to: m + 15, have: n, need: o.min }); }
+  }
+  return out;
+}
+const gapTxt = g => hhmm(g.from) + '–' + hhmm(g.to);
 function weekMin(R, pid, exceptId) { return R.shifts.filter(s => same(s.memberId, pid) && !same(s.id, exceptId)).reduce((a, s) => a + shiftMin(s), 0); }
 function contractMin(p) { return p && p.contractType === 'vast' ? Number(p.contractHours) * 60 : 0; }
 function availOf(R, pid, d) { return (R.availability || []).find(a => same(a.memberId, pid) && a.date === d); }
@@ -73,6 +92,7 @@ function rosterToolbar(R) {
       '<button class="btn small" data-act="rx-open">Open plekken</button>' +
       '<button class="btn small" data-act="rx-propose">Voorstel maken</button>' +
       '<button class="btn small" data-act="rx-needs">Bezetting instellen</button>' +
+      '<button class="btn small" data-act="rx-hours">Openingstijden</button>' +
       '<details class="ro-more"><summary class="btn small">Meer ▾</summary><div class="ro-menu">' +
         '<button class="link-btn" data-act="rx-std-apply"' + (R.standardCount ? '' : ' disabled') + '>Standaardweek invullen' + (R.standardCount ? ' (' + R.standardCount + ' diensten)' : '') + '</button>' +
         '<button class="link-btn" data-act="rx-std-save">Deze week opslaan als standaardweek</button>' +
@@ -90,6 +110,9 @@ function rosterWeek(R) {
     let x = '<button class="ro-dayhead" data-act="rx-day" data-v="' + d + '" title="Dagweergave">' + esc(dayShort(d)) + '</button>';
     if (R.canPlan) {
       const c = coverage(R, d);
+      const o = openFor(R, d), G = gaps(R, d);
+      if (!o && Object.keys(R.opening || {}).length) x += '<span class="ro-gap closed">Dicht</span>';
+      else if (o) x += G.length ? '<span class="ro-gap" title="' + esc('Nog niemand (genoeg) ingepland: ' + G.map(gapTxt).join(', ')) + '">Gat ' + esc(gapTxt(G[0])) + (G.length > 1 ? ' +' + (G.length - 1) : '') + '</span>' : '<span class="ro-gap ok" title="Open ' + hhmm(o.from) + '–' + hhmm(o.to) + '">✓ ' + hhmm(o.from) + '–' + hhmm(o.to) + '</span>';
       if (c.need) x += '<span class="ro-cov ' + (c.have >= c.need ? 'ok' : c.have ? 'half' : 'bad') + '" title="' + esc(c.items.map(i => (i.tpl ? i.tpl.name : 'Mensen') + ': ' + i.have + '/' + i.need).join(' · ')) + '">' + c.have + '/' + c.need + '</span>';
     }
     return x;
@@ -145,9 +168,21 @@ function rosterPanels(R) {
   let h = '';
   if (S.roUndo && Date.now() - S.roUndo.at < 120000) h += '<div class="ro-undo" role="status"><span>' + esc(S.roUndo.label) + '</span><button class="btn small" data-act="rx-undo">Ongedaan maken</button><button class="icon-btn small" data-act="rx-undo-x" aria-label="Sluiten">' + ICON.x + '</button></div>';
   if (S.roNeedsEdit) h += needsEditor(R);
+  if (S.roHoursEdit) h += hoursEditor();
   if (S.roOpenPanel) h += openSpots(R);
   if (S.roProposal) h += proposalPanel(R);
   return h;
+}
+function hoursEditor() {
+  const E = S.roHoursEdit;
+  return '<section class="card stack" style="gap:12px;max-width:none"><div class="item-top"><h2 style="margin:0">Openingstijden</h2><button class="icon-btn small" data-act="rx-hours-x" aria-label="Sluiten">' + ICON.x + '</button></div>' +
+    '<p class="small muted" style="margin:0">Wanneer ben je open, en hoeveel mensen moeten er dan minimaal zijn? Boven elke dag zie je dan welke uren nog niet gevuld zijn. Sluit je na middernacht, vul dan bijvoorbeeld 18:00 tot 02:00 in.</p>' +
+    '<div class="oh-grid">' + [1, 2, 3, 4, 5, 6, 7].map(wd => { const o = E[wd] || { open: false };
+      return '<div class="oh-row' + (o.open ? '' : ' closed') + '"><label class="check"><input type="checkbox" data-oh="' + wd + '|open"' + (o.open ? ' checked' : '') + '> <strong>' + WD[wd - 1] + '</strong></label>' +
+        (o.open ? '<input class="input" type="time" data-oh="' + wd + '|from" value="' + esc(o.from || '08:00') + '" aria-label="' + WD[wd - 1] + ' open vanaf"><span class="muted">tot</span><input class="input" type="time" data-oh="' + wd + '|to" value="' + esc(o.to || '21:00') + '" aria-label="' + WD[wd - 1] + ' open tot">' +
+          '<label class="small oh-min">Minimaal <input class="input" inputmode="numeric" data-oh="' + wd + '|min" value="' + esc(o.min || 1) + '"> pers.</label>' : '<span class="muted">Dicht</span>') + '</div>'; }).join('') + '</div>' +
+    '<div class="row"><button class="btn small ghost" data-act="rx-hours-copy">Maandag naar ma t/m vr kopiëren</button></div>' +
+    '<div class="row"><button class="btn primary" data-act="rx-hours-save">Opslaan</button><button class="btn ghost" data-act="rx-hours-x">Annuleren</button></div></section>';
 }
 function needsEditor(R) {
   const E = S.roNeedsEdit; const cols = (R.templates || []).length ? R.templates.map(t => [String(t.id), t.name + ' ' + t.start + '–' + t.end]) : [['dag', 'Aantal mensen']];
@@ -163,11 +198,22 @@ function openList(R) {
   days.forEach(d => { if (d < today()) return; coverage(R, d).items.forEach(i => { if (i.have < i.need) out.push({ d, item: i, missing: i.need - i.have }); }); });
   return out;
 }
+function gapList(R) {
+  const out = [];
+  [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i)).forEach(d => { if (d < today()) return; gaps(R, d).forEach(g => out.push({ d, g })); });
+  return out;
+}
 function openSpots(R) {
-  const L = openList(R);
+  const L = openList(R), GL = gapList(R);
   let h = '<section class="card stack" style="gap:12px;max-width:none"><div class="item-top"><h2 style="margin:0">Open plekken deze week</h2><button class="icon-btn small" data-act="rx-open-x" aria-label="Sluiten">' + ICON.x + '</button></div>';
-  if (!Object.keys(R.needs || {}).length) return h + '<p class="small muted" style="margin:0">Stel eerst in hoeveel mensen je per dag nodig hebt (knop <strong>Bezetting instellen</strong>).</p></section>';
-  if (!L.length) return h + '<p style="margin:0">Alles is gevuld. 🎉</p></section>';
+  if (!Object.keys(R.needs || {}).length && !Object.keys(R.opening || {}).length) return h + '<p class="small muted" style="margin:0">Stel eerst je <strong>Openingstijden</strong> in, of hoeveel mensen je per dienst nodig hebt (<strong>Bezetting instellen</strong>).</p></section>';
+  h += GL.map(o => {
+    const t = { start: hhmm(o.g.from), end: hhmm(o.g.to) };
+    const c = candidates(R, o.d, t).slice(0, 8);
+    return '<div class="ro-open"><div><strong>' + esc(dayShort(o.d)) + ' · ' + esc(gapTxt(o.g)) + '</strong><span class="badge red">' + (o.g.have ? 'nog ' + (o.g.need - o.g.have) + ' nodig' : 'niemand ingepland') + '</span></div>' +
+      '<div class="who-list">' + (c.length ? c.map(x => '<button class="who-chip ' + (x.kan ? 'kan' : 'leeg') + '" data-act="rx-fillgap" data-id="' + x.p.id + '" data-v="' + o.d + '|' + t.start + '|' + t.end + '"><strong>' + esc(x.p.name) + '</strong><small>' + (x.kan ? 'kan' : 'niet ingevuld') + (x.left != null ? ' · nog ' + fmtHM(Math.max(0, x.left)) + ' u' : '') + '</small></button>').join('') : '<span class="small muted">Niemand beschikbaar.</span>') + '</div></div>';
+  }).join('');
+  if (!L.length && !GL.length) return h + '<p style="margin:0">Alles is gevuld. 🎉</p></section>';
   h += L.map(o => {
     const c = candidates(R, o.d, o.item.tpl).slice(0, 8);
     return '<div class="ro-open"><div><strong>' + esc(dayShort(o.d)) + ' · ' + esc(o.item.tpl ? o.item.tpl.name + ' ' + o.item.tpl.start + '–' + o.item.tpl.end : 'Mensen') + '</strong><span class="badge orange">nog ' + o.missing + ' nodig</span></div>' +
@@ -187,12 +233,22 @@ function makeProposal(R) {
       work.shifts.push(s); out.push(s);
     }
   });
+  // gaten in de openingstijden: per gat één persoon voor precies die uren (minimaal 1 uur)
+  for (let round = 0; round < 3; round++) {
+    gapList(work).forEach(o => {
+      if (o.g.to - o.g.from < 60) return;
+      const t = { start: hhmm(o.g.from), end: hhmm(o.g.to) };
+      const c = candidates(work, o.d, t)[0]; if (!c) return;
+      const s = { id: 'p' + out.length, memberId: c.p.id, memberName: c.p.name, date: o.d, start: t.start, end: t.end, note: '', tplName: 'openingstijden', why: c.kan ? 'kan' : 'niet ingevuld' };
+      work.shifts.push(s); out.push(s);
+    });
+  }
   return out;
 }
 function proposalPanel(R) {
   const P = S.roProposal;
   let h = '<section class="card stack" style="gap:12px;max-width:none"><div class="item-top"><h2 style="margin:0">Voorstel</h2><button class="icon-btn small" data-act="rx-propose-x" aria-label="Sluiten">' + ICON.x + '</button></div>';
-  if (!Object.keys(R.needs || {}).length) return h + '<p class="small muted" style="margin:0">Stel eerst in hoeveel mensen je per dag nodig hebt (knop <strong>Bezetting instellen</strong>). Dan kan CrewHarbor een voorstel maken.</p></section>';
+  if (!Object.keys(R.needs || {}).length && !Object.keys(R.opening || {}).length) return h + '<p class="small muted" style="margin:0">Stel eerst je <strong>Openingstijden</strong> of de <strong>Bezetting</strong> in. Dan kan CrewHarbor een voorstel maken.</p></section>';
   if (!P.length) return h + '<p style="margin:0">Er zijn geen open plekken om te vullen, of er is niemand beschikbaar.</p></section>';
   h += '<p class="small muted" style="margin:0">CrewHarbor kiest eerst mensen die hebben aangegeven te kunnen, daarna wie nog de meeste contracturen over heeft. Vink uit wat je niet wilt.</p>' +
     '<div class="ro-prop">' + P.map((s, i) => '<label class="check"><input type="checkbox" data-prop="' + i + '"' + (s.off ? '' : ' checked') + '> <span><strong>' + esc(dayShort(s.date)) + '</strong> · ' + esc(s.memberName) + ' · ' + esc(s.start + '–' + s.end) + (s.tplName ? ' (' + esc(s.tplName) + ')' : '') + ' <span class="small muted">' + esc(s.why) + '</span></span></label>').join('') + '</div>' +
@@ -204,10 +260,11 @@ function proposalPanel(R) {
 function rosterDayView(R) {
   const d = S.rosterDay || today();
   const list = R.shifts.filter(s => s.date === d);
-  let from = 6 * 60, to = 23 * 60;
+  const OH = openFor(R, d), DG = gaps(R, d);
+  let from = OH ? Math.min(OH.from, 8 * 60) : 6 * 60, to = OH ? Math.max(OH.to, 18 * 60) : 23 * 60;
   list.forEach(s => { from = Math.min(from, toMin(s.start)); const e = toMin(s.end) <= toMin(s.start) ? 24 * 60 : toMin(s.end); to = Math.max(to, e); });
-  from = Math.floor(from / 60) * 60; to = Math.min(24 * 60, Math.ceil(to / 60) * 60);
-  const span = to - from; const pos = m => ((m - from) / span * 100).toFixed(2) + '%';
+  from = Math.floor(from / 60) * 60; to = Math.min(OH && OH.to > 1440 ? OH.to : 24 * 60, Math.ceil(to / 60) * 60);
+  const span = to - from; const pos = m => (Math.max(0, Math.min(1, (m - from) / span)) * 100).toFixed(2) + '%';
   const hours = []; for (let m = from; m <= to; m += 60) hours.push(m);
   const people = R.canPlan ? rosterPeople(R) : R.people.filter(p => list.some(s => same(s.memberId, p.id)));
   // aantal mensen per uur
@@ -215,8 +272,12 @@ function rosterDayView(R) {
   const max = Math.max(1, ...perHour);
   let h = '<div class="ro-daynav"><button class="icon-btn" data-act="rx-day" data-v="' + addDays(d, -1) + '" aria-label="Vorige dag">' + ICON.left + '</button><strong>' + esc(dayLong(d)) + '</strong>' +
     '<button class="icon-btn" data-act="rx-day" data-v="' + addDays(d, 1) + '" aria-label="Volgende dag">' + ICON.right + '</button>' + (d !== today() ? '<button class="btn small ghost" data-act="rx-day" data-v="' + today() + '">Vandaag</button>' : '') + '</div>';
+  if (OH) h += DG.length ? '<div class="alert warn"><p style="margin:0">Open ' + hhmm(OH.from) + '–' + hhmm(OH.to) + '. Nog niet gevuld: <strong>' + esc(DG.map(gapTxt).join(', ')) + '</strong>' + (OH.min > 1 ? ' (minimaal ' + OH.min + ' mensen)' : '') + '. Kijk bij <strong>Open plekken</strong> wie er kan.</p></div>'
+    : '<div class="alert info"><span>Open ' + hhmm(OH.from) + '–' + hhmm(OH.to) + '. Alle openingsuren zijn gevuld.</span></div>';
+  else if (Object.keys(R.opening || {}).length) h += '<div class="alert info"><span>Op deze dag ben je dicht.</span></div>';
+  const shade = OH ? '<span class="tl-closed" style="left:0;width:' + pos(OH.from) + '"></span><span class="tl-closed" style="left:' + pos(OH.to) + ';right:0"></span>' + DG.map(g => '<span class="tl-gap" style="left:' + pos(g.from) + ';width:' + ((g.to - g.from) / span * 100) + '%"></span>').join('') : '';
   h += '<div class="tl card"><div class="tl-row tl-head"><div class="tl-name"></div><div class="tl-track">' + hours.map(m => '<span class="tl-hour" style="left:' + pos(m) + '">' + String(m / 60).padStart(2, '0') + '</span>').join('') + '</div></div>' +
-    '<div class="tl-row tl-load"><div class="tl-name small muted">Aan het werk</div><div class="tl-track">' + perHour.map((n, i) => '<span class="tl-bar-n' + (n === 0 ? ' zero' : '') + '" style="left:' + pos(hours[i]) + ';width:' + (60 / span * 100) + '%;opacity:' + (0.25 + 0.75 * n / max) + '" title="' + String(hours[i] / 60).padStart(2, '0') + ':00 · ' + n + (n === 1 ? ' persoon' : ' personen') + '">' + n + '</span>').join('') + '</div></div>';
+    '<div class="tl-row tl-load"><div class="tl-name small muted">Aan het werk</div><div class="tl-track">' + shade + perHour.map((n, i) => '<span class="tl-bar-n' + (n === 0 ? ' zero' : '') + '" style="left:' + pos(hours[i]) + ';width:' + (60 / span * 100) + '%;opacity:' + (0.25 + 0.75 * n / max) + '" title="' + String(hours[i] / 60).padStart(2, '0') + ':00 · ' + n + (n === 1 ? ' persoon' : ' personen') + '">' + n + '</span>').join('') + '</div></div>';
   h += people.map(p => {
     const mine = list.filter(s => same(s.memberId, p.id));
     const av = R.canPlan ? availOf(R, p.id, d) : null; const ab = absFor(R.absences, p.id, d);
@@ -256,6 +317,19 @@ document.getElementById('app').addEventListener('click', async e => {
         el.disabled = true; const v2 = await rpc('cd_roster_needs_save', { p: S.roNeedsEdit });
         S.roster.needs = v2; S.roNeedsEdit = null; render(); toast('Bezetting opgeslagen. Boven elke dag zie je nu hoeveel plekken gevuld zijn.'); return;
       }
+      case 'rx-hours': S.roHoursEdit = JSON.parse(JSON.stringify(R.opening || {})); S.roNeedsEdit = null; render(); return;
+      case 'rx-hours-x': S.roHoursEdit = null; render(); return;
+      case 'rx-hours-copy': { const m = S.roHoursEdit['1'] || { open: false }; [2, 3, 4, 5].forEach(wd => { S.roHoursEdit[wd] = Object.assign({}, m); }); render(); return; }
+      case 'rx-hours-save': {
+        el.disabled = true; const v2 = await rpc('cd_opening_hours_save', { p: S.roHoursEdit });
+        S.roster.opening = v2; S.roHoursEdit = null; render(); toast('Openingstijden opgeslagen. Boven elke dag zie je nu of er nog gaten zijn.'); return;
+      }
+      case 'rx-fillgap': {
+        const [d, a, b] = v.split('|');
+        el.disabled = true; const s = await roCreate(id, d, a, b, '', S.locFilter || memberLoc(id));
+        roUndo('Ingepland: ' + s.memberName + ' ' + dayShort(d) + ' ' + a + '–' + b, async () => { await rpc('cd_shift_delete', { p_id: s.id }); });
+        await roReload(); return;
+      }
       case 'rx-open': S.roOpenPanel = !S.roOpenPanel; S.roProposal = null; S.roNeedsEdit = null; render(); return;
       case 'rx-open-x': S.roOpenPanel = false; render(); return;
       case 'rx-fill': {
@@ -294,12 +368,14 @@ document.getElementById('app').addEventListener('click', async e => {
 });
 document.getElementById('app').addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset.oh && S.roHoursEdit && el.type !== 'checkbox') { const [wd, k] = el.dataset.oh.split('|'); S.roHoursEdit[wd] = Object.assign({ open: true }, S.roHoursEdit[wd], { [k]: el.value }); return; }
   if (el.dataset.need && S.roNeedsEdit) { const [wd, k] = el.dataset.need.split('|'); S.roNeedsEdit[wd] = S.roNeedsEdit[wd] || {}; S.roNeedsEdit[wd][k] = el.value.replace(/\D/g, ''); return; }
   if (el.dataset.prop !== undefined && S.roProposal) { S.roProposal[Number(el.dataset.prop)].off = !el.checked; const b = document.querySelector('[data-act="rx-propose-apply"]'); if (b) b.textContent = S.roProposal.filter(s => !s.off).length + ' diensten inplannen'; return; }
   if (el.dataset.in === 'roq') { S.roFilter = Object.assign({}, S.roFilter, { q: el.value }); clearTimeout(S.roqT); S.roqT = setTimeout(() => { renderKeepFocus(); }, 250); return; }
 });
 document.getElementById('app').addEventListener('change', e => {
   const el = e.target;
+  if (el.dataset.oh && S.roHoursEdit && el.type === 'checkbox') { const wd = el.dataset.oh.split('|')[0]; S.roHoursEdit[wd] = Object.assign({ from: wd >= 6 ? '10:00' : '08:00', to: '21:00', min: 1 }, S.roHoursEdit[wd], { open: el.checked }); render(); return; }
   if (el.dataset.in === 'roleft') { S.roFilter = Object.assign({}, S.roFilter, { left: el.checked }); render(); }
   if (el.dataset.prop !== undefined && S.roProposal) S.roProposal[Number(el.dataset.prop)].off = !el.checked;
 });

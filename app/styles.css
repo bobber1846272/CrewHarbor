@@ -993,3 +993,15 @@ body.ro-dragging td[data-cell] .cell-add { opacity: 1; border-color: var(--accen
 .ro-daynav strong { text-transform: none; }
 .ro-daynav strong::first-letter { text-transform: uppercase; }
 .tl-bar-n.zero { background: #EEF2F3; color: transparent; opacity: 1 !important; }
+/* openingstijden */
+.ro-gap { display: block; margin: 3px auto 0; width: max-content; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: #FEE4E2; color: #B42318; }
+.ro-gap.ok { background: #DCFAE6; color: #067647; }
+.ro-gap.closed { background: #EEF2F3; color: var(--muted); }
+.oh-grid { display: flex; flex-direction: column; gap: 6px; }
+.oh-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-top: 1px solid var(--line); }
+.oh-row .check { min-width: 130px; }
+.oh-row .input[type=time] { max-width: 130px; min-height: 38px; }
+.oh-min { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; }
+.oh-min .input { width: 52px; min-height: 36px; text-align: center; padding: 4px; }
+.tl-closed { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, #F2F4F5 0 6px, #E7ECEE 6px 8px); }
+.tl-gap { position: absolute; top: 0; bottom: 0; background: rgba(240,68,56,.18); border-left: 2px solid #F04438; border-right: 2px solid #F04438; }
