@@ -12,10 +12,10 @@ window.CHMFA.use(sb);
 const $app = document.getElementById('app');
 
 const PERM_GROUPS = [
-  ['Terugbellen', [['callbacks.create', 'Verzoeken aanmaken'], ['callbacks.assign', 'Toewijzen aan collega’s'], ['callbacks.view_all', 'Alle verzoeken zien'],
-    ['callbacks.edit_all', 'Alle verzoeken bewerken'], ['callbacks.delete', 'Verzoeken verwijderen']]],
-  ['Taken', [['tasks.create', 'Taken aanmaken'], ['tasks.assign', 'Taken aan anderen geven'], ['tasks.view_all', 'Alle taken zien'],
-    ['tasks.edit_all', 'Alle taken bewerken'], ['tasks.delete', 'Taken verwijderen'], ['tasks.archive', 'Taakarchief: afgeronde taken van iedereen bekijken en aanpassen']]],
+  ['Terugbellen', [['callbacks.create', 'Verzoeken aanmaken'], ['callbacks.assign', 'Toewijzen aan collega’s'], ['callbacks.view_all', 'Verzoeken van collega’s zien'],
+    ['callbacks.edit_all', 'Verzoeken van collega’s bewerken'], ['callbacks.delete', 'Verzoeken verwijderen']]],
+  ['Taken', [['tasks.create', 'Taken aanmaken'], ['tasks.assign', 'Taken aan anderen geven'], ['tasks.view_all', 'Taken van collega’s zien'],
+    ['tasks.edit_all', 'Taken van collega’s bewerken'], ['tasks.delete', 'Taken verwijderen'], ['tasks.archive', 'Taakarchief: afgeronde taken van iedereen bekijken en aanpassen']]],
   ['Uren', [['hours.view_all', 'Uren van iedereen zien'], ['hours.approve', 'Uren en verlof goedkeuren'], ['hours.plan', 'Rooster plannen'], ['hours.kiosk', 'Prikklok instellen'], ['hours.kiosk_exit', 'Prikklok verlaten met eigen code']]],
   ['Kennis & documenten', [['kb.edit', 'Kennisbank bewerken'], ['docs.upload', 'Documenten uploaden'], ['docs.manage', 'Mappen en documenten beheren']]],
   ['Teamleiding', [['team.board', 'Teambord'], ['reports.view', 'Cijfers'], ['phone.view', 'Telefonie bekijken'], ['audit.view', 'Logboek']]],
