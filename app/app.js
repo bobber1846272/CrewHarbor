@@ -1447,22 +1447,38 @@ function entryForm() {
     '<div class="field"><label for="h-break">Pauze (min)</label><input class="input" type="number" min="0" max="600" step="5" id="h-break" data-h="breakMin" value="' + esc(E.breakMin) + '"></div></div>' +
     '<div class="field"><label for="h-note">Notitie <span class="muted" style="font-weight:400">(optioneel)</span></label><input class="input" id="h-note" data-h="note" maxlength="300" value="' + esc(E.note) + '" placeholder="Bijv. inventarisatie magazijn"></div>' +
     (E.start && E.end && E.start !== E.end ? '<p class="small muted" style="margin:0">Totaal: <strong>' + fmtHM(Math.max(0, spanMin(E.start, E.end) - (Number(E.breakMin) || 0))) + '</strong>' + (E.end < E.start ? ' (loopt door na middernacht)' : '') + '</p>' : '') +
+    (E.wasAuto ? '<p class="small" style="margin:0;color:#93370D">Let op: deze uren waren geklokt en al goedgekeurd. Na het aanpassen moet je ze opnieuw indienen en keurt je leidinggevende ze goed.</p>' : '') +
     '<div class="form-foot" style="justify-content:flex-start"><button class="btn primary small" data-act="h-save">Opslaan</button><button class="btn small ghost" data-act="h-cancel">Annuleren</button></div></div>';
 }
 function entryRow(e, self) {
   if (S.hEdit && same(S.hEdit.id, e.id)) return entryForm();
   const editable = self && ['concept', 'afgekeurd'].includes(e.status);
+  const fixable = self && e.auto && e.date >= addDays(today(), -14);
   return '<div class="entry' + (e.status === 'afgekeurd' ? ' bad' : '') + '"><div class="entry-main">' +
     '<span class="entry-time">' + esc(e.start) + ' – ' + (e.end ? esc(e.end) : 'nu') + '</span>' +
     (e.breakMin ? '<span class="small muted">' + e.breakMin + ' min pauze</span>' : '') + breakWarn(e) +
     (e.note ? '<span class="small entry-note">' + esc(e.note) + '</span>' : '') +
     (e.source === 'prikklok' ? '<span class="src-tag">Prikklok</span>' : e.source === 'handmatig' ? '<span class="src-tag soft">Handmatig</span>' : '') + '</div>' +
-    '<div class="entry-side"><strong>' + (e.minutes == null ? fmtHM(runningSince(e)) : fmtHM(e.minutes)) + '</strong>' + hBadge(e.status) +
+    '<div class="entry-side"><strong>' + (e.minutes == null ? fmtHM(runningSince(e)) : fmtHM(e.minutes)) + '</strong>' + (e.auto ? '<span class="badge green" title="Geklokte uren zijn meteen goedgekeurd">Geklokt ✓</span>' : hBadge(e.status)) +
+    (fixable ? '<button class="btn small ghost" data-act="h-edit" data-id="' + e.id + '" title="Klopt het niet? Pas het aan; daarna dien je het opnieuw in.">Aanpassen</button>' : '') +
+    (!self && can('hours.approve') && ['goedgekeurd', 'ingediend'].includes(e.status) && (!same(e.memberId, S.me.id) || S.me.isOwner) ? '<button class="btn small ghost" data-act="h-correct" data-id="' + e.id + '">Corrigeren</button>' : '') +
     (editable ? '<button class="icon-btn small" data-act="h-edit" data-id="' + e.id + '" aria-label="Bewerken">' + ICON.edit + '</button><button class="icon-btn small" data-act="h-del" data-id="' + e.id + '" aria-label="Verwijderen">' + ICON.trash + '</button>' : '') +
     (!self && e.status === 'goedgekeurd' && can('hours.approve') ? '<button class="btn small ghost" data-act="h-reopen" data-id="' + e.id + '">Terugzetten</button>' : '') + '</div>' +
+    (e.correctedByName ? '<div class="entry-reason soft">Gecorrigeerd door ' + esc(e.correctedByName) + (e.correctReason ? ': ' + esc(e.correctReason) : '') + '</div>' : '') +
     (e.status === 'afgekeurd' && e.rejectReason ? '<div class="entry-reason">Afgekeurd door ' + esc(e.reviewedByName || 'teamleider') + ': ' + esc(e.rejectReason) + '</div>' : '') + '</div>';
 }
 
+function corrForm() {
+  const C = S.hCorr;
+  return '<section class="card stack" style="gap:14px;max-width:none"><div class="item-top"><h2 style="margin:0">Uren corrigeren · ' + esc(C.name) + '</h2><button class="icon-btn small" data-act="hc-cancel" aria-label="Sluiten">' + ICON.x + '</button></div>' +
+    '<p class="small muted" style="margin:0">Was: <strong>' + esc(dayLong(C.date)) + ', ' + esc(C.was) + '</strong>. De uren blijven goedgekeurd; ' + esc(C.name.split(' ')[0]) + ' krijgt een melding met je reden.</p>' +
+    '<div class="fields4"><div class="field"><label for="hc-date">Datum</label><input class="input" type="date" id="hc-date" data-hc="date" value="' + esc(C.date) + '"></div>' +
+    '<div class="field"><label for="hc-start">Begin</label><input class="input" type="time" id="hc-start" data-hc="start" value="' + esc(C.start) + '"></div>' +
+    '<div class="field"><label for="hc-end">Eind</label><input class="input" type="time" id="hc-end" data-hc="end" value="' + esc(C.end) + '"></div>' +
+    '<div class="field"><label for="hc-break">Pauze (min)</label><input class="input" type="number" min="0" max="600" step="5" id="hc-break" data-hc="breakMin" value="' + esc(C.breakMin) + '"></div></div>' +
+    '<div class="field"><label for="hc-reason">Waarom pas je het aan?</label><input class="input" id="hc-reason" data-hc="reason" maxlength="300" value="' + esc(C.reason) + '" placeholder="Bijv. vergeten uit te klokken, was om 17:00 klaar"></div>' +
+    '<div class="form-foot"><button class="btn ghost" data-act="hc-cancel">Annuleren</button><button class="btn primary" data-act="hc-save">Opslaan</button></div></section>';
+}
 function viewHours() {
   const H = S.hours; if (!H) return '';
   const self = same(H.member.id, S.me.id);
@@ -1470,8 +1486,9 @@ function viewHours() {
   const ct = H.member.contractType, ch = Number(H.member.contractHours) * 60;
   const planned = H.shifts.reduce((a, s) => a + spanMin(s.start, s.end), 0);
   let h = '<header class="page-head"><div><h1>' + (self ? 'Mijn uren' : 'Uren van ' + esc(H.member.name)) + '</h1><p>' +
-    (self ? 'Klok in en uit, of vul je uren achteraf in. Klopt je week? Dien hem in.' : esc(contractText(H.member)) + '. Je bekijkt deze uren alleen.') + '</p></div>' +
+    (self ? 'Geklokte uren zijn meteen goedgekeurd. Uren die je zelf invult, dien je in en worden daarna goedgekeurd.' : esc(contractText(H.member)) + '.' + (can('hours.approve') ? ' Klopt er iets niet? Klik op Corrigeren.' : '')) + '</p></div>' +
     (!self ? '<div class="actions"><button class="btn" data-act="h-me">' + ICON.left + 'Mijn eigen uren</button></div>' : '') + '</header>';
+  if (S.hCorr) h += modal(corrForm(), 'hc-cancel');
   h += weekNav('h-week', mon);
   if (self && mon === mondayOf(today())) h += clockCard();
   if (self && H.published === false && !can('hours.plan')) h += '<p class="small muted" style="margin:0">Het rooster voor deze week is nog niet vastgezet. Je diensten verschijnen hier zodra het klaar is.</p>';
@@ -2090,57 +2107,78 @@ function avpSet(el) {
   S.avPatEdit[wd] = Object.assign({ weekday: Number(wd), status: '' }, S.avPatEdit[wd], { [k]: el.value });
 }
 const WD = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
+const WD_SHORT = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
+function avPat() { return S.avPatEdit || Object.fromEntries((S.avPat || []).map(x => [x.weekday, Object.assign({}, x)])); }
+let avpTimer = null;
+function avpAutoSave() {
+  clearTimeout(avpTimer);
+  avpTimer = setTimeout(async () => {
+    const P = S.avPatEdit || {};
+    for (const wd of [1, 2, 3, 4, 5, 6, 7]) { const r = P[wd] || {}; if (r.status === 'kan' && (!!r.start !== !!r.end)) return; }
+    try {
+      S.avPat = await rpc('cd_availability_pattern_set', { p: [1, 2, 3, 4, 5, 6, 7].map(wd => ({ weekday: wd, status: (P[wd] || {}).status || '', start: (P[wd] || {}).start || '', end: (P[wd] || {}).end || '', note: (P[wd] || {}).note || '' })) });
+      S.avPatEdit = null; await loadAvailability(); renderKeepFocus(); toast('Vaste week opgeslagen.');
+    } catch (err) { toast(err.message, true); }
+  }, 500);
+}
 function avPatternCard() {
-  const P = S.avPatEdit || Object.fromEntries((S.avPat || []).map(x => [x.weekday, Object.assign({}, x)]));
-  const row = i => { const wd = i + 1, r = P[wd] || { status: '' };
-    return '<div class="avp-row"><strong>' + WD[i] + '</strong>' +
-      '<select class="input" data-avp="' + wd + '|status" data-rerender="1">' + [['', '— Niet ingevuld'], ['kan', 'Kan werken'], ['kan_niet', 'Kan niet']].map(o => '<option value="' + o[0] + '"' + ((r.status || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>' +
-      (r.status === 'kan' ? '<input class="input" type="time" aria-label="' + WD[i] + ' vanaf" data-avp="' + wd + '|start" value="' + esc(r.start || '') + '"><span class="muted">tot</span><input class="input" type="time" aria-label="' + WD[i] + ' tot" data-avp="' + wd + '|end" value="' + esc(r.end || '') + '">' : '<span></span><span></span><span></span>') +
-      '</div>'; };
-  return '<section class="card stack" style="gap:12px"><div class="item-top"><h2 style="margin:0">Vaste week</h2>' + (S.avPatEdit ? '<span class="badge orange">Niet opgeslagen</span>' : '') + '</div>' +
-    '<p class="small muted" style="margin:0">Wanneer kun je normaal gesproken werken? Bijvoorbeeld ma t/m vr vanaf 12:00 tot 21:00. Dit geldt elke week. Laat de tijden leeg voor de hele dag.</p>' +
-    '<div class="avp">' + [0, 1, 2, 3, 4, 5, 6].map(row).join('') + '</div>' +
-    '<div class="row"><button class="btn primary" data-act="avp-save"' + (S.avPatEdit ? '' : ' disabled') + '>Vaste week opslaan</button>' +
-    (S.avPatEdit ? '<button class="btn ghost" data-act="avp-cancel">Annuleren</button>' : '') + '</div></section>';
+  const P = avPat();
+  const card = i => {
+    const wd = i + 1, r = P[wd] || { status: '' }, st = r.status || '';
+    return '<div class="avd ' + (st || 'leeg') + '"><strong>' + WD[i] + '</strong>' +
+      '<div class="avd-opts" role="radiogroup" aria-label="' + WD[i] + '">' + [['kan', 'Kan'], ['kan_niet', 'Kan niet'], ['', 'Leeg']].map(o =>
+        '<button role="radio" aria-checked="' + (st === o[0]) + '" class="' + (st === o[0] ? 'on ' : '') + (o[0] || 'leeg') + '" data-act="avp-st" data-v="' + wd + '|' + o[0] + '">' + o[1] + '</button>').join('') + '</div>' +
+      (st === 'kan' ? '<div class="avd-times"><span class="muted">van</span><input class="input" type="time" aria-label="' + WD[i] + ' vanaf" data-avp="' + wd + '|start" value="' + esc(r.start || '') + '"><span class="muted">tot</span><input class="input" type="time" aria-label="' + WD[i] + ' tot" data-avp="' + wd + '|end" value="' + esc(r.end || '') + '"></div>' +
+        '<span class="small muted">' + (r.start && r.end ? esc(r.start + ' – ' + r.end) : 'Hele dag') + '</span>'
+        : '<span class="small muted">' + (st === 'kan_niet' ? 'Nooit op ' + WD[i].toLowerCase() : 'Niet ingevuld') + '</span>') + '</div>';
+  };
+  return '<section class="card stack" style="gap:14px;max-width:none"><div><h2 style="margin:0">Mijn vaste week</h2>' +
+    '<p class="small muted" style="margin:4px 0 0">Wanneer kun je normaal werken? Dit geldt elke week. Laat de tijden leeg voor de hele dag. Wijzigingen worden meteen opgeslagen.</p></div>' +
+    '<div class="avd-grid">' + [0, 1, 2, 3, 4, 5, 6].map(card).join('') + '</div>' +
+    '<div class="row avd-presets"><span class="small muted">Snel:</span>' +
+      '<button class="btn small ghost" data-act="avp-preset" data-v="werkdagen">Ma t/m vr hele dag</button>' +
+      '<button class="btn small ghost" data-act="avp-preset" data-v="weekend-niet">Weekend kan niet</button>' +
+      '<button class="btn small ghost" data-act="avp-preset" data-v="kopieer-ma">Maandag naar ma t/m vr</button>' +
+      '<button class="btn small ghost" data-act="avp-preset" data-v="leeg">Alles leeg</button></div></section>';
 }
 function viewAvailability() {
   if (!S.av) return '';
+  const tab = S.avTab || 'vast';
+  let h = '<header class="page-head"><div><h1>Beschikbaarheid</h1><p>Geef aan wanneer je kunt werken. Wie het rooster maakt, ziet dit meteen.</p></div></header>';
+  h += '<div class="seg" role="tablist">' + [['vast', 'Vaste week'], ['dagen', 'Losse dagen']].map(t => '<button role="tab" aria-selected="' + (tab === t[0]) + '" class="' + (tab === t[0] ? 'on' : '') + '" data-act="av-tab" data-v="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
+  if (tab === 'vast') return h + avPatternCard();
   const m = S.avMonth, last = monthEnd(m), from = mondayOf(m), to = addDays(mondayOf(last), 6);
   const sel = S.avSel || {};
   const nSel = Object.keys(sel).filter(k => sel[k]).length;
   const cur = monthStart(today());
-  let h = '<header class="page-head"><div><h1>Beschikbaarheid</h1><p>Geef aan wanneer je wel of niet kunt werken. Wie het rooster maakt ziet dit meteen.</p></div></header>';
+  h += '<p class="small muted" style="margin:0">Wijkt een dag af van je vaste week, bijvoorbeeld door een toets of feestje? Tik op die dag(en) en kies daarna onderaan. Een losse dag gaat altijd voor je vaste week.</p>';
   h += '<div class="roster-bar"><div class="weeknav"><button class="icon-btn" data-act="av-month" data-v="' + addMonths(m, -1) + '" aria-label="Vorige maand">' + ICON.left + '</button>' +
     '<strong>' + monthLabel(m) + '</strong><button class="icon-btn" data-act="av-month" data-v="' + addMonths(m, 1) + '" aria-label="Volgende maand">' + ICON.right + '</button>' +
     (m !== cur ? '<button class="btn small ghost" data-act="av-month" data-v="' + cur + '">Naar deze maand</button>' : '') + '</div>' +
-    '<span class="small muted">Tik op dagen om ze te kiezen, of op ma t/m zo om die dag elke week te kiezen.</span></div>';
-  h += avPatternCard();
-  h += '<h2 class="card-sub" style="margin:8px 0 0">Losse dagen</h2><p class="small muted" style="margin:0">Wijkt een dag af van je vaste week (bijv. een toets of feestje)? Kies de dag hieronder. Een losse dag gaat altijd voor.</p>';
-  h += '<div class="month av-month"><div class="month-head">' + ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'].map((d, i) => '<button class="av-wd" data-act="av-weekday" data-v="' + i + '">' + d + '</button>').join('') + '</div><div class="month-grid">';
+    '<div class="av-legend"><span><i class="kan"></i>Kan</span><span><i class="kan_niet"></i>Kan niet</span><span><i class="vast"></i>Uit vaste week</span><span><i class="los"></i>Losse dag</span></div></div>';
+  h += '<div class="month av-month"><div class="month-head">' + WD_SHORT.map((d, i) => '<button class="av-wd" data-act="av-weekday" data-v="' + i + '" title="Kies elke ' + WD[i].toLowerCase() + ' van deze maand">' + d + '</button>').join('') + '</div><div class="month-grid">';
   for (let d = from; d <= to; d = addDays(d, 1)) {
     const out = d < m || d > last, past = d < today();
     const a = S.av.find(x => x.date === d) || Object.assign({ vast: true }, (S.avRoster.availability || []).find(x => x.date === d && same(x.memberId, S.me.id) && x.source === 'vast') || { none: true });
     if (a.none) delete a.status;
     const ab = absFor(S.avRoster.absences, S.me.id, d);
     const sh = S.avRoster.shifts.filter(s => same(s.memberId, S.me.id) && s.date === d);
-    h += '<button class="mday av' + (out ? ' out' : '') + (past ? ' past' : '') + (d === today() ? ' today' : '') + (sel[d] ? ' picked' : '') + (a.status ? ' ' + a.status + (a.vast ? ' vast' : '') : '') + '"' +
+    h += '<button class="mday av' + (out ? ' out' : '') + (past ? ' past' : '') + (d === today() ? ' today' : '') + (sel[d] ? ' picked' : '') + (a.status ? ' ' + a.status + (a.vast ? ' vast' : ' los') : '') + '"' +
       (past || out ? ' disabled' : ' data-act="av-pick" data-v="' + d + '"') + ' aria-pressed="' + !!sel[d] + '">' +
       '<span class="mday-num">' + pd(d).getDate() + '</span>' +
-      (a.status ? '<span class="av-state">' + (a.status === 'kan' ? 'Kan' + (a.start ? ' ' + esc(a.start + '–' + a.end) : '') : 'Kan niet') + (a.vast ? ' <small>(vast)</small>' : '') + '</span>' + (a.note ? '<span class="av-note">' + esc(a.note) + '</span>' : '') : '') +
+      (a.status ? '<span class="av-state">' + (a.status === 'kan' ? (a.start ? esc(a.start + '–' + a.end) : 'Kan') : 'Kan niet') + '</span>' + (a.note ? '<span class="av-note">' + esc(a.note) + '</span>' : '') : '') +
       (ab ? absChip(ab) : '') + (sh.length ? '<span class="av-shift">Dienst ' + esc(sh[0].start + '–' + sh[0].end) + '</span>' : '') + '</button>';
   }
   h += '</div></div>';
-  const A = S.avEdit || { start: '', end: '', note: '' };
-  h += '<section class="card av-bar' + (nSel ? ' on' : '') + '"><div><strong>' + (nSel ? nSel + (nSel === 1 ? ' dag gekozen' : ' dagen gekozen') : 'Kies eerst een of meer dagen') + '</strong>' +
-    (nSel ? ' <button class="link-btn dark" data-act="av-clear">Selectie wissen</button>' : '') + '</div>' +
-    '<div class="row" style="align-items:flex-end">' +
-      '<div class="field" style="flex:0 1 120px"><label for="av-start">Vanaf</label><input class="input" type="time" id="av-start" data-av="start" value="' + esc(A.start) + '"></div>' +
-      '<div class="field" style="flex:0 1 120px"><label for="av-end">Tot</label><input class="input" type="time" id="av-end" data-av="end" value="' + esc(A.end) + '"></div>' +
-      '<div class="field" style="flex:1 1 180px"><label for="av-note">Notitie</label><input class="input" id="av-note" data-av="note" maxlength="120" value="' + esc(A.note) + '" placeholder="Bijv. school, sport"></div></div>' +
-    '<div class="row"><button class="btn primary" data-act="av-set" data-v="kan"' + (nSel ? '' : ' disabled') + '>Kan werken</button>' +
-      '<button class="btn" data-act="av-set" data-v="kan_niet"' + (nSel ? '' : ' disabled') + '>Kan niet</button>' +
-      '<button class="btn ghost" data-act="av-set" data-v=""' + (nSel ? '' : ' disabled') + '>Wissen</button></div>' +
-    '<p class="small muted" style="margin:0">Laat vanaf en tot leeg voor de hele dag.</p></section>';
+  if (nSel) {
+    const A = S.avEdit || { start: '', end: '', note: '' };
+    h += '<section class="av-bar2" role="region" aria-label="Gekozen dagen"><div class="av-bar2-top"><strong>' + nSel + (nSel === 1 ? ' dag gekozen' : ' dagen gekozen') + '</strong><button class="link-btn" data-act="av-clear">Selectie wissen</button></div>' +
+      '<div class="av-bar2-row"><div class="field"><label for="av-start">Vanaf</label><input class="input" type="time" id="av-start" data-av="start" value="' + esc(A.start) + '"></div>' +
+        '<div class="field"><label for="av-end">Tot</label><input class="input" type="time" id="av-end" data-av="end" value="' + esc(A.end) + '"></div>' +
+        '<div class="field" style="flex:1 1 160px"><label for="av-note">Notitie</label><input class="input" id="av-note" data-av="note" maxlength="120" value="' + esc(A.note) + '" placeholder="Bijv. school, sport"></div></div>' +
+      '<div class="av-bar2-row"><button class="btn primary" data-act="av-set" data-v="kan">Kan werken</button><button class="btn" data-act="av-set" data-v="kan_niet">Kan niet</button><button class="btn ghost" data-act="av-set" data-v="">Terug naar vaste week</button>' +
+        '<span class="small muted">Tijden leeg = hele dag.</span></div></section>';
+  }
   return h;
 }
 
@@ -2377,7 +2415,7 @@ $app.addEventListener('input', e => {
     if (isFinite(v)) { if (f === 'from') S.brEdit[k][i].fromMin = Math.round(v * 60); else S.brEdit[k][i].breakMin = Math.round(v); }
     const b = document.querySelector('[data-act="br-save"]'); if (b) b.disabled = false; return;
   }
-  if (el.dataset.avp) { avpSet(el); if (!el.dataset.rerender) { const b = document.querySelector('[data-act="avp-save"]'); if (b) b.disabled = false; } return; }
+  if (el.dataset.avp) { avpSet(el); return; }
   if (el.dataset.tpl) { S.tplEdit = S.tplEdit || { name: '', start: '', end: '', note: '' }; S.tplEdit[el.dataset.tpl] = el.value; return; }
   if (el.dataset.in === 'kq') { K.q = el.value; renderKeepFocus(); return; }
   if (el.dataset.in === 'kbq') { S.kbQ = el.value; clearTimeout(logTimer); logTimer = setTimeout(async () => { try { await loadKb(); renderKeepFocus(); } catch (err) { toast(err.message, true); } }, 300); }
@@ -2405,11 +2443,12 @@ $app.addEventListener('change', async e => {
   }
   if (el.dataset.sh && S.shiftEdit) { S.shiftEdit[el.dataset.sh] = el.value; if (el.dataset.rerender) render(); }
   if (el.dataset.in === 'rowho') { S.rosterWho = el.value; render(); }
-  if (el.dataset.avp && el.dataset.rerender) { avpSet(el); render(); }
+  if (el.dataset.avp) { avpSet(el); avpAutoSave(); }
   if (el.dataset.brAuto !== undefined) { S.brEdit = S.brEdit || JSON.parse(JSON.stringify(breakRules())); S.brEdit.auto = el.checked; render(); }
   if (el.dataset.in === 'rocompare') { S.rosterCompare = el.checked; render(); }
   if (el.dataset.abs && S.absForm) { S.absForm[el.dataset.abs] = el.value; if (el.dataset.abs === 'from' && S.absForm.to && S.absForm.to < el.value) S.absForm.to = el.value; if (['from', 'to', 'memberId', 'hours'].includes(el.dataset.abs)) render(); }
   if (el.dataset.h && S.hEdit) S.hEdit[el.dataset.h] = el.value;
+  if (el.dataset.hc && S.hCorr) S.hCorr[el.dataset.hc] = el.value;
   if (el.dataset.kbPin !== undefined && S.kbEdit) S.kbEdit.pinned = el.checked;
   if (el.dataset.foRole && S.folderEdit) { const id = el.dataset.foRole; S.folderEdit.roleIds = S.folderEdit.roleIds.filter(x => !same(x, id)); if (el.checked) S.folderEdit.roleIds.push(id); }
   if (el.dataset.psel) { if (el.checked) delete S.pOff[el.dataset.psel]; else S.pOff[el.dataset.psel] = true; render(); }
@@ -2604,7 +2643,14 @@ $app.addEventListener('click', async e => {
         S.hEdit = { id: null, date: d, start: sh ? sh.start : '', end: sh ? sh.end : '', breakMin: sh && spanMin(sh.start, sh.end) > 330 ? 30 : 0, note: '' };
         render(); const f = document.getElementById(sh ? 'h-break' : 'h-start'); if (f) f.focus(); return;
       }
-      case 'h-edit': { const e2 = S.hours.entries.find(x => same(x.id, raw)); S.hEdit = { id: e2.id, date: e2.date, start: e2.start, end: e2.end || '', breakMin: e2.breakMin, note: e2.note || '' }; render(); return; }
+      case 'h-edit': { const e2 = S.hours.entries.find(x => same(x.id, raw)); S.hEdit = { id: e2.id, date: e2.date, start: e2.start, end: e2.end || '', breakMin: e2.breakMin, note: e2.note || '', wasAuto: !!e2.auto }; render(); return; }
+      case 'h-correct': { const e2 = S.hours.entries.find(x => same(x.id, raw)); S.hCorr = { id: e2.id, name: e2.memberName, date: e2.date, start: e2.start, end: e2.end || '', breakMin: e2.breakMin, note: e2.note || '', reason: '', was: e2.start + '–' + (e2.end || '') + (e2.breakMin ? ', ' + e2.breakMin + ' min pauze' : '') }; render(); return; }
+      case 'hc-cancel': S.hCorr = null; render(); return;
+      case 'hc-save': {
+        const C = S.hCorr; if (!C.reason.trim()) { toast('Schrijf kort waarom je de uren aanpast.', true); document.getElementById('hc-reason').focus(); return; }
+        el.disabled = true; await rpc('cd_hours_correct', { p_id: C.id, p: { date: C.date, start: C.start, end: C.end, breakMin: C.breakMin, note: C.note, reason: C.reason } });
+        S.hCorr = null; toast('Uren gecorrigeerd. ' + C.name.split(' ')[0] + ' krijgt een melding.'); break;
+      }
       case 'h-cancel': S.hEdit = null; render(); return;
       case 'h-save': {
         const E = S.hEdit;
@@ -2656,6 +2702,20 @@ $app.addEventListener('click', async e => {
       }
 
       case 'avp-cancel': S.avPatEdit = null; render(); return;
+      case 'av-tab': S.avTab = el.dataset.v; render(); return;
+      case 'avp-st': {
+        const [wd, st] = el.dataset.v.split('|'); const P = S.avPatEdit = avPat();
+        P[wd] = Object.assign({ weekday: Number(wd) }, P[wd], { status: st }); if (st !== 'kan') { P[wd].start = ''; P[wd].end = ''; }
+        render(); avpAutoSave(); return;
+      }
+      case 'avp-preset': {
+        const P = S.avPatEdit = avPat(); const v = el.dataset.v;
+        if (v === 'werkdagen') [1, 2, 3, 4, 5].forEach(wd => { P[wd] = { weekday: wd, status: 'kan', start: '', end: '' }; });
+        if (v === 'weekend-niet') [6, 7].forEach(wd => { P[wd] = { weekday: wd, status: 'kan_niet', start: '', end: '' }; });
+        if (v === 'kopieer-ma') { const m0 = P[1] || { status: '' }; [2, 3, 4, 5].forEach(wd => { P[wd] = Object.assign({}, m0, { weekday: wd }); }); }
+        if (v === 'leeg') { if (!confirm('Je hele vaste week leegmaken?')) return; [1, 2, 3, 4, 5, 6, 7].forEach(wd => { P[wd] = { weekday: wd, status: '' }; }); }
+        render(); avpAutoSave(); return;
+      }
       case 'avp-save': {
         const P = S.avPatEdit || {};
         S.avPat = await rpc('cd_availability_pattern_set', { p: [1, 2, 3, 4, 5, 6, 7].map(wd => ({ weekday: wd, status: (P[wd] || {}).status || '', start: (P[wd] || {}).start || '', end: (P[wd] || {}).end || '', note: (P[wd] || {}).note || '' })) });
@@ -2752,7 +2812,7 @@ $app.addEventListener('click', async e => {
         const A = S.avEdit || {};
         if (el.dataset.v === 'kan' && (!!A.start !== !!A.end)) { toast('Vul zowel vanaf als tot in, of laat beide leeg.', true); return; }
         const d = await rpc('cd_availability_set', { p_dates: dates, p_status: el.dataset.v || null, p_start: el.dataset.v === 'kan' ? A.start || null : null, p_end: el.dataset.v === 'kan' ? A.end || null : null, p_note: A.note || null });
-        toast(el.dataset.v ? 'Opgeslagen voor ' + dates.length + (dates.length === 1 ? ' dag.' : ' dagen.') : 'Gewist.'); S.avSel = {}; void d; break;
+        toast(el.dataset.v ? 'Opgeslagen voor ' + dates.length + (dates.length === 1 ? ' dag.' : ' dagen.') : 'Teruggezet naar je vaste week.'); S.avSel = {}; void d; break;
       }
 
       // meldingen
