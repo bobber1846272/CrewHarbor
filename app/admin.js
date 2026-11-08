@@ -167,8 +167,11 @@ function viewBilling() {
   h += '<section class="stack" style="gap:12px;max-width:none"><div class="section-title"><h2>Pakketten</h2><button class="btn small" data-act="plan-new">Pakket toevoegen</button></div>' +
     '<p class="small muted" style="margin:0">Prijzen zijn per actieve medewerker per maand, exclusief btw. Wijzigingen staan meteen op de website; lopende abonnementen krijgen het nieuwe bedrag bij hun volgende wijziging.</p>' +
     (A.data.plans || []).concat(A.planNew ? [{ id: '', name: '', priceCents: 0, minCents: 0, features: [], highlights: [], sort: 9, public: true, isNew: true }] : []).map(p =>
-      '<form class="card stack" data-form="plan" data-id="' + esc(p.id) + '" style="gap:12px;max-width:none" novalidate><div class="item-top"><h3 style="margin:0">' + (p.isNew ? 'Nieuw pakket' : esc(p.name)) + '</h3>' +
-        (p.popular ? '<span class="badge green">Meest gekozen</span>' : '') + (p.isNew ? '' : p.public === false ? '<span class="badge orange">Verborgen</span>' : '<span class="badge green">Live</span>') + '</div>' +
+      '<details class="card plan-card" style="max-width:none;padding:0"' + (p.isNew || (A.planOpen || {})[p.id] ? ' open' : '') + '>' +
+      '<summary class="plan-sum" data-act="plan-toggle" data-id="' + esc(p.id) + '"><span class="plan-chev" aria-hidden="true">›</span><h3 style="margin:0">' + (p.isNew ? 'Nieuw pakket' : esc(p.name)) + '</h3>' +
+        (p.isNew ? '' : '<span class="small muted">' + (!p.priceCents && !p.minCents ? 'gratis' : eur(p.priceCents) + '/mw' + (p.minCents ? ' · min. ' + eur(p.minCents) : '')) + '</span>') +
+        '<span class="plan-badges">' + (p.popular ? '<span class="badge green">Meest gekozen</span>' : '') + (p.isNew ? '' : p.public === false ? '<span class="badge orange">Verborgen</span>' : '<span class="badge green">Live</span>') + '</span></summary>' +
+      '<form class="stack" data-form="plan" data-id="' + esc(p.id) + '" style="gap:12px;max-width:none;padding:0 20px 20px" novalidate>' +
       '<div class="fields4">' +
         '<div class="field"><label>Code</label><input class="input" name="id" value="' + esc(p.id) + '"' + (p.isNew ? '' : ' readonly') + ' autocapitalize="none"></div>' +
         '<div class="field"><label>Naam</label><input class="input" name="name" value="' + esc(p.name) + '"></div>' +
@@ -181,7 +184,7 @@ function viewBilling() {
       '<div class="field"><label>Wat zit erin (één per regel, voor de website)</label><textarea class="input" name="highlights" rows="4">' + esc((p.highlights || []).join('\n')) + '</textarea></div>' +
       '<div class="row">' + FEAT.map(f => '<label class="check"><input type="checkbox" name="f-' + f[0] + '"' + ((p.features || []).includes(f[0]) ? ' checked' : '') + '> ' + f[1] + '</label>').join('') + '</div>' +
       '<div class="row"><label class="check"><input type="checkbox" name="public"' + (p.public !== false ? ' checked' : '') + '> Live (op de website en te kiezen door klanten). Uit = verborgen, alleen in Beheer</label><label class="check"><input type="checkbox" name="popular"' + (p.popular ? ' checked' : '') + '> Meest gekozen</label></div>' +
-      '<div class="row"><button class="btn primary" type="submit">Opslaan</button>' + (p.isNew ? '<button class="btn ghost" type="button" data-act="plan-cancel">Annuleren</button>' : '') + '</div></form>').join('') + '</section>';
+      '<div class="row"><button class="btn primary" type="submit">Opslaan</button>' + (p.isNew ? '<button class="btn ghost" type="button" data-act="plan-cancel">Annuleren</button>' : '') + '</div></form></details>').join('') + '</section>';
   return h;
 }
 function orgBilling(o) {
@@ -403,6 +406,7 @@ $app.addEventListener('click', async e => {
         if (id === 'mail') { A.mail = await svc('admin-mail-get'); render(); }
         if (id === 'betalen') { A.mollie = await svc('admin-mollie-get'); render(); }
         break;
+      case 'plan-toggle': A.planOpen = A.planOpen || {}; A.planOpen[id] = !b.parentElement.open; break;
       case 'plan-new': A.planNew = true; render(); break;
       case 'plan-cancel': A.planNew = false; render(); break;
       case 'mollie-remove': if (!confirm('Mollie ontkoppelen? Bedrijven kunnen dan geen betaling meer instellen; lopende incasso’s blijven bij Mollie doorlopen.')) break;

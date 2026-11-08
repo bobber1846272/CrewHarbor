@@ -758,3 +758,10 @@ details summary { cursor: pointer; font-weight: 600; min-height: 32px; display: 
   .wiz-row { grid-template-columns: 1fr; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
   .wiz-card h1 { font-size: 24px; }
 }
+
+/* Beheer · inklapbare pakketten */
+.plan-card > summary.plan-sum { list-style: none; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 20px; min-height: 0; }
+.plan-card > summary.plan-sum::-webkit-details-marker { display: none; }
+.plan-card .plan-chev { display: inline-block; font-size: 20px; line-height: 1; transition: transform .15s ease; color: var(--muted, #4A5F6E); }
+.plan-card[open] .plan-chev { transform: rotate(90deg); }
+.plan-card .plan-badges { margin-left: auto; display: flex; gap: 6px; }
