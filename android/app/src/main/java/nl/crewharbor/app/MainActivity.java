@@ -2,6 +2,7 @@ package nl.crewharbor.app;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.KeyguardManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -13,13 +14,20 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Insets;
+import android.graphics.Typeface;
+import android.hardware.biometrics.BiometricPrompt;
+import android.net.ConnectivityManager;
+import android.net.Network;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.CancellationSignal;
 import android.os.Environment;
 import android.os.Message;
 import android.provider.MediaStore;
 import android.util.Base64;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
@@ -36,7 +44,11 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -62,7 +74,10 @@ public class MainActivity extends Activity {
     private static final int REQ_FILE = 1;
     private static final int REQ_NOTIF = 2;
     private static final int NAVY = 0xFF0D2340;
-    private static final String VERSION = "5.0";
+    private static final String VERSION = "5.1";
+    private static final int REQ_UNLOCK = 3;
+    /** zo lang mag de app op de achtergrond staan voordat hij weer op slot gaat */
+    private static final long LOCK_AFTER_MS = 30_000;
 
     private WebView web;
     private View topBar;
@@ -71,6 +86,16 @@ public class MainActivity extends Activity {
     private int notifId = 100;
     private volatile boolean trusted = false;
     private ValueCallback<Uri[]> fileCallback;
+    private volatile boolean offlinePage = false;
+    private Totp totp;
+    private SharedPreferences prefs;
+    private View lockView;
+    private boolean locked = false;
+    private boolean pendingEnable = false;
+    private boolean authBusy = false;
+    private boolean autoPrompt = false;
+    private long backgroundAt = 0;
+    private ConnectivityManager.NetworkCallback netCallback;
 
     // ---------- opstarten ----------
 
@@ -90,12 +115,22 @@ public class MainActivity extends Activity {
         root.addView(topBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0));
         root.addView(web, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         root.addView(bottomBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0));
-        setContentView(root);
+        prefs = getSharedPreferences("crewharbor", MODE_PRIVATE);
+        totp = new Totp(this);
+        lockView = buildLockView();
+        FrameLayout frame = new FrameLayout(this);
+        frame.addView(root, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        frame.addView(lockView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        setContentView(frame);
         setupSystemBars(root);
 
         setupWebView();
         createChannel();
         askNotificationPermission();
+        watchNetwork();
+
+        // vergrendeld starten als het slot aan staat
+        setLocked(lockOn());
 
         if (saved != null && web.restoreState(saved) != null) return;
         load(0);
@@ -190,6 +225,7 @@ public class MainActivity extends Activity {
         @Override
         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
             trusted = isTrusted(Uri.parse(url));
+            offlinePage = OFFLINE.equals(url);
         }
 
         @Override
@@ -254,6 +290,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int req, int result, Intent data) {
         super.onActivityResult(req, result, data);
+        if (req == REQ_UNLOCK) { authBusy = false; authDone(result == RESULT_OK); return; }
         if (req == REQ_FILE && fileCallback != null) {
             fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result, data));
             fileCallback = null;
@@ -263,6 +300,7 @@ public class MainActivity extends Activity {
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
+        if (locked) { moveTaskToBack(true); return; }
         // eerst een open terugbelverzoek sluiten, dan terug in de geschiedenis, anders de app naar achteren
         web.evaluateJavascript(
                 "(function(){var b=document.querySelector('[data-mact=\"cb-close\"]');if(b){b.click();return 1}return 0})()",
@@ -363,6 +401,65 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public String appVersion() { return VERSION; }
+
+        // --- 6. laatste stand bewaren voor als er geen internet is ---
+        @JavascriptInterface
+        public void saveSnapshot(String json) {
+            if (!trusted) return;
+            if (json == null || json.isEmpty()) prefs.edit().remove("snapshot").apply();
+            else if (json.length() < 200_000) prefs.edit().putString("snapshot", json).apply();
+        }
+
+        @JavascriptInterface
+        public String getSnapshot() {
+            if (!trusted && !offlinePage) return null;
+            return prefs.getString("snapshot", null);
+        }
+
+        @JavascriptInterface
+        public void goOffline() {
+            if (!trusted) return;
+            runOnUiThread(() -> { trusted = false; web.loadUrl(OFFLINE); });
+        }
+
+        // --- 7. slot met vingerafdruk, gezicht of schermvergrendeling ---
+        @JavascriptInterface
+        public boolean lockAvailable() { return deviceSecure(); }
+
+        @JavascriptInterface
+        public boolean lockEnabled() { return lockOn(); }
+
+        @JavascriptInterface
+        public void setLock(boolean on) {
+            if (!trusted) return;
+            runOnUiThread(() -> {
+                if (!on) { prefs.edit().putBoolean("lock", false).apply(); lockResult(false); return; }
+                if (!deviceSecure()) { lockResult(false); return; }
+                pendingEnable = true;
+                authenticate();
+            });
+        }
+
+        // --- 8. eigen tweestapsverificatie ---
+        @JavascriptInterface
+        public boolean totpSave(String factorId, String secret, String label) {
+            return trusted && totp.save(factorId, secret, label);
+        }
+
+        @JavascriptInterface
+        public String totpCode(String factorId) {
+            if (!trusted || locked) return null;
+            return totp.code(factorId);
+        }
+
+        @JavascriptInterface
+        public String totpList() { return trusted ? totp.list() : "[]"; }
+
+        @JavascriptInterface
+        public void totpRemove(String factorId) { if (trusted) totp.remove(factorId); }
+
+        @JavascriptInterface
         public String saveBase64(String name, String base64, String mime) {
             if (!trusted || base64 == null) return null;
             try {
@@ -373,7 +470,154 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ---------- slot ----------
+
+    private boolean lockOn() { return prefs.getBoolean("lock", false) && deviceSecure(); }
+
+    private boolean deviceSecure() {
+        KeyguardManager km = getSystemService(KeyguardManager.class);
+        return km != null && km.isDeviceSecure();
+    }
+
+    private View buildLockView() {
+        LinearLayout v = new LinearLayout(this);
+        v.setOrientation(LinearLayout.VERTICAL);
+        v.setGravity(Gravity.CENTER);
+        v.setBackgroundColor(NAVY);
+        v.setClickable(true); // niets erachter aanklikbaar
+        int pad = dp(32);
+        v.setPadding(pad, pad, pad, pad);
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.mipmap.ic_launcher_foreground);
+        v.addView(logo, new LinearLayout.LayoutParams(dp(128), dp(128)));
+        TextView t = new TextView(this);
+        t.setText("CrewHarbor is vergrendeld");
+        t.setTextColor(Color.WHITE);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setGravity(Gravity.CENTER);
+        v.addView(t);
+        TextView sub = new TextView(this);
+        sub.setText("Ontgrendel met je vingerafdruk, gezicht of schermvergrendeling.");
+        sub.setTextColor(0xFFB9C6D3);
+        sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        sub.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sp.topMargin = dp(8);
+        v.addView(sub, sp);
+        Button b = new Button(this);
+        b.setText("Ontgrendelen");
+        b.setAllCaps(false);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        b.setTextColor(NAVY);
+        b.setBackgroundColor(0xFFEDE8DC);
+        b.setOnClickListener(x -> authenticate());
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(dp(220), dp(52));
+        bp.topMargin = dp(28);
+        v.addView(b, bp);
+        v.setVisibility(View.GONE);
+        return v;
+    }
+
+    private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
+
+    private void setLocked(boolean on) {
+        locked = on;
+        autoPrompt = on;
+        lockView.setVisibility(on ? View.VISIBLE : View.GONE);
+        if (on) lockView.bringToFront();
+        // geen inkijk via het overzicht van recente apps
+        if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(!lockOn());
+    }
+
+    /** Vingerafdruk/gezicht, met de pincode of het patroon van de telefoon als terugval. */
+    private void authenticate() {
+        if (authBusy) return;
+        if (!deviceSecure()) { authDone(!pendingEnable); return; }
+        authBusy = true;
+        if (Build.VERSION.SDK_INT >= 28) {
+            BiometricPrompt.Builder b = new BiometricPrompt.Builder(this)
+                    .setTitle(pendingEnable ? "Slot aanzetten" : "CrewHarbor ontgrendelen")
+                    .setSubtitle(pendingEnable ? "Bevestig dat jij het bent" : "Gebruik je vingerafdruk, gezicht of schermvergrendeling");
+            if (Build.VERSION.SDK_INT >= 30) {
+                b.setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK
+                        | android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL);
+            } else if (Build.VERSION.SDK_INT == 29) {
+                b.setDeviceCredentialAllowed(true);
+            } else {
+                b.setNegativeButton("Annuleren", getMainExecutor(), (d, w) -> { authBusy = false; authDone(false); });
+            }
+            try {
+                b.build().authenticate(new CancellationSignal(), getMainExecutor(), new BiometricPrompt.AuthenticationCallback() {
+                    @Override public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult r) { authBusy = false; authDone(true); }
+                    @Override public void onAuthenticationError(int code, CharSequence msg) { authBusy = false; authDone(false); }
+                });
+            } catch (Exception e) {
+                authBusy = false;
+                authViaKeyguard();
+            }
+        } else {
+            authViaKeyguard();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void authViaKeyguard() {
+        KeyguardManager km = getSystemService(KeyguardManager.class);
+        Intent i = km == null ? null : km.createConfirmDeviceCredentialIntent(pendingEnable ? "Slot aanzetten" : "CrewHarbor ontgrendelen", "Bevestig dat jij het bent");
+        if (i == null) { authDone(!pendingEnable); return; }
+        authBusy = true;
+        startActivityForResult(i, REQ_UNLOCK);
+    }
+
+    private void authDone(boolean ok) {
+        if (pendingEnable) {
+            pendingEnable = false;
+            if (ok) prefs.edit().putBoolean("lock", true).apply();
+            lockResult(ok);
+            if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(!lockOn());
+            return;
+        }
+        if (ok) setLocked(false);
+    }
+
+    private void lockResult(boolean on) {
+        web.evaluateJavascript("window.CHApp&&CHApp.lock&&CHApp.lock(" + (on && lockOn()) + ")", null);
+    }
+
+    // ---------- netwerk terug: offline-pagina vervangen door de app ----------
+
+    private void watchNetwork() {
+        ConnectivityManager cm = getSystemService(ConnectivityManager.class);
+        if (cm == null) return;
+        netCallback = new ConnectivityManager.NetworkCallback() {
+            @Override public void onAvailable(Network n) {
+                web.postDelayed(() -> { if (offlinePage) load(0); }, 1500);
+            }
+        };
+        try { cm.registerDefaultNetworkCallback(netCallback); } catch (Exception e) { netCallback = null; }
+    }
+
     // ---------- levenscyclus ----------
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (backgroundAt > 0 && lockOn() && System.currentTimeMillis() - backgroundAt > LOCK_AFTER_MS) setLocked(true);
+        backgroundAt = 0;
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (!authBusy && fileCallback == null) backgroundAt = System.currentTimeMillis();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && locked && autoPrompt && !authBusy) { autoPrompt = false; authenticate(); }
+    }
 
     @Override
     protected void onResume() {
@@ -395,6 +639,9 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (netCallback != null) {
+            try { getSystemService(ConnectivityManager.class).unregisterNetworkCallback(netCallback); } catch (Exception e) { /* */ }
+        }
         if (web != null) {
             ((ViewGroup) web.getParent()).removeView(web);
             web.destroy();

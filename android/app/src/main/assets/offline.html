@@ -5,19 +5,132 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CrewHarbor</title>
 <style>
-  html, body { margin: 0; height: 100%; }
-  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #0D2340; color: #fff;
-         display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px; box-sizing: border-box; }
-  svg { width: 64px; height: 64px; margin-bottom: 24px; }
-  h1 { font-size: 22px; margin: 0 0 8px; }
-  p { margin: 0 0 28px; color: #C9D3DE; line-height: 1.5; max-width: 320px; }
-  a { display: inline-block; background: #EDE8DC; color: #0D2340; text-decoration: none; font-weight: 600; padding: 14px 28px; border-radius: 12px; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #F4F7F7; color: #0D2340; -webkit-tap-highlight-color: transparent; }
+  header { background: #0D2340; color: #fff; padding: 18px 20px; display: flex; align-items: center; gap: 10px; }
+  header svg { width: 22px; height: 30px; }
+  header strong { font-size: 18px; }
+  .bar { background: #FEF3C7; color: #78350F; padding: 12px 20px; display: flex; align-items: center; gap: 12px; font-size: 14px; }
+  .bar span { flex: 1; line-height: 1.35; }
+  .bar a { background: #0D2340; color: #fff; text-decoration: none; font-weight: 600; padding: 10px 14px; border-radius: 10px; white-space: nowrap; }
+  main { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .card { background: #fff; border: 1px solid #DCE3E8; border-radius: 16px; padding: 16px; }
+  .label { font-size: 13px; color: #5B6B7B; font-weight: 600; margin: 0 0 4px; }
+  .big { font-size: 26px; font-weight: 800; }
+  .tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; }
+  .in { display: flex; align-items: center; gap: 10px; background: #0D2340; color: #fff; border-color: #0D2340; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #22C55E; flex: none; }
+  h2 { font-size: 15px; margin: 8px 2px 0; display: flex; justify-content: space-between; }
+  h2 span { font-weight: 400; color: #5B6B7B; font-size: 13px; }
+  .list { background: #fff; border: 1px solid #DCE3E8; border-radius: 16px; overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-top: 1px solid #DCE3E8; }
+  .row:first-child { border-top: 0; }
+  .row.today { background: #DDF0F2; }
+  .date { width: 44px; flex: none; text-align: center; line-height: 1.1; }
+  .date span { display: block; font-size: 11px; text-transform: uppercase; color: #5B6B7B; font-weight: 600; }
+  .date b { display: block; font-size: 20px; }
+  .main b { display: block; font-size: 16px; }
+  .main span { font-size: 13px; color: #5B6B7B; }
+  .chip { display: inline-block; background: #EDE9FE; color: #5B21B6; font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
+  .empty { text-align: center; color: #5B6B7B; padding: 40px 20px; }
+  .empty svg { width: 56px; height: 80px; margin-bottom: 16px; }
+  .empty h1 { color: #0D2340; font-size: 22px; margin: 0 0 8px; }
+  .empty a { display: inline-block; margin-top: 24px; background: #0D2340; color: #fff; text-decoration: none; font-weight: 600; padding: 14px 28px; border-radius: 12px; }
+  .note { font-size: 12px; color: #5B6B7B; text-align: center; margin: 8px 0 24px; }
 </style>
 </head>
 <body>
-<svg viewBox="26 6 52 78" aria-hidden="true"><path fill="#EDE8DC" d="M50 8 C68 26 78 50 76 82 L50 82 Z M45 22 C34 38 28 58 28 82 L45 82 Z"/></svg>
-<h1>Geen verbinding</h1>
-<p>CrewHarbor kan niet worden bereikt. Controleer je internet en probeer het opnieuw.</p>
-<a href="crewharbor://opnieuw">Opnieuw proberen</a>
+<header><svg viewBox="26 6 52 78" aria-hidden="true"><path fill="#EDE8DC" d="M50 8 C68 26 78 50 76 82 L50 82 Z M45 22 C34 38 28 58 28 82 L45 82 Z"/></svg><strong>CrewHarbor</strong></header>
+<div id="root"></div>
+<script>
+(function () {
+  'use strict';
+  var DAYS = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+  var DAYS_LONG = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
+  var MONTHS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+  var root = document.getElementById('root');
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); };
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  var ymd = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  var pd = function (s) { var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2], 12); };
+  var addDays = function (s, n) { var d = pd(s); d.setDate(d.getDate() + n); return ymd(d); };
+  var monday = function (s) { var d = pd(s); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return ymd(d); };
+  var mins = function (a, b) { var x = a.split(':'), y = b.split(':'); var m = (+y[0] * 60 + +y[1]) - (+x[0] * 60 + +x[1]); return m < 0 ? m + 1440 : m; };
+  var hm = function (m) { return Math.floor(m / 60) + ':' + pad(Math.round(m % 60)); };
+  var hrs = function (h) { var r = Math.round(h * 10) / 10; return String(r).replace('.', ',') + ' uur'; };
+  var today = ymd(new Date());
+  var retry = '<a href="crewharbor://opnieuw">Opnieuw</a>';
+
+  var snap = null;
+  try { snap = JSON.parse(window.CrewdeckApp && window.CrewdeckApp.getSnapshot() || 'null'); } catch (e) { snap = null; }
+
+  if (!snap) {
+    root.innerHTML = '<div class="empty"><svg viewBox="26 6 52 78" aria-hidden="true"><path fill="#0D2340" d="M50 8 C68 26 78 50 76 82 L50 82 Z M45 22 C34 38 28 58 28 82 L45 82 Z"/></svg>' +
+      '<h1>Geen verbinding</h1><p>CrewHarbor kan niet worden bereikt. Controleer je internet en probeer het opnieuw.</p>' +
+      '<a href="crewharbor://opnieuw">Opnieuw proberen</a></div>';
+    return;
+  }
+
+  var at = new Date(snap.at || Date.now());
+  var atTxt = (ymd(at) === today ? 'vandaag' : DAYS_LONG[at.getDay()] + ' ' + at.getDate() + ' ' + MONTHS[at.getMonth()]) + ' om ' + pad(at.getHours()) + ':' + pad(at.getMinutes());
+  var h = '<div class="bar"><span><b>Geen internet.</b> Je ziet de stand van ' + esc(atTxt) + '. Inklokken en aanvragen kan weer zodra je online bent.</span>' + retry + '</div><main>';
+
+  if (snap.running) h += '<div class="card in"><span class="dot"></span><div><b>Ingeklokt</b><br><span style="font-size:13px;color:#B9C6D3">sinds ' + esc(snap.running.start) + (snap.running.date !== today ? ' (' + esc(DAYS[pd(snap.running.date).getDay()]) + ')' : '') + '</span></div></div>';
+
+  var tiles = [];
+  if (snap.week) tiles.push('<div class="card"><p class="label">Gewerkt deze week</p><div class="big">' + hm(snap.week.min || 0) + '</div>' + (snap.week.contract ? '<span style="font-size:12px;color:#5B6B7B">van ' + hm(snap.week.contract) + '</span>' : '') + '</div>');
+  if (snap.leave) tiles.push('<div class="card"><p class="label">Verlof over</p><div class="big">' + hrs(snap.leave.left) + '</div>' + (snap.leave.pending ? '<span style="font-size:12px;color:#5B6B7B">' + hrs(snap.leave.pending) + ' aangevraagd</span>' : '') + '</div>');
+  if (tiles.length) h += '<div class="tiles">' + tiles.join('') + '</div>';
+
+  // diensten vanaf vandaag, per week
+  var shifts = (snap.shifts || []).filter(function (s) { return s.date >= today; });
+  var abs = snap.abs || [];
+  var absOn = function (d) { for (var i = 0; i < abs.length; i++) { var a = abs[i]; if (a.from <= d && (!a.to || a.to >= d)) return a; } return null; };
+  var days = [];
+  var last = shifts.length ? shifts[shifts.length - 1].date : today;
+  abs.forEach(function (a) { if ((a.to || a.from) > last) last = a.to || a.from; });
+  for (var d = today, n = 0; d <= last && n < 60; d = addDays(d, 1), n++) {
+    var list = shifts.filter(function (s) { return s.date === d; });
+    var ab = absOn(d);
+    if (!list.length && ab) {
+      var prev = days[days.length - 1];
+      if (prev && !prev.list.length && prev.ab === ab && monday(prev.d) === monday(d)) { prev.to = d; continue; }
+    }
+    if (list.length || ab) days.push({ d: d, to: d, list: list, ab: ab });
+  }
+  var cur = monday(today);
+  var weekName = function (w) {
+    if (w === cur) return 'Deze week';
+    if (w === addDays(cur, 7)) return 'Volgende week';
+    var a = pd(w), b = pd(addDays(w, 6));
+    return a.getDate() + ' ' + MONTHS[a.getMonth()] + ' – ' + b.getDate() + ' ' + MONTHS[b.getMonth()];
+  };
+  if (!days.length) h += '<div class="card" style="text-align:center;color:#5B6B7B">Geen diensten bekend.</div>';
+  var wk = null;
+  days.forEach(function (x) {
+    var w = monday(x.d);
+    if (w !== wk) {
+      if (wk) h += '</div>';
+      wk = w;
+      var tot = shifts.filter(function (s) { return monday(s.date) === w; }).reduce(function (a, s) { return a + mins(s.start, s.end); }, 0);
+      h += '<h2>' + esc(weekName(w)) + (tot ? '<span>' + hm(tot) + ' uur</span>' : '') + '</h2><div class="list">';
+    }
+    var dd = pd(x.d);
+    var date = '<div class="date"><span>' + DAYS[dd.getDay()] + '</span><b>' + dd.getDate() + '</b><span>' + MONTHS[dd.getMonth()] + '</span></div>';
+    if (!x.list.length) {
+      var t = pd(x.to);
+      h += '<div class="row">' + date + '<div class="main"><span class="chip">' + esc(x.ab.kindLabel || 'Afwezig') + '</span><br><span>' + (x.to !== x.d ? 't/m ' + DAYS[t.getDay()] + ' ' + t.getDate() + ' ' + MONTHS[t.getMonth()] : 'hele dag') + (x.ab.status === 'aangevraagd' ? ' · nog niet goedgekeurd' : '') + '</span></div></div>';
+      return;
+    }
+    x.list.forEach(function (s) {
+      h += '<div class="row' + (x.d === today ? ' today' : '') + '">' + date + '<div class="main"><b>' + esc(s.start + ' – ' + s.end) + '</b><span>' + hm(mins(s.start, s.end)) + ' uur' + (s.note ? ' · ' + esc(s.note) : '') + '</span></div></div>';
+    });
+  });
+  if (wk) h += '</div>';
+  h += '<p class="note">' + esc(snap.name || '') + (snap.org ? ' · ' + esc(snap.org) : '') + '</p></main>';
+  root.innerHTML = h;
+})();
+</script>
 </body>
 </html>
