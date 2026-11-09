@@ -53,13 +53,13 @@ async function mfaPrepare() {
 function viewLoginEmail() {
   return '<div class="login">' + brandPanel('De vaste haven voor je team.', 'Log in met je e-mailadres en wachtwoord.') +
     '<section class="login-main"><form class="login-card" data-form="ac-login" novalidate>' +
-      '<div><h2>Inloggen</h2><p class="muted" style="margin:6px 0 0;font-size:14px">Nog geen wachtwoord? Gebruik de link uit je uitnodiging.</p></div>' + errBox() +
+      '<div><h2>Inloggen</h2><p class="muted login-sub" style="margin:6px 0 0;font-size:14px">Nog geen wachtwoord? Gebruik de link uit je uitnodiging.</p></div>' + errBox() +
       '<div class="field"><label for="l-email">E-mailadres</label><input class="input" id="l-email" name="email" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" value="' + esc(lastEmail()) + '" required></div>' +
       '<div class="field"><label for="l-pass">Wachtwoord</label><input class="input" id="l-pass" name="password" type="password" autocomplete="current-password" required></div>' +
       '<button class="btn primary" type="submit" id="l-submit">Inloggen</button>' +
       '<p class="switch" style="margin:0"><button type="button" class="linkbtn" data-act="ac-forgot">Wachtwoord vergeten?</button></p>' +
-      '<p class="switch">Nieuw bij CrewHarbor? <a href="' + (/\/app\/?$/.test(location.pathname.replace(/index\.html$/, '')) && !(S.regInfo && S.regInfo.open) ? '../#aanvragen' : '#/registreren') + '">' + (S.regInfo && S.regInfo.request === false ? 'Registreer je bedrijf' : 'Vraag CrewHarbor aan') + '</a></p>' +
-    '</form></section></div>';
+      '<p class="switch login-new">Nieuw bij CrewHarbor? <a href="' + (/\/app\/?$/.test(location.pathname.replace(/index\.html$/, '')) && !(S.regInfo && S.regInfo.open) ? '../#aanvragen' : '#/registreren') + '">' + (S.regInfo && S.regInfo.request === false ? 'Registreer je bedrijf' : 'Vraag CrewHarbor aan') + '</a></p>' +
+    '</form><p class="login-foot">Een product van <strong>Spark Apps</strong></p></section></div>';
 }
 function viewForgot() {
   const F = S.forgot || {};

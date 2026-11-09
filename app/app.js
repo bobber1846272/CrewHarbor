@@ -232,6 +232,7 @@ function beep() {
 }
 const canSysNotify = () => 'Notification' in window && window.isSecureContext;
 const APP = window.CrewdeckApp || null; // de Android-app geeft deze brug mee
+if (APP) document.documentElement.classList.add('in-app');
 function notify(title, body) {
   beep(); toast(title + (body ? ': ' + body : ''));
   if (APP && document.hidden) { try { APP.notify(title, body || ''); } catch (e) { /* */ } }
