@@ -1,108 +1,166 @@
 /* CrewHarbor — app-weergave voor personeel (Android-app)
- * Snel regelen: inklokken (klokcode voor de prikklok of zelf), je rooster, verlof met saldo en
- * beschikbaarheid. Onder "Meer": account, taken en terugbellen. Al het andere gaat via de website.
- * Hergebruikt de schermen en knoppen (data-act) van app.js waar dat kan, zodat alles hetzelfde werkt.
+ * Zo min mogelijk tikken: Vandaag (klokcode, in-/uitklokken, volgende dienst, snel verlof of ziek),
+ * Rooster (komende diensten in één lijst), Verlof, Beschikbaar en Account.
+ * Beheren en plannen gebeurt op de website. Hergebruikt schermen en knoppen (data-act) van app.js.
  */
 'use strict';
 
-const M = { tab: 'code', clock: null, clockAt: 0, upcoming: null, rWeek: null, sub: null, cbOpen: null, taskOpen: null, codeForm: false };
+const M = { tab: 'code', clock: null, clockAt: 0, plan: null, mine: null, leave: null, codeForm: false };
 const SITE = (window.CREWDECK_CONFIG || {}).siteUrl || '';
 const isMobileApp = () => !!APP && !!S.me && route() !== 'klok';
+const PLAN_DAYS = 28;
 
 async function loadMobile() {
   if (!mTabs().some(t => t[0] === M.tab)) M.tab = 'code';
   const jobs = [loadCounts()];
   if (M.tab === 'code') {
-    jobs.push(loadClockCode());
-    jobs.push(rpc('cd_roster_range', { p_from: today(), p_to: addDays(today(), 20) })
-      .then(r => { M.upcoming = (r.shifts || []).filter(s => same(s.memberId, S.me.id)).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start)); })
-      .catch(() => { M.upcoming = null; }));
+    jobs.push(loadClockCode(), loadPlan());
+    if (selfOn('selfLeave')) {
+      jobs.push(rpc('cd_absences', { p_scope: 'mine' }).then(d => { M.mine = d; }).catch(() => { M.mine = null; }));
+      jobs.push(rpc('cd_leave_me').then(d => { M.leave = d; }).catch(() => { M.leave = null; }));
+    }
   }
-  if (M.tab === 'rooster') jobs.push(rpc('cd_roster', { p_week: M.rWeek || today() }).then(r => { S.roster = r; M.rWeek = r.weekStart; }));
-  if (M.tab === 'rooster' && typeof loadSwaps === 'function') jobs.push(loadSwaps());
+  if (M.tab === 'rooster') { jobs.push(loadPlan()); if (typeof loadSwaps === 'function') jobs.push(loadSwaps()); }
   if (M.tab === 'verlof') jobs.push(loadAbsences());
   if (M.tab === 'beschikbaar') jobs.push(loadAvailability());
   await Promise.all(jobs);
+}
+async function loadPlan() {
+  try { M.plan = await rpc('cd_roster_range', { p_from: today(), p_to: addDays(today(), PLAN_DAYS - 1) }); } catch (e) { M.plan = null; }
 }
 async function loadClockCode() {
   try { M.clock = await rpc('cd_clock_code'); M.clockAt = Date.now(); } catch (e) { M.clock = null; }
 }
 function secondsLeft() { return M.clock ? Math.max(0, M.clock.secondsLeft - Math.floor((Date.now() - M.clockAt) / 1000)) : 0; }
+function nowHM() { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function myShifts() { return M.plan ? M.plan.shifts.filter(s => same(s.memberId, S.me.id)).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start)) : []; }
+function dayWord(d) { return d === today() ? 'Vandaag' : d === addDays(today(), 1) ? 'Morgen' : dayLong(d); }
+function openSick(list) { return (list || []).find(a => a.kind === 'ziek' && a.status === 'goedgekeurd' && !a.to); }
 
 function mTabs() {
-  return [['code', 'Klokken', NI.prikklok], ['rooster', 'Rooster', NI.rooster],
+  return [['code', 'Vandaag', NI.prikklok], ['rooster', 'Rooster', NI.rooster],
     selfOn('selfLeave') && ['verlof', 'Verlof', NI.verlof], selfOn('selfAvail') && ['beschikbaar', 'Beschikbaar', NI.beschikbaar],
-    ['meer', 'Meer', NI.mensen]].filter(Boolean);
+    ['account', 'Account', NI.mensen]].filter(Boolean);
 }
-function openWork() { return S.myTasks.filter(t => !t.done && !t.mineDone && !t.archived).length + S.counts.mine; }
 function viewMobile() {
   const tabs = mTabs();
   if (!tabs.some(t => t[0] === M.tab)) M.tab = 'code';
-  const badges = { meer: openWork() };
-  const views = { code: mCode, rooster: mRoster, verlof: mLeave, beschikbaar: mAvail, meer: mMore };
-  // onzichtbare terugknop: de terugknop van Android klikt hierop (sluit eerst een formulier of scherm, dan naar Klokken)
-  const back = M.cbOpen || M.sub || S.absForm || S.swOffer || M.tab !== 'code';
+  const views = { code: mToday, rooster: mRoster, verlof: mLeave, beschikbaar: mAvail, account: mAccount };
+  // onzichtbare terugknop: de terugknop van Android klikt hierop (sluit eerst een formulier, dan naar Vandaag)
+  const back = S.absForm || S.swOffer || M.codeForm || M.tab !== 'code';
   return '<div class="m-app"><header class="m-top">' + LOGO(26) + '<span class="m-org">' + esc(S.org.name) + '</span></header>' +
-    '<main class="m-main" id="m-main">' + (views[M.tab] || mCode)() + '</main>' +
+    '<main class="m-main" id="m-main">' + (views[M.tab] || mToday)() + '</main>' +
     (back ? '<button hidden aria-hidden="true" tabindex="-1" data-mact="cb-close"></button>' : '') +
     '<nav class="m-tabs" aria-label="Menu" style="grid-template-columns:repeat(' + tabs.length + ',1fr)">' + tabs.map(t => '<button class="' + (M.tab === t[0] ? 'on' : '') + '" data-mact="tab" data-v="' + t[0] + '"' + (M.tab === t[0] ? ' aria-current="page"' : '') + '>' +
-      t[2] + '<span>' + t[1] + '</span>' + (badges[t[0]] ? '<i>' + badges[t[0]] + '</i>' : '') + '</button>').join('') + '</nav></div>';
+      t[2] + '<span>' + t[1] + '</span></button>').join('') + '</nav></div>';
 }
 
-// ---------- klokken ----------
-function mCode() {
+// ---------- vandaag ----------
+function mToday() {
   const R = S.running; const W = S.nowWeek; const kiosk = kioskOnly();
-  const todayShift = W ? W.shifts.find(s => s.date === W.today) : null;
   const code = M.clock ? M.clock.code : '--------';
   const left = secondsLeft();
+  const hm = nowHM();
+  const shifts = myShifts();
+  const todayShift = shifts.find(s => s.date === today());
+  const next = shifts.find(s => s.date > today() || (s.date === today() && s.end > hm && !(R && s.start <= hm)));
+  const sick = openSick(M.mine);
+
+  // klokcode + klokken in één kaart
   let h = '<section class="m-card m-codecard"><p class="m-label">Jouw klokcode</p>' +
     '<div class="m-code" id="m-code" aria-live="polite">' + esc(code.slice(0, 4)) + ' ' + esc(code.slice(4)) + '</div>' +
     '<div class="m-timer"><span id="m-bar" style="width:' + (left / ((M.clock && M.clock.period) || 20) * 100) + '%"></span></div>' +
-    '<p class="m-sub" id="m-left">Nieuwe code over ' + left + ' sec</p>' +
-    '<p class="m-help">' + (kiosk ? 'Tik bij de prikklok op je naam en voer deze code in.' : 'Bij de prikklok: tik op je naam en voer deze code in. Of klok hieronder zelf in.') + '</p></section>';
-  h += '<section class="m-card m-status ' + (R ? 'in' : '') + '">' + (R
-    ? '<span class="live-dot"></span><div><strong>Ingeklokt sinds ' + esc(R.start) + '</strong><span id="clock-elapsed" data-date="' + esc(R.date) + '" data-start="' + esc(R.start) + '">' + fmtHM(runningSince(R)) + '</span></div>'
-    : '<div><strong>Niet ingeklokt</strong><span>' + (todayShift ? 'Vandaag ingepland ' + esc(todayShift.start + '–' + todayShift.end) : 'Vandaag niet ingepland') + '</span></div>') +
-    (kiosk ? '' : '<button class="btn small ' + (R ? 'dark' : 'primary') + '" data-mact="clock">' + (R ? 'Uitklokken' : 'Inklokken') + '</button>') + '</section>';
+    '<p class="m-sub" id="m-left">Nieuwe code over ' + left + ' sec · voer in bij de prikklok</p>' +
+    '<div class="m-clockrow' + (R ? ' in' : '') + '">' + (R
+      ? '<span class="live-dot"></span><div><strong>Ingeklokt</strong><span>sinds ' + esc(R.start) + ' · <b id="clock-elapsed" data-date="' + esc(R.date) + '" data-start="' + esc(R.start) + '">' + fmtHM(runningSince(R)) + '</b> uur</span></div>'
+      : '<div><strong>Niet ingeklokt</strong><span>' + (todayShift ? 'Vandaag ' + esc(todayShift.start + '–' + todayShift.end) : 'Vandaag vrij') + '</span></div>') +
+    (kiosk ? '' : '<button class="btn ' + (R ? 'sand-out' : 'sand') + '" data-mact="clock">' + (R ? 'Uitklokken' : 'Inklokken') + '</button>') + '</div></section>';
+
+  // ziek: één tik om beter te melden
+  if (sick) h += '<section class="m-card m-sick"><div><strong>Je bent ziek gemeld</strong><span>Sinds ' + esc(dayLong(sick.from).toLowerCase()) + '. Beterschap!</span></div>' +
+    '<button class="btn primary" data-mact="beter" data-id="' + sick.id + '">Ik ben beter</button></section>';
+
   // volgende dienst
-  if (M.upcoming) {
-    const now = new Date(); const hm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-    const nx = M.upcoming.find(s => s.date > today() || (s.date === today() && s.end > hm && !(R && s.start <= hm)));
-    h += '<button class="m-card m-next" data-mact="tab" data-v="rooster"><div><p class="m-label">Volgende dienst</p>' + (nx
-      ? '<strong>' + (nx.date === today() ? 'Vandaag' : nx.date === addDays(today(), 1) ? 'Morgen' : esc(dayLong(nx.date))) + ' · ' + esc(nx.start + '–' + nx.end) + '</strong>' + (nx.note ? '<span>' + esc(nx.note) + '</span>' : '')
-      : '<strong>Nog niets ingepland</strong><span>De komende drie weken heb je geen diensten.</span>') + '</div>' + ICON.right + '</button>';
-  }
-  // uren deze week in het kort
+  h += '<button class="m-card m-next" data-mact="tab" data-v="rooster"><div><p class="m-label">Volgende dienst</p>' + (next
+    ? '<strong>' + esc(dayWord(next.date)) + ' · ' + esc(next.start + '–' + next.end) + '</strong>' + (next.note ? '<span>' + esc(next.note) + '</span>' : '')
+    : '<strong>Niets ingepland</strong><span>De komende 4 weken heb je geen diensten.</span>') + '</div>' + ICON.right + '</button>';
+
+  // in één oogopslag: uren en verlof
+  const tiles = [];
   if (W && selfOn('selfHours')) {
     const ch = W.member.contractType === 'vast' ? Number(W.member.contractHours) * 60 : 0;
-    h += '<section class="m-card"><p class="m-label">Gewerkt deze week</p><div class="m-big">' + fmtHM(W.totalMin) + '<small>' + (ch ? ' van ' + fmtHM(ch) : W.member.contractType === 'flex' ? ' · flex' : '') + '</small></div>' +
-      (ch ? '<div class="progress" style="margin:8px 0 0"><span style="width:' + Math.min(100, W.totalMin / ch * 100) + '%"></span></div>' : '') + '</section>';
+    tiles.push('<div class="m-tile"><span>Gewerkt deze week</span><strong>' + fmtHM(W.totalMin) + '</strong>' + (ch ? '<small>van ' + fmtHM(ch) + '</small>' : '<small>uur</small>') + '</div>');
   }
+  const st = M.leave && M.leave.status;
+  if (st && st.tracked) tiles.push('<button class="m-tile" data-mact="tab" data-v="verlof"><span>Verlof over</span><strong class="' + (st.left < 0 ? 'neg' : '') + '">' + esc(hrsTxt(st.left)) + '</strong><small>' + (st.pending ? esc(hrsTxt(st.pending)) + ' aangevraagd' : 'in ' + st.year) + '</small></button>');
+  if (tiles.length) h += '<div class="m-tiles">' + tiles.join('') + '</div>';
+
+  // snelle knoppen
+  if (selfOn('selfLeave')) h += '<div class="m-quick"><button class="btn" data-mact="leave-new">Verlof aanvragen</button>' +
+    (sick ? '' : '<button class="btn" data-mact="sick">Ziek melden</button>') + '</div>';
   return h;
 }
 
-// ---------- rooster ----------
+// ---------- rooster: komende diensten in één lijst ----------
 function mRoster() {
-  const R = S.roster; if (!R || !R.weekStart || !M.rWeek) return '<div class="m-empty">Rooster laden…</div>';
-  const wk = R.weekStart, cur = mondayOf(today());
-  let h = '<div class="m-weeknav"><button class="icon-btn" data-mact="r-week" data-v="' + addDays(wk, -7) + '" aria-label="Vorige week">' + ICON.left + '</button>' +
-    '<div><strong>' + esc(weekLabel(wk)) + '</strong><span>' + (wk === cur ? 'Deze week' : wk === addDays(cur, 7) ? 'Volgende week' : wk < cur ? 'Geweest' : '<button class="link-btn small" data-mact="r-week" data-v="' + cur + '">Naar deze week</button>') + '</span></div>' +
-    '<button class="icon-btn" data-mact="r-week" data-v="' + addDays(wk, 7) + '" aria-label="Volgende week">' + ICON.right + '</button></div>';
-  const swM = S.swOffer && typeof swapOfferModal === 'function' ? modal(swapOfferModal(R), 'sw-offer-x') : '';
-  return h + '<div class="m-roster">' + rosterMine(R) + '</div>' + swM;
+  const P = M.plan; if (!P) return '<div class="m-empty">Rooster laden…</div>';
+  const shifts = myShifts();
+  const cur = mondayOf(today());
+  const weekName = wk => wk === cur ? 'Deze week' : wk === addDays(cur, 7) ? 'Volgende week' : weekLabel(wk);
+  // dagen met een dienst of afwezigheid, per week
+  const days = [];
+  for (let d = today(); d <= addDays(today(), PLAN_DAYS - 1); d = addDays(d, 1)) {
+    const list = shifts.filter(s => s.date === d);
+    const ab = absFor(P.absences, S.me.id, d);
+    if (!list.length && ab) {
+      // aaneengesloten verlof of ziekte (in dezelfde week) samenvoegen tot één regel
+      const prev = days[days.length - 1];
+      if (prev && !prev.list.length && prev.ab && same(prev.ab.id, ab.id) && addDays(prev.to, 1) === d && mondayOf(prev.d) === mondayOf(d)) { prev.to = d; continue; }
+    }
+    if (list.length || ab) days.push({ d, to: d, list, ab });
+  }
+  let h = '<h1 class="m-h1">Mijn diensten</h1>';
+  if (!days.length) return h + '<div class="m-empty">Je hebt de komende 4 weken geen diensten.</div>';
+  let wk = null;
+  days.forEach(x => {
+    const w = mondayOf(x.d);
+    if (w !== wk) {
+      if (wk) h += '</div>';
+      wk = w;
+      const min = shifts.filter(s => mondayOf(s.date) === w).reduce((a, s) => a + spanMin(s.start, s.end), 0);
+      h += '<div class="m-weekhead"><strong>' + esc(weekName(w)) + '</strong>' + (min ? '<span>' + fmtHM(min) + ' uur</span>' : '') + '</div><div class="m-list">';
+    }
+    const dd = pd(x.d);
+    const date = '<div class="m-date' + (x.d === today() ? ' today' : '') + '"><span>' + esc(DAYS[dd.getDay()]) + '</span><strong>' + dd.getDate() + '</strong><span>' + esc(MONTHS[dd.getMonth()]) + '</span></div>';
+    if (!x.list.length) { h += '<div class="m-shift off">' + date + '<div class="m-shift-main">' + absChip(x.ab) + '<span>' + (x.to !== x.d ? 't/m ' + esc(dayShort(x.to)) : 'hele dag') + (x.ab.status === 'aangevraagd' ? ' · nog niet goedgekeurd' : '') + '</span></div></div>'; return; }
+    x.list.forEach(s => {
+      h += '<div class="m-shift' + (x.d === today() ? ' today' : '') + '">' + date + '<div class="m-shift-main"><strong>' + esc(s.start + ' – ' + s.end) + '</strong>' +
+        '<span>' + fmtHM(spanMin(s.start, s.end)) + ' uur' + (s.note ? ' · ' + esc(s.note) : '') + '</span>' + (x.ab ? absChip(x.ab) : '') + '</div>' +
+        (typeof swapBtn === 'function' ? '<div class="m-shift-act">' + swapBtn(s) + '</div>' : '') + '</div>';
+    });
+  });
+  h += '</div>';
+  // ruilen van collega's alleen tonen als er iets te doen is
+  const D = typeof SW === 'function' ? SW() : null;
+  if (D && (D.open.length || D.mine.some(w => w.status === 'open' || w.status === 'aangevraagd')) && typeof swapsSection === 'function') h += swapsSection(P);
+  if (S.swOffer && typeof swapOfferModal === 'function') h += modal(swapOfferModal(P), 'sw-offer-x');
+  return h;
 }
 
 // ---------- verlof ----------
 function mLeave() {
   const A = S.abs; if (!A) return '<div class="m-empty">Verlof laden…</div>';
-  const sick = A.mine.find(a => a.kind === 'ziek' && a.status === 'goedgekeurd' && !a.to);
+  const sick = openSick(A.mine);
   let h = '<h1 class="m-h1">Verlof</h1>';
-  if (sick) h += sickCard(sick);
+  if (sick) h += '<section class="m-card m-sick"><div><strong>Je bent ziek gemeld</strong><span>Sinds ' + esc(dayLong(sick.from).toLowerCase()) + '. Beterschap!</span></div>' +
+    '<button class="btn primary" data-mact="beter" data-id="' + sick.id + '">Ik ben beter</button></section>';
   h += leaveSaldoCard();
   if (S.absForm) h += '<div class="m-form">' + absenceForm() + '</div>';
-  else h += '<div class="m-actions m-two">' + (sick ? '' : '<button class="btn" data-act="abs-new" data-v="ziek">Ziek melden</button>') +
-    '<button class="btn primary" data-act="abs-new" data-v="verlof">Verlof aanvragen</button></div>';
-  return h + '<h2 class="m-h2">Mijn verlof en ziekte</h2>' + myAbsList(A.mine);
+  else h += '<div class="m-quick"><button class="btn primary" data-mact="leave-new">Verlof aanvragen</button>' + (sick ? '' : '<button class="btn" data-mact="sick">Ziek melden</button>') + '</div>';
+  // alleen wat nog speelt; oud verlof staat op de website
+  const now = A.mine.filter(a => a.status !== 'ingetrokken' && (!a.to || a.to >= today()) && (a.status !== 'afgewezen' || a.from >= today()));
+  h += '<h2 class="m-h2">Gepland en aangevraagd</h2>' + (now.length ? myAbsList(now) : '<div class="m-empty">Niets gepland.</div>');
+  return h;
 }
 
 // ---------- beschikbaarheid ----------
@@ -111,75 +169,11 @@ function mAvail() {
   return v ? '<div class="m-avail">' + v + '</div>' : '<div class="m-empty">Beschikbaarheid laden…</div>';
 }
 
-// ---------- meer ----------
-function mMore() {
-  if (M.sub === 'taken' || M.sub === 'bellen') {
-    return (M.cbOpen ? '' : '<button class="m-back" data-mact="cb-close">' + ICON.left + 'Meer</button>') + (M.sub === 'taken' ? mTasks() : mCalls());
-  }
-  return mAccount();
-}
-
-// ---------- taken ----------
-function mTasks() {
-  const open = S.myTasks.filter(t => !t.done && !t.mineDone && !t.archived);
-  const done = S.myTasks.filter(t => (t.done || t.mineDone) && !t.archived);
-  let h = '<h1 class="m-h1">Mijn taken</h1>';
-  if (!open.length) h += '<div class="m-empty">Niets meer te doen. Lekker bezig!</div>';
-  h += open.map(t => mTask(t, false)).join('');
-  if (done.length) h += '<h2 class="m-h2">Afgevinkt</h2>' + done.slice(0, 10).map(t => mTask(t, true)).join('');
-  return h;
-}
-function mTask(t, done) {
-  const open = same(M.taskOpen, t.id);
-  return '<div class="m-item' + (done ? ' done' : '') + '"><button class="m-check' + (done ? ' on' : '') + '" data-mact="task-toggle" data-id="' + t.id + '" aria-label="' + (done ? 'Weer open zetten' : 'Afvinken') + ': ' + esc(t.title) + '">' + (done ? '✓' : '') + '</button>' +
-    '<button class="m-item-body" data-mact="task-open" data-id="' + t.id + '"><strong>' + esc(t.title) + '</strong>' +
-    '<span>' + (t.dueAt ? dueBadge(t.dueAt, 'taak') : '') + (t.assignees.length > 1 ? ' <span class="small muted">met ' + t.assignees.filter(a => !same(a.id, S.me.id)).map(a => esc(a.name.split(' ')[0])).join(', ') + '</span>' : '') + '</span>' +
-    (open && t.desc ? '<p>' + esc(t.desc) + '</p>' : '') + (open ? '<small>Van ' + esc(t.createdByName || '') + '</small>' : '') + '</button></div>';
-}
-
-// ---------- terugbellen ----------
-function mCalls() {
-  if (M.cbOpen) {
-    const c = S.myCbs.concat(S.poolCbs).find(x => same(x.id, M.cbOpen));
-    if (c) return mCall(c);
-    M.cbOpen = null;
-  }
-  let h = '<h1 class="m-h1">Terugbellen</h1>';
-  h += S.myCbs.length ? S.myCbs.map(c => '<button class="m-item m-cb" data-mact="cb-open" data-id="' + c.id + '"><div class="m-item-body"><strong>' + esc(cbTitle(c)) + '</strong>' +
-    '<span>' + dueBadge(c.dueAt, 'bel') + (c.attempts.length ? ' <span class="small muted">' + c.attempts.length + 'x geprobeerd</span>' : '') + '</span></div>' + ICON.right + '</button>').join('')
-    : '<div class="m-empty">Geen open verzoeken voor jou.</div>';
-  if (S.poolCbs.length) {
-    h += '<h2 class="m-h2">Open pool</h2>' + S.poolCbs.map(c => '<div class="m-item m-cb"><button class="m-item-body" data-mact="cb-open" data-id="' + c.id + '"><strong>' + esc(cbTitle(c)) + '</strong><span>' + dueBadge(c.dueAt, 'bel') + '</span></button>' +
-      '<button class="btn small" data-mact="cb-claim" data-id="' + c.id + '">Oppakken</button></div>').join('');
-  }
-  return h;
-}
-function mCall(c) {
-  const mine = same(c.assignee, S.me.id);
-  const tel = String(c.phone || '').replace(/[^\d+]/g, '');
-  return '<button class="m-back" data-mact="cb-close">' + ICON.left + 'Terug</button>' +
-    '<section class="m-card"><h1 class="m-h1" style="margin:0">' + esc(cbTitle(c)) + '</h1>' +
-    (c.type === 'zakelijk' && c.contact ? '<p class="m-sub">' + esc(c.contact) + '</p>' : '') +
-    '<div style="margin:10px 0">' + dueBadge(c.dueAt, 'bel') + (c.priority === 'hoog' ? ' <span class="badge red">Hoge prioriteit</span>' : '') + '</div>' +
-    (tel ? '<a class="btn primary m-call" href="tel:' + esc(tel) + '">' + NI.terugbellen + 'Bel ' + esc(c.phone) + '</a>' : '') +
-    '<dl class="m-dl">' + (c.order ? '<dt>Order</dt><dd>' + esc(c.order) + '</dd>' : '') + '<dt>Categorie</dt><dd>' + esc(c.category) + '</dd>' +
-      (c.email ? '<dt>E-mail</dt><dd>' + esc(c.email) + '</dd>' : '') + (c.note ? '<dt>Notitie</dt><dd>' + esc(c.note) + '</dd>' : '') + '</dl>' +
-    (c.attempts.length ? '<div class="m-attempts">' + c.attempts.map(a => '<div><time>' + esc(fmtDate(a.at)) + '</time> ' + esc(a.text) + '</div>').join('') + '</div>' : '') + '</section>' +
-    (mine ? '<section class="m-card"><label class="m-label" for="m-note">Notitie bij het gesprek</label><input class="input" id="m-note" placeholder="Bijv. voicemail ingesproken" autocomplete="off">' +
-      '<div class="chips" style="margin-top:8px">' + (settings().quick_notes || []).slice(0, 4).map(n => '<button class="chip quick" data-mact="cb-quick" data-v="' + esc(n) + '">' + esc(n) + '</button>').join('') + '</div>' +
-      '<div class="m-actions"><button class="btn" data-mact="cb-attempt" data-id="' + c.id + '">Niet bereikt</button><button class="btn green" data-mact="cb-done" data-id="' + c.id + '">Afgerond</button></div></section>'
-      : '<section class="m-card"><button class="btn primary" style="width:100%" data-mact="cb-claim" data-id="' + c.id + '">Oppakken</button></section>');
-}
-
 // ---------- account ----------
 function mAccount() {
-  let h = '<h1 class="m-h1">Meer</h1><section class="m-card m-me">' + avatar(S.me.id, S.me.name, 'lg') + '<div><strong>' + esc(S.me.name) + '</strong><span>' + esc(S.roleName) + ' · ' + esc(S.org.name) + '</span>' +
-    '<span>' + (S.me.legacy ? 'Bedrijfscode: ' + esc(S.org.slug) : esc(S.me.email || '')) + '</span></div></section>';
+  let h = '<h1 class="m-h1">Account</h1><section class="m-card m-me">' + avatar(S.me.id, S.me.name, 'lg') + '<div><strong>' + esc(S.me.name) + '</strong><span>' + esc(S.roleName) + ' · ' + esc(S.org.name) + '</span>' +
+    '<span>' + (S.me.legacy ? 'Bedrijfscode: ' + esc(S.org.slug) : esc(S.me.email || '')) + '</span><span>' + esc(contractText(S.me)) + '</span></div></section>';
   if (S.me.legacy) h += '<section class="m-card"><p class="m-label">Koppel je e-mailadres</p><p class="small" style="margin:0">Inloggen met een code verdwijnt. Koppel op de website bij Instellingen je e-mailadres en kies een wachtwoord.</p></section>';
-  const openTasks = S.myTasks.filter(t => !t.done && !t.mineDone && !t.archived).length;
-  const row = (sub, icon, label, n) => '<button class="m-link" data-mact="sub" data-v="' + sub + '"><span class="m-link-l">' + icon + label + '</span><span class="m-link-r">' + (n ? '<i class="m-count">' + n + '</i>' : '') + ICON.right + '</span></button>';
-  h += '<section class="m-card"><p class="m-label">Werk</p>' + row('taken', NI.taken, 'Mijn taken', openTasks) + row('bellen', NI.terugbellen, 'Terugbellen', S.counts.mine) + '</section>';
-  h += '<section class="m-card"><p class="m-label">Contract</p><strong>' + esc(contractText(S.me)) + '</strong></section>';
   const pw = !S.me.legacy;
   h += '<section class="m-card">' + (M.codeForm
     ? (pw ? '<p class="m-label">Nieuw wachtwoord (minstens 10 tekens)</p><input type="email" autocomplete="username" value="' + esc(S.me.email || '') + '" hidden><input class="input" id="m-c1" type="password" autocomplete="new-password" placeholder="Nieuw wachtwoord">' +
@@ -188,7 +182,7 @@ function mAccount() {
         '<input class="input code-input" id="m-c2" type="password" inputmode="numeric" autocomplete="new-password" placeholder="Herhaal" style="margin-top:8px">') +
       '<div class="m-actions"><button class="btn ghost" data-mact="code-cancel">Annuleren</button><button class="btn dark" data-mact="code-save">Opslaan</button></div>'
     : '<button class="m-link" data-mact="code-open">' + (pw ? 'Wachtwoord wijzigen' : 'Inlogcode wijzigen') + ICON.right + '</button>') +
-    '<button class="m-link" data-mact="sound">Geluid bij nieuw werk<span>' + (prefs.sound ? 'aan' : 'uit') + '</span></button>' +
+    '<button class="m-link" data-mact="sound">Geluid bij meldingen<span>' + (prefs.sound ? 'aan' : 'uit') + '</span></button>' +
     (SITE ? '<a class="m-link" href="' + esc(SITE) + '" target="_blank" rel="noopener">Naar de website' + ICON.right + '</a>' : '') +
     '<button class="m-link danger" data-mact="logout">Uitloggen</button></section>';
   h += '<p class="m-site">Een product van <strong>Spark Apps</strong></p>';
@@ -196,37 +190,42 @@ function mAccount() {
 }
 
 // ---------- knoppen ----------
+async function mGo(tab) { M.tab = tab; M.codeForm = false; S.absForm = null; S.swOffer = null; S.avSel = {}; render(); window.scrollTo(0, 0); await loadMobile(); render(); }
 document.addEventListener('click', async e => {
   const el = e.target.closest('[data-mact]');
   if (!el || el.disabled || !isMobileApp()) return;
   const a = el.dataset.mact, id = el.dataset.id, num = id != null ? Number(id) : null;
   try {
     switch (a) {
-      case 'tab': M.tab = el.dataset.v; M.sub = null; M.cbOpen = null; M.taskOpen = null; M.codeForm = false; S.absForm = null; S.swOffer = null; S.avSel = {}; render(); window.scrollTo(0, 0); await loadMobile(); render(); return;
-      case 'sub': M.sub = el.dataset.v; M.cbOpen = null; M.taskOpen = null; render(); window.scrollTo(0, 0); return;
-      case 'r-week': M.rWeek = el.dataset.v; break;
+      case 'tab': await mGo(el.dataset.v); return;
+      case 'cb-close': // de terugknop van Android
+        if (S.swOffer) S.swOffer = null;
+        else if (S.absForm) S.absForm = null;
+        else if (M.codeForm) M.codeForm = false;
+        else if (M.tab !== 'code') { await mGo('code'); return; }
+        render(); window.scrollTo(0, 0); return;
       case 'clock': {
+        el.disabled = true;
         const e2 = await rpc('cd_hours_clock', { p_action: S.running ? 'out' : 'in' });
         toast(e2.status === 'open' ? 'Ingeklokt. Fijne dienst!' : 'Uitgeklokt: ' + fmtHM(e2.minutes) + ' gewerkt.'); break;
       }
-      case 'task-toggle': await rpc('cd_task_action', { p_id: num, p_action: 'toggle' }); break;
-      case 'task-open': M.taskOpen = same(M.taskOpen, num) ? null : num; render(); return;
-      case 'cb-open': M.cbOpen = num; render(); window.scrollTo(0, 0); return;
-      case 'cb-close': { // ook de terugknop van Android
-        if (M.cbOpen) M.cbOpen = null;
-        else if (S.swOffer) S.swOffer = null;
-        else if (S.absForm) S.absForm = null;
-        else if (M.sub) M.sub = null;
-        else if (M.tab !== 'code') { M.tab = 'code'; S.avSel = {}; render(); window.scrollTo(0, 0); await loadMobile(); render(); return; }
-        render(); window.scrollTo(0, 0); return;
+      case 'leave-new':
+        await mGo('verlof');
+        S.absForm = { kind: 'verlof', from: '', to: '', note: '', memberId: '' }; render();
+        { const f = document.getElementById('abs-from'); if (f) f.focus(); }
+        return;
+      case 'sick': {
+        if (!confirm('Ziek melden vanaf vandaag?\nJe leidinggevende krijgt meteen een melding.')) return;
+        el.disabled = true;
+        await rpc('cd_absence_save', { p: { kind: 'ziek', from: today(), to: '', note: '', memberId: null, hours: null } });
+        toast('Ziek gemeld. Beterschap!'); break;
       }
-      case 'cb-quick': { const inp = document.getElementById('m-note'); inp.value = inp.value.trim() ? inp.value.trim() + ' · ' + el.dataset.v : el.dataset.v; return; }
-      case 'cb-claim': await rpc('cd_callback_action', { p_id: num, p_action: 'claim' }); toast('Opgepakt.'); M.cbOpen = num; break;
-      case 'cb-attempt': {
-        const note = (document.getElementById('m-note') || {}).value || '';
-        await rpc('cd_callback_action', { p_id: num, p_action: 'attempt', p_text: note ? 'Niet bereikt · ' + note : 'Niet bereikt' }); toast('Belpoging genoteerd.'); break;
+      case 'beter': {
+        if (!confirm('Weer beter en vandaag aan het werk?')) return;
+        el.disabled = true;
+        await rpc('cd_absence_action', { p_id: num, p_action: 'beter', p_date: today() });
+        toast('Fijn dat je weer beter bent!'); break;
       }
-      case 'cb-done': await rpc('cd_callback_action', { p_id: num, p_action: 'done', p_text: (document.getElementById('m-note') || {}).value || '' }); toast('Afgerond. Goed gedaan!'); M.cbOpen = null; break;
       case 'code-open': M.codeForm = true; render(); return;
       case 'code-cancel': M.codeForm = false; render(); return;
       case 'code-save': {
@@ -249,7 +248,7 @@ document.addEventListener('click', async e => {
     }
     S.quiet = true; try { await loadMobile(); } finally { S.quiet = false; }
     render();
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(err.message, true); if (el.isConnected) el.disabled = false; }
 });
 
 // klokcode live bijwerken
@@ -257,6 +256,6 @@ setInterval(async () => {
   if (!isMobileApp() || M.tab !== 'code') return;
   const left = secondsLeft();
   if (!M.clock || left <= 0) { await loadClockCode(); render(); return; }
-  const l = document.getElementById('m-left'); if (l) l.textContent = 'Nieuwe code over ' + left + ' sec';
+  const l = document.getElementById('m-left'); if (l) l.textContent = 'Nieuwe code over ' + left + ' sec · voer in bij de prikklok';
   const b = document.getElementById('m-bar'); if (b) b.style.width = (left / ((M.clock && M.clock.period) || 20) * 100) + '%';
 }, 1000);
