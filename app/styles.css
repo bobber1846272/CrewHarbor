@@ -213,6 +213,8 @@ tr.sel td { background: var(--accent-soft); }
 tr.admin td { background: #EEF7F8; }
 .check { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 14px; }
 .check input { width: 18px; height: 18px; accent-color: var(--ink); }
+.login-remember { min-height: 32px; margin: -4px 0 -2px; font-size: 15px; }
+.login-remember input { width: 20px; height: 20px; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 

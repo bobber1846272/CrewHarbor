@@ -38,6 +38,15 @@ async function mfaAuto() {
   const inp = document.getElementById('mfa-code'), form = document.querySelector('form[data-form="ac-mfa"]');
   if (inp && form) { inp.value = code; M.autoFactor = id; form.requestSubmit(); }
 }
+// "Ingelogd blijven": aan (standaard) = sessie blijft bewaard; uit = uitgelogd zodra de browser of app dicht gaat
+const rememberMe = () => { try { return localStorage.getItem('crewharbor-remember') !== '0'; } catch (e) { return true; } };
+function setRemember(on) {
+  try { localStorage.setItem('crewharbor-remember', on ? '1' : '0'); sessionStorage.setItem('crewharbor-live', '1'); } catch (e) { /* */ }
+}
+/** Bij opstarten: niet onthouden en dit is een nieuwe browser-/app-sessie? Dan eerst uitloggen. */
+function forgetIfNeeded() {
+  try { return !rememberMe() && !sessionStorage.getItem('crewharbor-live'); } catch (e) { return false; }
+}
 const errBox = () => S.authError ? '<div class="alert error" role="alert">' + ICON.alert + '<span>' + esc(S.authError) + '</span></div>' : '';
 
 // ---------- na inloggen: sessie laden, of eerst de tweestapscode ----------
@@ -73,6 +82,7 @@ function viewLoginEmail() {
       '<div><h2>Inloggen</h2><p class="muted login-sub" style="margin:6px 0 0;font-size:14px">Nog geen wachtwoord? Gebruik de link uit je uitnodiging.</p></div>' + errBox() +
       '<div class="field"><label for="l-email">E-mailadres</label><input class="input" id="l-email" name="email" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" value="' + esc(lastEmail()) + '" required></div>' +
       '<div class="field"><label for="l-pass">Wachtwoord</label><input class="input" id="l-pass" name="password" type="password" autocomplete="current-password" required></div>' +
+      '<label class="check login-remember"><input type="checkbox" name="remember"' + (rememberMe() ? ' checked' : '') + '> Ingelogd blijven</label>' +
       '<button class="btn primary" type="submit" id="l-submit">Inloggen</button>' +
       '<p class="switch" style="margin:0"><button type="button" class="linkbtn" data-act="ac-forgot">Wachtwoord vergeten?</button></p>' +
       '<p class="switch login-new">Nieuw bij CrewHarbor? <a href="' + (/\/app\/?$/.test(location.pathname.replace(/index\.html$/, '')) && !(S.regInfo && S.regInfo.open) ? '../#aanvragen' : '#/registreren') + '">' + (S.regInfo && S.regInfo.request === false ? 'Registreer je bedrijf' : 'Vraag CrewHarbor aan') + '</a></p>' +
@@ -382,6 +392,7 @@ document.getElementById('app').addEventListener('submit', async e => {
       const d = await svc('login', { email, password });
       await sb.auth.setSession(d.session);
       try { localStorage.setItem('crewharbor-email', email); } catch (x) { /* */ }
+      setRemember(!f.elements.remember || f.elements.remember.checked);
       await enterApp();
     } else if (f.dataset.form === 'ac-forgot') {
       const email = f.elements.email.value.trim().toLowerCase();

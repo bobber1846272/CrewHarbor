@@ -3249,13 +3249,28 @@ setInterval(() => {
 (async function start() {
   // wacht tot alle scripts (ook mobile.js, roster.js) geladen zijn
   if (document.readyState === 'loading') await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
+  if (forgetIfNeeded()) { try { await sb.auth.signOut({ scope: 'local' }); } catch (e) { /* */ } }
+  try { sessionStorage.setItem('crewharbor-live', '1'); } catch (e) { /* */ }
   try {
     const { data: { session } } = await sb.auth.getSession();
     if (session) await loadSession();
   } catch (e) {
     S.me = null;
     if ((e.code === 'CH001' || e.code === 'CH002') && !['wachtwoord', 'email'].includes(route())) { await enterApp(); return; }
-    try { await sb.auth.signOut({ scope: 'local' }); } catch (err) { /* */ }
+    // Alleen uitloggen als de sessie echt niet meer geldig is. Bij een haperende verbinding blijf je ingelogd.
+    if (isAuthError(e)) { try { await sb.auth.signOut({ scope: 'local' }); } catch (err) { /* */ } }
+    else { noConnection(); return; }
   }
   await onRoute();
 })();
+function isAuthError(e) {
+  return !!e && (e.code === '28000' || e.code === 'PGRST301' || e.code === 'PGRST303' || /JWT|refresh token|not authenticated|deactiv/i.test(e.message || ''));
+}
+/** Geen verbinding bij opstarten: in de app naar de offline-weergave, anders opnieuw proberen. */
+function noConnection() {
+  if (APP && typeof APP.goOffline === 'function') { APP.goOffline(); return; }
+  $app.innerHTML = '<div class="login"><section class="login-brand"><div>' + LOGO(36) + '</div></section><section class="login-main"><div class="login-card">' +
+    '<h2>Geen verbinding</h2><p class="muted" style="margin:0">CrewHarbor kan de server nu niet bereiken. Je blijft ingelogd; we proberen het zo opnieuw.</p>' +
+    '<button class="btn primary" onclick="location.reload()">Opnieuw proberen</button></div></section></div>';
+  setTimeout(() => location.reload(), 15000);
+}
