@@ -74,7 +74,7 @@ public class MainActivity extends Activity {
     private static final int REQ_FILE = 1;
     private static final int REQ_NOTIF = 2;
     private static final int NAVY = 0xFF0D2340;
-    private static final String VERSION = "5.1";
+    private static final String VERSION = "5.2";
     private static final int REQ_UNLOCK = 3;
     /** zo lang mag de app op de achtergrond staan voordat hij weer op slot gaat */
     private static final long LOCK_AFTER_MS = 30_000;
@@ -489,7 +489,7 @@ public class MainActivity extends Activity {
         v.setPadding(pad, pad, pad, pad);
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.mipmap.ic_launcher_foreground);
-        v.addView(logo, new LinearLayout.LayoutParams(dp(128), dp(128)));
+        v.addView(logo, new LinearLayout.LayoutParams(dp(96), dp(96)));
         TextView t = new TextView(this);
         t.setText("CrewHarbor is vergrendeld");
         t.setTextColor(Color.WHITE);
