@@ -18,12 +18,12 @@
     return { verified: (data && data.totp) || [], all: (data && data.all) || [] };
   }
   // Begin met instellen: oude, half ingestelde pogingen eerst opruimen
-  async function enrollStart() {
+  async function enrollStart(name) {
     const f = await factors();
     for (const x of f.all.filter(x => x.factor_type === 'totp' && x.status !== 'verified')) {
       try { await auth().mfa.unenroll({ factorId: x.id }); } catch (e) { /* */ }
     }
-    const { data, error } = await auth().mfa.enroll({ factorType: 'totp', friendlyName: 'CrewHarbor ' + new Date().toISOString().slice(0, 16).replace('T', ' ') });
+    const { data, error } = await auth().mfa.enroll({ factorType: 'totp', friendlyName: (name || 'CrewHarbor') + ' ' + new Date().toISOString().slice(0, 16).replace('T', ' ') });
     if (error) throw err(error, 'Tweestapsverificatie instellen mislukt.');
     // Supabase geeft de QR-code als "data:image/svg+xml;utf-8,<svg…>" zonder codering; een # in de svg breekt dat af
     let qr = String(data.totp.qr_code || '');
@@ -38,10 +38,22 @@
   async function verify(factorId, code) {
     code = String(code || '').replace(/\s+/g, '');
     if (!/^\d{6}$/.test(code)) throw new Error('Vul de 6 cijfers uit je authenticator-app in.');
-    if (!factorId) { const f = await factors(); factorId = f.verified[0] && f.verified[0].id; }
-    if (!factorId) throw new Error('Er is nog geen authenticator-app gekoppeld.');
-    const { error } = await auth().mfa.challengeAndVerify({ factorId, code });
-    if (error) throw err(error, 'Deze code klopt niet.');
+    // Zonder factorId: probeer elke gekoppelde app (authenticator-app én CrewHarbor-app)
+    const ids = factorId ? [factorId] : (await factors()).verified.filter(f => f.status === 'verified' || !f.status).map(f => f.id);
+    if (!ids.length) throw new Error('Er is nog geen authenticator-app gekoppeld.');
+    let last = null;
+    for (const id of ids) {
+      const { error } = await auth().mfa.challengeAndVerify({ factorId: id, code });
+      if (!error) return;
+      last = error;
+      if (/rate|too many/i.test(error.message || '')) break;
+    }
+    throw err(last, 'Deze code klopt niet.');
+  }
+  async function unenroll(factorId) {
+    const { error } = await auth().mfa.unenroll({ factorId });
+    if (error) throw err(error, 'Verwijderen mislukt.');
+    try { await auth().refreshSession(); } catch (e) { /* */ }
   }
   async function disableAll() {
     const f = await factors();
@@ -67,5 +79,5 @@
   }
   // Leesbare weergave van de geheime sleutel, voor wie de QR-code niet kan scannen
   const groupSecret = s => String(s || '').replace(/(.{4})/g, '$1 ').trim();
-  window.CHMFA = { use: c => { client = c; }, factors, enrollStart, verify, disableAll, passwordProblem, groupSecret };
+  window.CHMFA = { use: c => { client = c; }, factors, enrollStart, verify, unenroll, disableAll, passwordProblem, groupSecret };
 })();

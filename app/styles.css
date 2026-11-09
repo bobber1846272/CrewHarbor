@@ -664,6 +664,16 @@ td.rc.absent { background: #FAF8FF; }
 .m-link:first-child { border-top: 0; }
 /* app-weergave voor personeel (nov 2026): Vandaag, Rooster, Verlof, Beschikbaar, Account */
 .btn.sand { background: #EDE8DC; border-color: #EDE8DC; color: var(--navy); }
+.m-link-t { text-align: left; flex: 1; padding-right: 12px; }
+.m-switch { flex: none; width: 46px; height: 28px; border-radius: 99px; background: #CBD5DC; position: relative; transition: background .15s; }
+.m-switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .15s; }
+.m-switch.on { background: var(--accent); }
+.m-switch.on::after { transform: translateX(18px); }
+.m-totp { padding: 12px 0 14px; text-align: center; }
+.m-totp .m-label { margin-bottom: 2px; }
+.m-totp-code { font-size: 40px; font-weight: 800; letter-spacing: .08em; font-variant-numeric: tabular-nums; color: var(--navy); margin: 2px 0 10px; }
+.m-totp .m-timer { background: var(--line); }
+.m-totp .m-sub { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
 .btn.sand-out { background: transparent; border: 2px solid #EDE8DC; color: #EDE8DC; }
 .m-clockrow b { color: #fff; font-weight: 700; }
 .m-codecard { padding: 22px 18px 16px; }
@@ -802,6 +812,11 @@ h1, h2, .page-head h1, .login-brand h1, .kiosk-clock strong { letter-spacing: -0
 .mfa-steps { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.5; display: grid; gap: 4px; }
 .mfa-qr { display: flex; justify-content: center; padding: 12px; background: #fff; border: 1px solid var(--line, #D8E1E3); border-radius: 12px; }
 .mfa-qr img { display: block; width: 184px; height: 184px; }
+.mfa-device { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 12px; background: var(--accent-soft); font-size: 14px; }
+.mfa-device .btn { justify-content: center; min-height: 48px; }
+.mfa-other { display: flex; flex-direction: column; gap: 12px; }
+.mfa-other[open] { display: flex; }
+.mfa-other summary { display: block; cursor: pointer; color: var(--accent); font-weight: 600; text-align: center; margin-bottom: 12px; }
 .mfa-secret { display: block; margin-top: 8px; padding: 10px 12px; background: var(--bg, #F4F7F7); border-radius: 8px; font-size: 14px; letter-spacing: .04em; overflow-wrap: anywhere; word-break: break-all; }
 details summary { cursor: pointer; font-weight: 600; min-height: 32px; display: flex; align-items: center; }
 .small-table { font-size: 13px; }

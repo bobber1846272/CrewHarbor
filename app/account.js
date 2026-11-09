@@ -21,6 +21,23 @@ function saveJson(name, data) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
+// Android-app 5.1+: de app kan zelf tweestapscodes maken (sleutel in de kluis van de telefoon)
+const appTotp = () => !!(APP && typeof APP.totpSave === 'function');
+function appTotpIds() { try { return JSON.parse(APP.totpList() || '[]').map(x => x.id); } catch (e) { return []; } }
+function appTotpCode(id) { try { const c = JSON.parse(APP.totpCode(id) || 'null'); return c && c.code; } catch (e) { return null; } }
+/** Bij inloggen in de app: staat er voor dit account een sleutel op deze telefoon? Dan meteen bevestigen. */
+async function mfaAuto() {
+  const M = S.mfa;
+  if (!M || M.mode !== 'verify' || M.autoTried || !appTotp()) return;
+  M.autoTried = true;
+  let id = null;
+  try { const mine = appTotpIds(); id = ((await window.CHMFA.factors()).verified.find(f => mine.includes(f.id)) || {}).id; } catch (e) { return; }
+  const code = id && appTotpCode(id);
+  if (!code) return;
+  M.auto = true; render();
+  const inp = document.getElementById('mfa-code'), form = document.querySelector('form[data-form="ac-mfa"]');
+  if (inp && form) { inp.value = code; M.autoFactor = id; form.requestSubmit(); }
+}
 const errBox = () => S.authError ? '<div class="alert error" role="alert">' + ICON.alert + '<span>' + esc(S.authError) + '</span></div>' : '';
 
 // ---------- na inloggen: sessie laden, of eerst de tweestapscode ----------
@@ -32,7 +49,7 @@ async function enterApp(okMsg) {
       S.mfa = { mode: e.code === 'CH001' ? 'verify' : 'setup', msg: e.message, required: true, after: okMsg || null };
       render();
       if (S.mfa.mode === 'setup') await mfaPrepare();
-      else { const c = document.getElementById('mfa-code'); if (c) c.focus(); }
+      else { const c = document.getElementById('mfa-code'); if (c) c.focus(); mfaAuto(); }
       return false;
     }
     throw e;
@@ -116,8 +133,13 @@ function viewMfa() {
   const M = S.mfa;
   const setup = M.mode === 'setup';
   let body = '<div><h2>' + (setup ? 'Tweestapsverificatie instellen' : 'Tweestapsverificatie') + '</h2>' +
-    '<p class="muted" style="margin:6px 0 0;font-size:14px">' + esc(setup ? (M.required ? M.msg : 'Een extra slot op je account: naast je wachtwoord vul je een code uit een app op je telefoon in.') : 'Vul de 6 cijfers uit je authenticator-app in.') + '</p></div>' +
+    '<p class="muted" style="margin:6px 0 0;font-size:14px">' + esc(setup ? (M.required ? M.msg : 'Een extra slot op je account: naast je wachtwoord vul je een code uit een app op je telefoon in.') : 'Vul de 6 cijfers uit je authenticator-app of de CrewHarbor-app in.') + '</p></div>' +
     (M.err ? '<div class="alert error" role="alert">' + ICON.alert + '<span>' + esc(M.err) + '</span></div>' : '');
+  if (setup && appTotp()) {
+    body += '<div class="mfa-device"><p style="margin:0">De CrewHarbor-app maakt de codes zelf. Je hoeft niets te installeren of over te typen.</p>' +
+      '<button type="button" class="btn primary" data-act="ac-mfa-device"' + (M.factorId && !M.busy ? '' : ' disabled') + '>' + (M.busy ? 'Bezig…' : 'Gebruik deze telefoon') + '</button></div>' +
+      '<details class="small mfa-other"><summary>Liever een andere authenticator-app?</summary>';
+  }
   if (setup) {
     body += '<ol class="mfa-steps"><li>Installeer een authenticator-app, bijvoorbeeld <strong>Microsoft Authenticator</strong>, <strong>Google Authenticator</strong> of de app van je wachtwoordmanager.</li>' +
       '<li>Scan de QR-code met die app.</li><li>Vul de code van 6 cijfers in die de app laat zien.</li></ol>' +
@@ -125,8 +147,10 @@ function viewMfa() {
         '<details class="small"><summary>Kun je niet scannen? Vul deze sleutel handmatig in</summary><code class="mfa-secret">' + esc(window.CHMFA.groupSecret(M.secret)) + '</code></details>'
         : (M.err ? '<button type="button" class="btn" data-act="ac-mfa-retry">Opnieuw proberen</button>' : '<p class="muted">QR-code maken…</p>'));
   }
+  const devSetup = setup && appTotp();
+  if (M.auto && !M.err) body += '<div class="alert info"><span>Bevestigen met deze telefoon…</span></div>';
   body += '<div class="field"><label for="mfa-code">Code uit de app</label><input class="input code-input" id="mfa-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" pattern="\\d{6}" required></div>' +
-    '<button class="btn primary" type="submit"' + (M.busy ? ' disabled' : '') + '>' + (M.busy ? 'Controleren…' : setup ? 'Aanzetten' : 'Bevestigen') + '</button>' +
+    '<button class="btn ' + (devSetup ? '' : 'primary') + '" type="submit"' + (M.busy ? ' disabled' : '') + '>' + (M.busy ? 'Controleren…' : setup ? 'Aanzetten' : 'Bevestigen') + '</button>' + (devSetup ? '</details>' : '') +
     '<p class="switch">' + (M.voluntary ? '<button type="button" class="linkbtn" data-act="ac-mfa-cancel">Annuleren</button>' : '<button type="button" class="linkbtn" data-act="ac-mfa-logout">Uitloggen</button>') + '</p>';
   if (!setup) body += '<p class="small muted" style="margin:0;text-align:center">Telefoon kwijt? Vraag de eigenaar van je bedrijf (of CrewHarbor) om je tweestapsverificatie te resetten.</p>';
   return '<div class="login">' + brandPanel('Extra beveiliging.', 'Zo kan niemand inloggen met alleen je wachtwoord.') +
@@ -256,6 +280,14 @@ document.getElementById('app').addEventListener('click', async e => {
       case 'ac-forgot': S.forgot = { email: (document.getElementById('l-email') || {}).value || '' }; S.authError = null; S.tok = null; location.hash = '#/vergeten'; render(); return;
       case 'ac-back': S.forgot = null; S.legacyLogin = false; S.authError = null; location.hash = '#/login'; render(); return;
       case 'ac-mfa-retry': await mfaPrepare(); return;
+      case 'ac-mfa-device': {
+        const M = S.mfa; if (!M || !M.factorId || !M.secret) return;
+        if (!APP.totpSave(M.factorId, M.secret, lastEmail() || (S.me && S.me.email) || '')) { M.err = 'Opslaan op deze telefoon lukte niet. Gebruik een authenticator-app.'; render(); return; }
+        const code = appTotpCode(M.factorId);
+        const inp = document.getElementById('mfa-code'), form = document.querySelector('form[data-form="ac-mfa"]');
+        if (!code || !inp || !form) { M.err = 'Code maken lukte niet. Gebruik een authenticator-app.'; render(); return; }
+        inp.value = code; form.requestSubmit(); return;
+      }
       case 'ac-mfa-cancel': S.mfa = null; render(); return;
       case 'ac-mfa-logout': try { await sb.auth.signOut({ scope: 'local' }); } catch (x) { /* */ } S.mfa = null; S.me = null; location.hash = '#/login'; render(); return;
       case 'ac-mfa-on': S.mfa = { mode: 'setup', voluntary: true }; render(); await mfaPrepare(); return;
@@ -379,7 +411,8 @@ document.getElementById('app').addEventListener('submit', async e => {
       M.busy = true; M.err = null; render();
       try { await window.CHMFA.verify(M.mode === 'setup' ? M.factorId : null, code); }
       catch (x) {
-        M.busy = false; M.err = x.message;
+        if (M.mode === 'setup' && appTotp() && appTotpIds().includes(M.factorId)) APP.totpRemove(M.factorId);
+        M.busy = false; M.err = M.auto ? 'Bevestigen met deze telefoon lukte niet. Vul de code uit je authenticator-app in.' : x.message; M.auto = false;
         try { await rpc('cd_mfa_log', { p_event: '2fa-fout' }); } catch (y) { /* */ }
         render(); const c = document.getElementById('mfa-code'); if (c) c.focus(); return;
       }

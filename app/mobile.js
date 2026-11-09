@@ -5,7 +5,7 @@
  */
 'use strict';
 
-const M = { tab: 'code', clock: null, clockAt: 0, plan: null, mine: null, leave: null, codeForm: false };
+const M = { tab: 'code', clock: null, clockAt: 0, plan: null, mine: null, leave: null, codeForm: false, factors: null, snap: null };
 const SITE = (window.CREWDECK_CONFIG || {}).siteUrl || '';
 const isMobileApp = () => !!APP && !!S.me && route() !== 'klok';
 const PLAN_DAYS = 28;
@@ -23,8 +23,33 @@ async function loadMobile() {
   if (M.tab === 'rooster') { jobs.push(loadPlan()); if (typeof loadSwaps === 'function') jobs.push(loadSwaps()); }
   if (M.tab === 'verlof') jobs.push(loadAbsences());
   if (M.tab === 'beschikbaar') jobs.push(loadAvailability());
+  if (M.tab === 'account' && appTotp() && !S.me.legacy) jobs.push(window.CHMFA.factors().then(f => { M.factors = f; }).catch(() => { M.factors = null; }));
   await Promise.all(jobs);
+  if (M.tab === 'code' || M.tab === 'rooster') saveSnap();
 }
+
+// ---------- laatste stand bewaren voor als er geen internet is (Android-app 5.1+) ----------
+function saveSnap() {
+  if (!APP || typeof APP.saveSnapshot !== 'function' || !M.plan || !S.me) return;
+  const W = S.nowWeek, st = M.leave && M.leave.status, prev = M.snap || {};
+  const d = {
+    v: 1, at: Date.now(), name: S.me.name, org: S.org.name,
+    running: S.running ? { date: S.running.date, start: S.running.start } : null,
+    shifts: myShifts().map(s => ({ date: s.date, start: s.start, end: s.end, note: s.note || '' })),
+    abs: (M.plan.absences || []).filter(a => same(a.memberId, S.me.id) && a.status !== 'afgewezen' && a.status !== 'ingetrokken')
+      .map(a => ({ kind: a.kind, kindLabel: a.kindLabel, from: a.from, to: a.to, status: a.status })),
+    leave: st && st.tracked ? { left: st.left, pending: st.pending, year: st.year } : M.tab === 'code' ? null : prev.leave || null,
+    week: W && selfOn('selfHours') ? { min: W.totalMin, contract: W.member.contractType === 'vast' ? Number(W.member.contractHours) * 60 : 0 } : null
+  };
+  M.snap = d;
+  try { APP.saveSnapshot(JSON.stringify(d)); } catch (e) { /* */ }
+}
+window.addEventListener('offline', () => {
+  if (!isMobileApp() || typeof APP.goOffline !== 'function') return;
+  setTimeout(() => { if (!navigator.onLine) APP.goOffline(); }, 3000);
+});
+// antwoord van de app na het aan- of uitzetten van het slot
+window.CHApp = { lock: on => { toast(on ? 'Vanaf nu ontgrendel je CrewHarbor met je vingerafdruk, gezicht of pincode.' : 'Het slot staat uit.'); if (isMobileApp()) render(); } };
 async function loadPlan() {
   try { M.plan = await rpc('cd_roster_range', { p_from: today(), p_to: addDays(today(), PLAN_DAYS - 1) }); } catch (e) { M.plan = null; }
 }
@@ -185,8 +210,35 @@ function mAccount() {
     '<button class="m-link" data-mact="sound">Geluid bij meldingen<span>' + (prefs.sound ? 'aan' : 'uit') + '</span></button>' +
     (SITE ? '<a class="m-link" href="' + esc(SITE) + '" target="_blank" rel="noopener">Naar de website' + ICON.right + '</a>' : '') +
     '<button class="m-link danger" data-mact="logout">Uitloggen</button></section>';
+  h += mSecurity();
   h += '<p class="m-site">Een product van <strong>Spark Apps</strong></p>';
   return h;
+}
+function mTotpMine() {
+  const F = M.factors; if (!F) return null;
+  const ids = appTotpIds();
+  return F.verified.find(f => ids.includes(f.id)) || null;
+}
+function mSecurity() {
+  const rows = [];
+  if (APP && typeof APP.lockAvailable === 'function' && APP.lockAvailable()) {
+    const on = APP.lockEnabled();
+    rows.push('<button class="m-link" data-mact="lock" role="switch" aria-checked="' + on + '"><span class="m-link-t">Ontgrendelen met vingerafdruk of gezicht</span><span class="m-switch' + (on ? ' on' : '') + '" aria-hidden="true"></span></button>');
+  }
+  if (appTotp() && !S.me.legacy && M.factors) {
+    const mine = mTotpMine();
+    if (mine) {
+      const c = (() => { try { return JSON.parse(APP.totpCode(mine.id) || 'null'); } catch (e) { return null; } })();
+      rows.push('<div class="m-totp"><p class="m-label">Inlogcode voor de website</p>' +
+        '<div class="m-totp-code" id="m-totp">' + (c ? esc(c.code.slice(0, 3) + ' ' + c.code.slice(3)) : '--- ---') + '</div>' +
+        '<div class="m-timer"><span id="m-totp-bar" style="width:' + (c ? c.left / 30 * 100 : 0) + '%"></span></div>' +
+        '<p class="m-sub">Vraagt de website om je tweestapscode? Vul deze code in. In de app gaat het vanzelf.</p></div>' +
+        '<button class="m-link" data-mact="totp-off">Tweestapscodes van deze telefoon halen</button>');
+    } else {
+      rows.push('<button class="m-link" data-mact="totp-on">Tweestapscodes op deze telefoon' + ICON.right + '</button>');
+    }
+  }
+  return rows.length ? '<section class="m-card"><p class="m-label">Beveiliging</p>' + rows.join('') + '</section>' : '';
 }
 
 // ---------- knoppen ----------
@@ -226,6 +278,26 @@ document.addEventListener('click', async e => {
         await rpc('cd_absence_action', { p_id: num, p_action: 'beter', p_date: today() });
         toast('Fijn dat je weer beter bent!'); break;
       }
+      case 'lock': APP.setLock(!APP.lockEnabled()); return;
+      case 'totp-on': {
+        el.disabled = true;
+        const r = await window.CHMFA.enrollStart('CrewHarbor-app');
+        if (!APP.totpSave(r.factorId, r.secret, S.me.email || '')) { try { await window.CHMFA.unenroll(r.factorId); } catch (x) { /* */ } throw new Error('Opslaan op deze telefoon lukte niet.'); }
+        try { await window.CHMFA.verify(r.factorId, appTotpCode(r.factorId)); }
+        catch (x) { APP.totpRemove(r.factorId); try { await window.CHMFA.unenroll(r.factorId); } catch (y) { /* */ } throw x; }
+        try { await rpc('cd_mfa_log', { p_event: '2fa-aangezet' }); } catch (x) { /* */ }
+        toast('Klaar. Deze telefoon maakt nu je tweestapscodes.'); break;
+      }
+      case 'totp-off': {
+        const mine = mTotpMine(); if (!mine) return;
+        const others = M.factors.verified.filter(f => f.id !== mine.id);
+        if (!others.length && settings().requireMfa && S.me.isManager) { toast('Je bedrijf vraagt tweestapsverificatie. Koppel eerst een authenticator-app via de website.', true); return; }
+        if (!confirm(others.length ? 'Tweestapscodes van deze telefoon halen? Je andere authenticator-app blijft werken.' : 'Tweestapscodes van deze telefoon halen? Daarmee gaat je tweestapsverificatie uit.')) return;
+        el.disabled = true;
+        await window.CHMFA.unenroll(mine.id); APP.totpRemove(mine.id);
+        if (!others.length) { try { await rpc('cd_mfa_log', { p_event: '2fa-uitgezet' }); } catch (x) { /* */ } }
+        toast('Verwijderd van deze telefoon.'); break;
+      }
       case 'code-open': M.codeForm = true; render(); return;
       case 'code-cancel': M.codeForm = false; render(); return;
       case 'code-save': {
@@ -243,7 +315,7 @@ document.addEventListener('click', async e => {
         await svc('member-code', { memberId: S.me.id, code: c1 }); M.codeForm = false; toast('Je nieuwe code is opgeslagen.'); render(); return;
       }
       case 'sound': prefs.sound = !prefs.sound; savePrefs(); unlockAudio(); if (prefs.sound) beep(); render(); return;
-      case 'logout': if (!confirm('Uitloggen?')) return; await sb.auth.signOut(); S.me = null; S.seen = null; location.hash = '#/login'; render(); return;
+      case 'logout': if (!confirm('Uitloggen?')) return; if (typeof APP.saveSnapshot === 'function') APP.saveSnapshot(''); M.snap = null; await sb.auth.signOut(); S.me = null; S.seen = null; location.hash = '#/login'; render(); return;
       default: return;
     }
     S.quiet = true; try { await loadMobile(); } finally { S.quiet = false; }
@@ -253,6 +325,13 @@ document.addEventListener('click', async e => {
 
 // klokcode live bijwerken
 setInterval(async () => {
+  if (isMobileApp() && M.tab === 'account') {
+    const t = document.getElementById('m-totp'), mine = t && mTotpMine();
+    if (!mine) return;
+    let c = null; try { c = JSON.parse(APP.totpCode(mine.id) || 'null'); } catch (e) { /* */ }
+    if (c) { t.textContent = c.code.slice(0, 3) + ' ' + c.code.slice(3); const b = document.getElementById('m-totp-bar'); if (b) b.style.width = (c.left / 30 * 100) + '%'; }
+    return;
+  }
   if (!isMobileApp() || M.tab !== 'code') return;
   const left = secondsLeft();
   if (!M.clock || left <= 0) { await loadClockCode(); render(); return; }
