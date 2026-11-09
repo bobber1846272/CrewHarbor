@@ -1,0 +1,34 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'nl.crewharbor.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'nl.crewharbor.app'
+        minSdk 24
+        targetSdk 35
+        // Spark Store: Crewdeck had versie 4, CrewHarbor gaat verder vanaf 5
+        versionCode 5
+        versionName '5.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // ondertekenen gebeurt buiten GitHub, met de sleutel van Thomas
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

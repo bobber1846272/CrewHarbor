@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CrewHarbor</string>
+    <string name="channel_name">Meldingen</string>
+    <string name="channel_desc">Nieuwe terugbelverzoeken, taken en andere meldingen van CrewHarbor</string>
+</resources>

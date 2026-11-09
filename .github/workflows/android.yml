@@ -1,0 +1,40 @@
+name: Android-app bouwen
+
+on:
+  push:
+    branches: [android-app]
+    paths: ['android/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: APK bouwen (niet ondertekend)
+        run: gradle -p android assembleRelease --no-daemon --stacktrace
+
+      - name: Ondertekengereedschap erbij pakken
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "build-tools: $BT"
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk out/
+          cp "$BT/lib/apksigner.jar" out/
+          "$BT/zipalign" -c -v 4 out/app-release-unsigned.apk | tail -1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crewharbor-apk-unsigned
+          path: out/
+          retention-days: 7
