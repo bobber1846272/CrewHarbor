@@ -2029,9 +2029,18 @@ function viewKiosk() {
     body = '<div class="kiosk-msg"><h1>Geen verbinding</h1><p>' + esc(K.offline || 'De server is niet bereikbaar.') + ' We proberen het zo opnieuw.</p></div>';
   } else if (K.result) {
     const R = K.result;
-    body = '<div class="kiosk-done ' + (R.action === 'in' ? 'in' : 'out') + '" role="status"><div class="kiosk-check">' + ICON.check + '</div>' +
-      '<h1>' + (R.action === 'in' ? 'Ingeklokt om ' : 'Uitgeklokt om ') + esc(R.time) + '</h1>' +
-      '<p>' + (R.action === 'in' ? 'Fijne dienst, ' : 'Tot de volgende keer, ') + esc(R.name.split(' ')[0]) + '!' + (R.action === 'out' && R.minutes != null ? ' Je hebt ' + fmtHM(R.minutes) + ' gewerkt.' : '') + '</p></div>';
+    const inn = R.action === 'in';
+    // feestelijke animatie: vinkje dat zich tekent, golven, confetti en een bootje dat de haven in (of uit) vaart
+    const conf = Array.from({ length: 28 }, (_, i) => '<i style="--a:' + Math.round(i * 12.86) + 'deg;--d:' + (120 + (i * 47) % 90) + 'px;--t:' + (i % 4) + '"></i>').join('');
+    body = '<div class="kiosk-done kd2 ' + (inn ? 'in' : 'out') + '" role="status">' +
+      '<div class="kd-burst" aria-hidden="true">' + conf + '</div>' +
+      '<div class="kd-ring r1" aria-hidden="true"></div><div class="kd-ring r2" aria-hidden="true"></div>' +
+      '<div class="kiosk-check"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="kd-tick" d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>' +
+      '<h1 class="kd-up" style="--dl:.35s">' + (inn ? 'Ingeklokt om ' : 'Uitgeklokt om ') + esc(R.time) + '</h1>' +
+      '<p class="kd-up" style="--dl:.5s">' + (inn ? 'Fijne dienst, ' : 'Tot de volgende keer, ') + esc(R.name.split(' ')[0]) + '!' + (!inn && R.minutes != null ? ' Je hebt <strong>' + fmtHM(R.minutes) + '</strong> gewerkt.' : '') + '</p>' +
+      '<div class="kd-sea" aria-hidden="true"><svg class="kd-boat" viewBox="0 0 64 56"><path d="M30 4v34" stroke="#EDE8DC" stroke-width="2.5" stroke-linecap="round"/><path d="M33 8l17 26H33z" fill="#EDE8DC"/><path d="M28 12L14 34h14z" fill="#7FC4CF"/><path d="M8 40h48l-7 10H15z" fill="' + (inn ? '#16A34A' : '#F59E0B') + '"/></svg>' +
+        '<svg class="kd-waves" viewBox="0 0 400 20" preserveAspectRatio="none"><path d="M0 10 Q 25 0 50 10 T 100 10 T 150 10 T 200 10 T 250 10 T 300 10 T 350 10 T 400 10 V20 H0z" fill="rgba(127,196,207,.28)"/></svg></div>' +
+      '<div class="kd-timer" aria-hidden="true"><span></span></div></div>';
   } else if (K.sel) {
     const P = K.info.people.find(x => same(x.id, K.sel));
     const goingIn = !P || !P.in;

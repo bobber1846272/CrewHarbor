@@ -1410,3 +1410,38 @@ a.db-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
 .period-opt.on { border-color: var(--accent); background: #F1F8F9; box-shadow: inset 0 0 0 1px var(--accent); }
 .period-opt span { font-size: 15px; font-weight: 600; } .period-opt small { color: var(--muted); font-size: 13px; }
 @media (max-width: 560px) { .period-pick { grid-template-columns: 1fr; } }
+
+/* ---------- prikklok: animatie bij in- en uitklokken ---------- */
+.kd2 { position: relative; --c: #16A34A; --c2: #4ADE80; }
+.kd2.out { --c: #F59E0B; --c2: #FCD34D; }
+.kd2 .kiosk-check { position: relative; z-index: 2; background: var(--c); animation: kdPop .6s cubic-bezier(.2,1.4,.4,1) both; box-shadow: 0 0 0 0 var(--c); }
+.kd2 .kiosk-check svg { stroke: #fff; }
+.kd2 .kd-tick { stroke-dasharray: 26; stroke-dashoffset: 26; animation: kdDraw .45s .3s ease-out forwards; }
+.kd-ring { position: absolute; top: 0; left: 50%; width: 110px; height: 110px; margin-left: -55px; border-radius: 50%; border: 3px solid var(--c); opacity: 0; animation: kdRing 1.4s .15s ease-out forwards; pointer-events: none; }
+.kd-ring.r2 { animation-delay: .45s; }
+.kd-burst { position: absolute; top: 55px; left: 50%; width: 0; height: 0; z-index: 1; }
+.kd-burst i { position: absolute; width: 9px; height: 9px; border-radius: 2px; background: var(--c2); opacity: 0; transform: rotate(var(--a)) translateY(0); animation: kdConf .9s calc(.25s + var(--t) * .06s) cubic-bezier(.1,.7,.3,1) forwards; }
+.kd-burst i:nth-child(3n) { background: #EDE8DC; border-radius: 50%; } .kd-burst i:nth-child(3n+1) { background: #7FC4CF; }
+.kd2.out .kd-burst i { width: 7px; height: 7px; border-radius: 50%; }
+.kd-up { opacity: 0; animation: kdUp .5s var(--dl) ease-out forwards; }
+.kd-sea { position: relative; width: min(420px, 80vw); height: 70px; margin-top: 18px; overflow: hidden; }
+.kd-waves { position: absolute; left: 0; bottom: 0; width: 200%; height: 22px; animation: kdWave 3s linear infinite; }
+.kd-boat { position: absolute; bottom: 8px; width: 56px; height: 50px; animation: kdBob 1.6s ease-in-out infinite; }
+.kd2.in .kd-boat { left: 50%; margin-left: -28px; animation: kdSailIn 1.6s .2s cubic-bezier(.2,.8,.3,1) both, kdBob 1.6s 1.8s ease-in-out infinite; }
+.kd2.out .kd-boat { left: 50%; margin-left: -28px; animation: kdSailOut 3.4s .6s cubic-bezier(.5,0,.6,1) forwards; }
+.kd-timer { width: 160px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; margin-top: 10px; }
+.kd-timer span { display: block; height: 100%; background: var(--c); transform-origin: left; animation: kdTimer 4.5s linear forwards; }
+@keyframes kdPop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+@keyframes kdDraw { to { stroke-dashoffset: 0; } }
+@keyframes kdRing { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(2.4); } }
+@keyframes kdConf { 0% { opacity: 1; transform: rotate(var(--a)) translateY(0) scale(.6); } 70% { opacity: 1; } 100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(var(--d) * -1)) rotate(200deg) scale(1); } }
+@keyframes kdUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes kdWave { to { transform: translateX(-50%); } }
+@keyframes kdBob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-4px) rotate(2deg); } }
+@keyframes kdSailIn { from { transform: translateX(-260px); } to { transform: none; } }
+@keyframes kdSailOut { 0% { transform: none; } 15% { transform: translateY(-3px) rotate(3deg); } 100% { transform: translateX(300px) rotate(0deg); } }
+@keyframes kdTimer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .kd2 *, .kd2 .kiosk-check { animation-duration: .01s !important; animation-iteration-count: 1 !important; } .kd-burst, .kd-ring { display: none; } }
+.kd-burst i { width: 11px; height: 11px; }
+.kd2.out .kd-burst i { width: 9px; height: 9px; }
+.kd2 .kiosk-check::after { content: ''; position: absolute; inset: -14px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--c) 35%, transparent), transparent 70%); z-index: -1; animation: kdUp .6s .2s both; }
