@@ -1,17 +1,27 @@
-/* CrewHarbor — eenvoudige app-weergave (Android-app)
- * Alleen: klokcode, taken, terugbellen, uren in het kort en je account. Al het andere gaat via de website.
- * Gebruikt de gedeelde staat en hulpjes uit app.js.
+/* CrewHarbor — app-weergave voor personeel (Android-app)
+ * Snel regelen: inklokken (klokcode voor de prikklok of zelf), je rooster, verlof met saldo en
+ * beschikbaarheid. Onder "Meer": account, taken en terugbellen. Al het andere gaat via de website.
+ * Hergebruikt de schermen en knoppen (data-act) van app.js waar dat kan, zodat alles hetzelfde werkt.
  */
 'use strict';
 
-const M = { tab: 'code', clock: null, clockAt: 0, next: null, cbOpen: null, taskOpen: null, busy: false, codeForm: false };
+const M = { tab: 'code', clock: null, clockAt: 0, upcoming: null, rWeek: null, sub: null, cbOpen: null, taskOpen: null, codeForm: false };
 const SITE = (window.CREWDECK_CONFIG || {}).siteUrl || '';
 const isMobileApp = () => !!APP && !!S.me && route() !== 'klok';
 
 async function loadMobile() {
+  if (!mTabs().some(t => t[0] === M.tab)) M.tab = 'code';
   const jobs = [loadCounts()];
-  if (M.tab === 'code') jobs.push(loadClockCode());
-  if (M.tab === 'uren') jobs.push(rpc('cd_hours_week', { p_member: null, p_week: addDays(mondayOf(today()), 7) }).then(d => { M.next = d; }));
+  if (M.tab === 'code') {
+    jobs.push(loadClockCode());
+    jobs.push(rpc('cd_roster_range', { p_from: today(), p_to: addDays(today(), 20) })
+      .then(r => { M.upcoming = (r.shifts || []).filter(s => same(s.memberId, S.me.id)).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start)); })
+      .catch(() => { M.upcoming = null; }));
+  }
+  if (M.tab === 'rooster') jobs.push(rpc('cd_roster', { p_week: M.rWeek || today() }).then(r => { S.roster = r; M.rWeek = r.weekStart; }));
+  if (M.tab === 'rooster' && typeof loadSwaps === 'function') jobs.push(loadSwaps());
+  if (M.tab === 'verlof') jobs.push(loadAbsences());
+  if (M.tab === 'beschikbaar') jobs.push(loadAvailability());
   await Promise.all(jobs);
 }
 async function loadClockCode() {
@@ -19,20 +29,29 @@ async function loadClockCode() {
 }
 function secondsLeft() { return M.clock ? Math.max(0, M.clock.secondsLeft - Math.floor((Date.now() - M.clockAt) / 1000)) : 0; }
 
-const MTABS = [['code', 'Klokcode', NI.prikklok], ['taken', 'Taken', NI.taken], ['bellen', 'Bellen', NI.terugbellen], ['uren', 'Uren', NI.uren], ['account', 'Account', NI.mensen]];
+function mTabs() {
+  return [['code', 'Klokken', NI.prikklok], ['rooster', 'Rooster', NI.rooster],
+    selfOn('selfLeave') && ['verlof', 'Verlof', NI.verlof], selfOn('selfAvail') && ['beschikbaar', 'Beschikbaar', NI.beschikbaar],
+    ['meer', 'Meer', NI.mensen]].filter(Boolean);
+}
+function openWork() { return S.myTasks.filter(t => !t.done && !t.mineDone && !t.archived).length + S.counts.mine; }
 function viewMobile() {
-  const openTasks = S.myTasks.filter(t => !t.done && !t.mineDone && !t.archived).length;
-  const badges = { taken: openTasks, bellen: S.counts.mine };
-  const views = { code: mCode, taken: mTasks, bellen: mCalls, uren: mHours, account: mAccount };
+  const tabs = mTabs();
+  if (!tabs.some(t => t[0] === M.tab)) M.tab = 'code';
+  const badges = { meer: openWork() };
+  const views = { code: mCode, rooster: mRoster, verlof: mLeave, beschikbaar: mAvail, meer: mMore };
+  // onzichtbare terugknop: de terugknop van Android klikt hierop (sluit eerst een formulier of scherm, dan naar Klokken)
+  const back = M.cbOpen || M.sub || S.absForm || S.swOffer || M.tab !== 'code';
   return '<div class="m-app"><header class="m-top">' + LOGO(26) + '<span class="m-org">' + esc(S.org.name) + '</span></header>' +
     '<main class="m-main" id="m-main">' + (views[M.tab] || mCode)() + '</main>' +
-    '<nav class="m-tabs" aria-label="Menu">' + MTABS.filter(t => t[0] !== 'uren' || selfOn('selfHours')).map(t => '<button class="' + (M.tab === t[0] ? 'on' : '') + '" data-mact="tab" data-v="' + t[0] + '"' + (M.tab === t[0] ? ' aria-current="page"' : '') + '>' +
+    (back ? '<button hidden aria-hidden="true" tabindex="-1" data-mact="cb-close"></button>' : '') +
+    '<nav class="m-tabs" aria-label="Menu" style="grid-template-columns:repeat(' + tabs.length + ',1fr)">' + tabs.map(t => '<button class="' + (M.tab === t[0] ? 'on' : '') + '" data-mact="tab" data-v="' + t[0] + '"' + (M.tab === t[0] ? ' aria-current="page"' : '') + '>' +
       t[2] + '<span>' + t[1] + '</span>' + (badges[t[0]] ? '<i>' + badges[t[0]] + '</i>' : '') + '</button>').join('') + '</nav></div>';
 }
 
-// ---------- klokcode ----------
+// ---------- klokken ----------
 function mCode() {
-  const R = S.running; const W = S.nowWeek;
+  const R = S.running; const W = S.nowWeek; const kiosk = kioskOnly();
   const todayShift = W ? W.shifts.find(s => s.date === W.today) : null;
   const code = M.clock ? M.clock.code : '--------';
   const left = secondsLeft();
@@ -40,12 +59,64 @@ function mCode() {
     '<div class="m-code" id="m-code" aria-live="polite">' + esc(code.slice(0, 4)) + ' ' + esc(code.slice(4)) + '</div>' +
     '<div class="m-timer"><span id="m-bar" style="width:' + (left / ((M.clock && M.clock.period) || 20) * 100) + '%"></span></div>' +
     '<p class="m-sub" id="m-left">Nieuwe code over ' + left + ' sec</p>' +
-    '<p class="m-help">Tik bij de prikklok op je naam en voer deze code in.</p></section>';
+    '<p class="m-help">' + (kiosk ? 'Tik bij de prikklok op je naam en voer deze code in.' : 'Bij de prikklok: tik op je naam en voer deze code in. Of klok hieronder zelf in.') + '</p></section>';
   h += '<section class="m-card m-status ' + (R ? 'in' : '') + '">' + (R
     ? '<span class="live-dot"></span><div><strong>Ingeklokt sinds ' + esc(R.start) + '</strong><span id="clock-elapsed" data-date="' + esc(R.date) + '" data-start="' + esc(R.start) + '">' + fmtHM(runningSince(R)) + '</span></div>'
     : '<div><strong>Niet ingeklokt</strong><span>' + (todayShift ? 'Vandaag ingepland ' + esc(todayShift.start + '–' + todayShift.end) : 'Vandaag niet ingepland') + '</span></div>') +
-    (kioskOnly() ? '' : '<button class="btn small ' + (R ? 'dark' : 'primary') + '" data-mact="clock">' + (R ? 'Uitklokken' : 'Inklokken') + '</button>') + '</section>';
+    (kiosk ? '' : '<button class="btn small ' + (R ? 'dark' : 'primary') + '" data-mact="clock">' + (R ? 'Uitklokken' : 'Inklokken') + '</button>') + '</section>';
+  // volgende dienst
+  if (M.upcoming) {
+    const now = new Date(); const hm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    const nx = M.upcoming.find(s => s.date > today() || (s.date === today() && s.end > hm && !(R && s.start <= hm)));
+    h += '<button class="m-card m-next" data-mact="tab" data-v="rooster"><div><p class="m-label">Volgende dienst</p>' + (nx
+      ? '<strong>' + (nx.date === today() ? 'Vandaag' : nx.date === addDays(today(), 1) ? 'Morgen' : esc(dayLong(nx.date))) + ' · ' + esc(nx.start + '–' + nx.end) + '</strong>' + (nx.note ? '<span>' + esc(nx.note) + '</span>' : '')
+      : '<strong>Nog niets ingepland</strong><span>De komende drie weken heb je geen diensten.</span>') + '</div>' + ICON.right + '</button>';
+  }
+  // uren deze week in het kort
+  if (W && selfOn('selfHours')) {
+    const ch = W.member.contractType === 'vast' ? Number(W.member.contractHours) * 60 : 0;
+    h += '<section class="m-card"><p class="m-label">Gewerkt deze week</p><div class="m-big">' + fmtHM(W.totalMin) + '<small>' + (ch ? ' van ' + fmtHM(ch) : W.member.contractType === 'flex' ? ' · flex' : '') + '</small></div>' +
+      (ch ? '<div class="progress" style="margin:8px 0 0"><span style="width:' + Math.min(100, W.totalMin / ch * 100) + '%"></span></div>' : '') + '</section>';
+  }
   return h;
+}
+
+// ---------- rooster ----------
+function mRoster() {
+  const R = S.roster; if (!R || !R.weekStart || !M.rWeek) return '<div class="m-empty">Rooster laden…</div>';
+  const wk = R.weekStart, cur = mondayOf(today());
+  let h = '<div class="m-weeknav"><button class="icon-btn" data-mact="r-week" data-v="' + addDays(wk, -7) + '" aria-label="Vorige week">' + ICON.left + '</button>' +
+    '<div><strong>' + esc(weekLabel(wk)) + '</strong><span>' + (wk === cur ? 'Deze week' : wk === addDays(cur, 7) ? 'Volgende week' : wk < cur ? 'Geweest' : '<button class="link-btn small" data-mact="r-week" data-v="' + cur + '">Naar deze week</button>') + '</span></div>' +
+    '<button class="icon-btn" data-mact="r-week" data-v="' + addDays(wk, 7) + '" aria-label="Volgende week">' + ICON.right + '</button></div>';
+  const swM = S.swOffer && typeof swapOfferModal === 'function' ? modal(swapOfferModal(R), 'sw-offer-x') : '';
+  return h + '<div class="m-roster">' + rosterMine(R) + '</div>' + swM;
+}
+
+// ---------- verlof ----------
+function mLeave() {
+  const A = S.abs; if (!A) return '<div class="m-empty">Verlof laden…</div>';
+  const sick = A.mine.find(a => a.kind === 'ziek' && a.status === 'goedgekeurd' && !a.to);
+  let h = '<h1 class="m-h1">Verlof</h1>';
+  if (sick) h += sickCard(sick);
+  h += leaveSaldoCard();
+  if (S.absForm) h += '<div class="m-form">' + absenceForm() + '</div>';
+  else h += '<div class="m-actions m-two">' + (sick ? '' : '<button class="btn" data-act="abs-new" data-v="ziek">Ziek melden</button>') +
+    '<button class="btn primary" data-act="abs-new" data-v="verlof">Verlof aanvragen</button></div>';
+  return h + '<h2 class="m-h2">Mijn verlof en ziekte</h2>' + myAbsList(A.mine);
+}
+
+// ---------- beschikbaarheid ----------
+function mAvail() {
+  const v = viewAvailability();
+  return v ? '<div class="m-avail">' + v + '</div>' : '<div class="m-empty">Beschikbaarheid laden…</div>';
+}
+
+// ---------- meer ----------
+function mMore() {
+  if (M.sub === 'taken' || M.sub === 'bellen') {
+    return (M.cbOpen ? '' : '<button class="m-back" data-mact="cb-close">' + ICON.left + 'Meer</button>') + (M.sub === 'taken' ? mTasks() : mCalls());
+  }
+  return mAccount();
 }
 
 // ---------- taken ----------
@@ -100,36 +171,14 @@ function mCall(c) {
       : '<section class="m-card"><button class="btn primary" style="width:100%" data-mact="cb-claim" data-id="' + c.id + '">Oppakken</button></section>');
 }
 
-// ---------- uren ----------
-function mHours() {
-  const W = S.nowWeek; if (!W) return '';
-  const ct = W.member.contractType, ch = Number(W.member.contractHours) * 60;
-  let h = '<h1 class="m-h1">Uren</h1><section class="m-card"><p class="m-label">Deze week · ' + weekLabel(W.weekStart) + '</p>' +
-    '<div class="m-big">' + fmtHM(W.totalMin) + '<small>' + (ct === 'vast' && ch ? ' van ' + fmtHM(ch) : ct === 'flex' ? ' · flex' : '') + '</small></div>' +
-    (ct === 'vast' && ch ? '<div class="progress" style="margin:8px 0 0"><span style="width:' + Math.min(100, W.totalMin / ch * 100) + '%"></span></div>' : '') + '</section>';
-  h += '<section class="m-card"><div class="m-days">' + [0, 1, 2, 3, 4, 5, 6].map(i => {
-    const d = addDays(W.weekStart, i);
-    const es = W.entries.filter(e => e.date === d); const ss = W.shifts.filter(s => s.date === d);
-    const ab = (W.absences || []).find(a => absCovers(a, d));
-    const tot = es.reduce((a, e) => a + (e.minutes || 0), 0);
-    if (!es.length && !ss.length && !ab) return '';
-    const st = es.find(e => e.status === 'afgekeurd') ? 'afgekeurd' : es.find(e => e.status === 'concept' || e.status === 'open') ? 'concept' : es.find(e => e.status === 'ingediend') ? 'ingediend' : es.length ? 'goedgekeurd' : '';
-    return '<div class="m-day' + (d === W.today ? ' today' : '') + '"><span class="m-dname">' + esc(dayShort(d)) + '</span>' +
-      '<span class="m-dplan">' + (ab ? absChip(ab) : '') + (ss.length ? esc(ss.map(s => s.start + '–' + s.end).join(', ')) : '') + '</span>' +
-      '<span class="m-dtot">' + (tot ? fmtHM(tot) : es.some(e => e.status === 'open') ? 'bezig' : '–') + '</span>' + (st ? hBadge(st) : '<span></span>') + '</div>';
-  }).join('') + '</div>' + (W.entries.length || W.shifts.length ? '' : '<p class="m-sub" style="margin:0">Nog niets deze week.</p>') + '</section>';
-  if (M.next && M.next.shifts.length) {
-    h += '<section class="m-card"><p class="m-label">Volgende week</p>' + M.next.shifts.map(s => '<div class="m-row"><span>' + esc(dayShort(s.date)) + '</span><strong>' + esc(s.start + '–' + s.end) + '</strong>' + (s.note ? '<span class="small muted">' + esc(s.note) + '</span>' : '') + '</div>').join('') + '</section>';
-  }
-  h += '<p class="m-site">Uren aanpassen of indienen, verlof aanvragen en het hele rooster: ' + (SITE ? '<a href="' + esc(SITE) + '" target="_blank" rel="noopener">open de website</a>' : 'via de website van CrewHarbor') + '.</p>';
-  return h;
-}
-
 // ---------- account ----------
 function mAccount() {
-  let h = '<h1 class="m-h1">Account</h1><section class="m-card m-me">' + avatar(S.me.id, S.me.name, 'lg') + '<div><strong>' + esc(S.me.name) + '</strong><span>' + esc(S.roleName) + ' · ' + esc(S.org.name) + '</span>' +
+  let h = '<h1 class="m-h1">Meer</h1><section class="m-card m-me">' + avatar(S.me.id, S.me.name, 'lg') + '<div><strong>' + esc(S.me.name) + '</strong><span>' + esc(S.roleName) + ' · ' + esc(S.org.name) + '</span>' +
     '<span>' + (S.me.legacy ? 'Bedrijfscode: ' + esc(S.org.slug) : esc(S.me.email || '')) + '</span></div></section>';
   if (S.me.legacy) h += '<section class="m-card"><p class="m-label">Koppel je e-mailadres</p><p class="small" style="margin:0">Inloggen met een code verdwijnt. Koppel op de website bij Instellingen je e-mailadres en kies een wachtwoord.</p></section>';
+  const openTasks = S.myTasks.filter(t => !t.done && !t.mineDone && !t.archived).length;
+  const row = (sub, icon, label, n) => '<button class="m-link" data-mact="sub" data-v="' + sub + '"><span class="m-link-l">' + icon + label + '</span><span class="m-link-r">' + (n ? '<i class="m-count">' + n + '</i>' : '') + ICON.right + '</span></button>';
+  h += '<section class="m-card"><p class="m-label">Werk</p>' + row('taken', NI.taken, 'Mijn taken', openTasks) + row('bellen', NI.terugbellen, 'Terugbellen', S.counts.mine) + '</section>';
   h += '<section class="m-card"><p class="m-label">Contract</p><strong>' + esc(contractText(S.me)) + '</strong></section>';
   const pw = !S.me.legacy;
   h += '<section class="m-card">' + (M.codeForm
@@ -153,7 +202,9 @@ document.addEventListener('click', async e => {
   const a = el.dataset.mact, id = el.dataset.id, num = id != null ? Number(id) : null;
   try {
     switch (a) {
-      case 'tab': M.tab = el.dataset.v; M.cbOpen = null; M.taskOpen = null; M.codeForm = false; render(); window.scrollTo(0, 0); await loadMobile(); render(); return;
+      case 'tab': M.tab = el.dataset.v; M.sub = null; M.cbOpen = null; M.taskOpen = null; M.codeForm = false; S.absForm = null; S.swOffer = null; S.avSel = {}; render(); window.scrollTo(0, 0); await loadMobile(); render(); return;
+      case 'sub': M.sub = el.dataset.v; M.cbOpen = null; M.taskOpen = null; render(); window.scrollTo(0, 0); return;
+      case 'r-week': M.rWeek = el.dataset.v; break;
       case 'clock': {
         const e2 = await rpc('cd_hours_clock', { p_action: S.running ? 'out' : 'in' });
         toast(e2.status === 'open' ? 'Ingeklokt. Fijne dienst!' : 'Uitgeklokt: ' + fmtHM(e2.minutes) + ' gewerkt.'); break;
@@ -161,7 +212,14 @@ document.addEventListener('click', async e => {
       case 'task-toggle': await rpc('cd_task_action', { p_id: num, p_action: 'toggle' }); break;
       case 'task-open': M.taskOpen = same(M.taskOpen, num) ? null : num; render(); return;
       case 'cb-open': M.cbOpen = num; render(); window.scrollTo(0, 0); return;
-      case 'cb-close': M.cbOpen = null; render(); return;
+      case 'cb-close': { // ook de terugknop van Android
+        if (M.cbOpen) M.cbOpen = null;
+        else if (S.swOffer) S.swOffer = null;
+        else if (S.absForm) S.absForm = null;
+        else if (M.sub) M.sub = null;
+        else if (M.tab !== 'code') { M.tab = 'code'; S.avSel = {}; render(); window.scrollTo(0, 0); await loadMobile(); render(); return; }
+        render(); window.scrollTo(0, 0); return;
+      }
       case 'cb-quick': { const inp = document.getElementById('m-note'); inp.value = inp.value.trim() ? inp.value.trim() + ' · ' + el.dataset.v : el.dataset.v; return; }
       case 'cb-claim': await rpc('cd_callback_action', { p_id: num, p_action: 'claim' }); toast('Opgepakt.'); M.cbOpen = num; break;
       case 'cb-attempt': {

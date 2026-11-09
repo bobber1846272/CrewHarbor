@@ -306,6 +306,7 @@ async function onRoute() {
 }
 
 async function loadRoute() {
+  if (typeof isMobileApp === 'function' && isMobileApp()) return loadMobile();
   const r = route();
   const jobs = [loadCounts(), loadPresence()];
   if (r === 'overzicht' && can('reports.view')) jobs.push(rpc('cd_stats', { p_days: 7 }).then(s => { S.weekStats = s; }));
@@ -2137,6 +2138,22 @@ function absenceForm() {
     (ziek ? '<p class="small muted" style="margin:0">Je leidinggevende krijgt meteen een melding. Meld je weer beter zodra je kunt werken. <strong>Schrijf hier niet wat je hebt</strong>: je werkgever mag volgens de privacywet niet vastleggen welke ziekte je hebt.</p>' : '<p class="small muted" style="margin:0">Je leidinggevende krijgt een melding en keurt het verlof goed of af.</p>') +
     '<div class="form-foot"><button class="btn ghost" data-act="abs-cancel">Annuleren</button><button class="btn ' + (ziek ? 'danger' : 'primary') + '" data-act="abs-save">' + (ziek ? 'Ziek melden' : 'Aanvragen') + '</button></div></section>';
 }
+function sickCard(sick) {
+  return '<section class="card sick-card"><div><strong>Je bent ziek gemeld sinds ' + esc(dayLong(sick.from).toLowerCase()) + '</strong><p class="small muted" style="margin:2px 0 0">Beterschap! Meld je beter zodra je weer kunt werken.</p></div>' +
+    '<div class="row" style="align-items:flex-end"><div class="field"><label for="beter-date">Weer aan het werk op</label><input class="input" type="date" id="beter-date" value="' + today() + '" min="' + esc(sick.from) + '"></div>' +
+    '<button class="btn primary" data-act="abs-beter" data-id="' + sick.id + '">Beter melden</button></div></section>';
+}
+function myAbsList(list) {
+  if (!list.length) return '<div class="empty">Nog niets aangevraagd of gemeld.</div>';
+  return '<div class="doc-list">' + list.map(a => {
+    const st = ABS_STATUS[a.status] || [a.status, ''];
+    const canCancel = a.status === 'aangevraagd' || (a.status === 'goedgekeurd' && a.kind !== 'ziek' && a.from > today());
+    return '<div class="doc"><span class="abs-chip big ' + a.kind + '">' + esc(a.kindLabel) + '</span><div class="doc-main"><strong>' + esc(spanLabel(a)) + '</strong>' +
+      '<span class="small muted">' + (a.to || a.kind !== 'ziek' ? a.workdays + (a.workdays === 1 ? ' werkdag' : ' werkdagen') + (a.hours != null ? ' · ' + hrsTxt(a.hours) : '') : 'loopt nog') + (a.cover ? ' · tekort ' + hrsTxt(a.coverHours) + ': ' + COVER[a.cover][0].toLowerCase() : '') + (a.note ? ' · ' + esc(a.note) : '') +
+      (a.reviewedByName && a.status !== 'aangevraagd' && a.kind !== 'ziek' ? ' · ' + esc(st[0].toLowerCase()) + ' door ' + esc(a.reviewedByName) : '') + (a.rejectReason ? ': ' + esc(a.rejectReason) : '') + '</span></div>' +
+      '<div class="doc-act"><span class="badge ' + st[1] + '">' + st[0] + '</span>' + (canCancel ? '<button class="btn small ghost" data-act="abs-cancel-item" data-id="' + a.id + '">Intrekken</button>' : '') + '</div></div>';
+  }).join('') + '</div>';
+}
 function viewAbsence() {
   const A = S.abs; if (!A) return '';
   const sick = A.mine.find(a => a.kind === 'ziek' && a.status === 'goedgekeurd' && !a.to);
@@ -2144,11 +2161,7 @@ function viewAbsence() {
   let h = own ? '<header class="page-head"><div><h1>Verlof &amp; ziek</h1><p>Vraag verlof aan, meld je ziek en zie wie er de komende tijd weg is.</p></div>' +
     '<div class="actions">' + (sick ? '' : '<button class="btn" data-act="abs-new" data-v="ziek">Ziek melden</button>') + '<button class="btn primary" data-act="abs-new" data-v="verlof">' + ICON.plus + 'Verlof aanvragen</button></div></header>'
     : '<header class="page-head"><div><h1>Verlof</h1><p>Beoordeel aanvragen van je team en zie wie er de komende tijd weg is.</p></div></header>';
-  if (sick && own) {
-    h += '<section class="card sick-card"><div><strong>Je bent ziek gemeld sinds ' + esc(dayLong(sick.from).toLowerCase()) + '</strong><p class="small muted" style="margin:2px 0 0">Beterschap! Meld je beter zodra je weer kunt werken.</p></div>' +
-      '<div class="row" style="align-items:flex-end"><div class="field"><label for="beter-date">Weer aan het werk op</label><input class="input" type="date" id="beter-date" value="' + today() + '" min="' + esc(sick.from) + '"></div>' +
-      '<button class="btn primary" data-act="abs-beter" data-id="' + sick.id + '">Beter melden</button></div></section>';
-  }
+  if (sick && own) h += sickCard(sick);
   if (own) h += leaveSaldoCard();
   if (S.absForm) h += absenceForm();
   if (A.pending.length) {
@@ -2167,16 +2180,7 @@ function viewAbsence() {
       '<section class="card"><h2>Komende 2 maanden</h2>' + (soon.length ? '<div class="mini-list">' + soon.map(a => '<div class="mini-row"><span>' + esc(a.memberName) + ' <span class="small muted">· ' + esc(spanLabel(a)) + '</span></span>' + absChip(a) + '</div>').join('') + '</div>' : '<p class="small muted" style="margin:0">Geen verlof gepland.</p>') + '</section></div>';
   }
   if (!own) return h + (A.pending.length || A.team ? '' : '<div class="empty">Er zijn nu geen aanvragen.</div>');
-  h += '<section class="stack" style="gap:8px;max-width:none"><div class="section-title"><h2>Mijn verlof en ziekte</h2></div>';
-  if (!A.mine.length) h += '<div class="empty">Nog niets aangevraagd of gemeld.</div>';
-  else h += '<div class="doc-list">' + A.mine.map(a => {
-    const st = ABS_STATUS[a.status] || [a.status, ''];
-    const canCancel = a.status === 'aangevraagd' || (a.status === 'goedgekeurd' && a.kind !== 'ziek' && a.from > today());
-    return '<div class="doc"><span class="abs-chip big ' + a.kind + '">' + esc(a.kindLabel) + '</span><div class="doc-main"><strong>' + esc(spanLabel(a)) + '</strong>' +
-      '<span class="small muted">' + (a.to || a.kind !== 'ziek' ? a.workdays + (a.workdays === 1 ? ' werkdag' : ' werkdagen') + (a.hours != null ? ' · ' + hrsTxt(a.hours) : '') : 'loopt nog') + (a.cover ? ' · tekort ' + hrsTxt(a.coverHours) + ': ' + COVER[a.cover][0].toLowerCase() : '') + (a.note ? ' · ' + esc(a.note) : '') +
-      (a.reviewedByName && a.status !== 'aangevraagd' && a.kind !== 'ziek' ? ' · ' + esc(st[0].toLowerCase()) + ' door ' + esc(a.reviewedByName) : '') + (a.rejectReason ? ': ' + esc(a.rejectReason) : '') + '</span></div>' +
-      '<div class="doc-act"><span class="badge ' + st[1] + '">' + st[0] + '</span>' + (canCancel ? '<button class="btn small ghost" data-act="abs-cancel-item" data-id="' + a.id + '">Intrekken</button>' : '') + '</div></div>';
-  }).join('') + '</div>';
+  h += '<section class="stack" style="gap:8px;max-width:none"><div class="section-title"><h2>Mijn verlof en ziekte</h2></div>' + myAbsList(A.mine);
   return h + '</section>';
 }
 
@@ -3242,6 +3246,8 @@ setInterval(() => {
 
 // ---------- start ----------
 (async function start() {
+  // wacht tot alle scripts (ook mobile.js, roster.js) geladen zijn
+  if (document.readyState === 'loading') await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
   try {
     const { data: { session } } = await sb.auth.getSession();
     if (session) await loadSession();
