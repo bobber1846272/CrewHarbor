@@ -209,7 +209,8 @@ function plPopup(R) {
   const fn = funcOf(P.functionId, R), dp = deptOf(P.departmentId, R);
   const q = (P.q || '').trim().toLowerCase();
   const ct = P.ct || 'alle';
-  const people = R.people.filter(p => (!q || p.name.toLowerCase().includes(q)) && (ct === 'alle' || (ct === 'vast' ? p.contractType === 'vast' : p.contractType !== 'vast')))
+  const ff = P.fn || '';
+  const people = R.people.filter(p => (!q || p.name.toLowerCase().includes(q)) && (ct === 'alle' || (ct === 'vast' ? p.contractType === 'vast' : p.contractType !== 'vast')) && (!ff || (ff === '-' ? !(p.functionIds || []).length : hasFunc(p, ff))))
     .filter(p => !(S.roFilter || {}).dept || !R.people.some(x => (x.departmentIds || []).length) || (p.departmentIds || []).some(x => same(x, S.roFilter.dept)) || !(p.departmentIds || []).length);
   const rows = people.map(p => Object.assign({ p }, plStatus(R, p, P)));
   const sorted = (cat, fn2) => rows.filter(r => r.cat === cat).sort(fn2 || ((a, b) => a.p.name.localeCompare(b.p.name)));
@@ -226,10 +227,14 @@ function plPopup(R) {
   const row = r => {
     const p = r.p; const wm = weekMin(R, p.id), ch = contractMin(p);
     const avTag = r.av && r.cat !== 'liever' ? '<span class="pl-av ' + r.av.status + '">' + (r.av.status === 'kan' ? 'Kan' + (r.av.start ? ' ' + esc(r.av.start + '–' + r.av.end) : '') : 'Kan niet') + '</span>' : '';
-    const fnTags = (p.functionIds || []).map(f => funcOf(f, R)).filter(Boolean).slice(0, 3).map(f => '<span class="func-tag"' + (f.color ? ' style="background:' + esc(f.color) + ';color:#fff"' : '') + '>' + esc(f.name) + '</span>').join('');
+    const fns = (p.functionIds || []).map(f => funcOf(f, R)).filter(Boolean);
+    const fnTags = fns.map(f => '<span class="pl-fn' + (P.functionId && same(f.id, P.functionId) ? ' match' : '') + '" style="--fc:' + esc(f.color || '#475467') + '">' + esc(f.name) + '</span>').join('') +
+      (p.departmentIds || []).map(x => deptOf(x, R)).filter(Boolean).map(dp => '<span class="pl-dp" style="--c:' + esc(dp.color || '#7FC4CF') + '"><i></i>' + esc(dp.name) + '</span>').join('');
+    const hasUnits = UNITS(R).functions.length;
     const over = ch && wm + dur > ch;
     return '<button class="pl-row ' + r.cat + '" ' + (r.cat === 'nee' ? 'disabled' : 'data-act="pl-add" data-id="' + p.id + '"') + '>' + avatar(p.id, p.name, 'sm2') +
-      '<span class="pl-row-main"><strong>' + esc(p.name) + '</strong><small>' + esc(contractShort(p)) + (r.why ? ' · ' + esc(r.why) : '') + '</small>' + (fnTags ? '<span class="pl-row-fn">' + fnTags + '</span>' : '') + '</span>' +
+      '<span class="pl-row-main"><strong>' + esc(p.name) + '</strong><small>' + esc([contractShort(p), p.roleName || ''].filter(Boolean).join(' · ')) + (r.why ? ' · ' + esc(r.why) : '') + '</small>' +
+        (fnTags || hasUnits ? '<span class="pl-row-fn">' + (fnTags || '<span class="pl-fn none">Geen functie</span>') + '</span>' : '') + '</span>' +
       plWeekTag(R, p.id, P.date) + avTag +
       '<span class="pl-row-hrs">' + (ch ? '<b>' + (r.left > 0 ? 'nog ' + fmtHM(r.left) : fmtHM(wm) + ' / ' + fmtHM(ch)) + '</b><span class="ro-bar' + (wm > ch ? ' over' : '') + '"><span style="width:' + Math.min(100, wm / ch * 100) + '%"></span></span>' : '<b>' + fmtHM(wm) + ' u</b><small>deze week</small>') + '</span>' +
       (r.cat === 'nee' ? '' : '<span class="pl-row-btn' + (over ? ' over' : '') + '">' + (over ? 'Toch inplannen' : 'Inplannen') + '</span>') + '</button>';
@@ -245,6 +250,7 @@ function plPopup(R) {
         '<span class="pl-times"><label class="sr-only" for="pl-s">Begin</label><input class="input" type="time" id="pl-s" data-pl="start" value="' + esc(P.start) + '"><span>–</span><label class="sr-only" for="pl-e">Eind</label><input class="input" type="time" id="pl-e" data-pl="end" value="' + esc(P.end) + '"></span></div>' +
     '</div>' +
     '<div class="pl-filter"><div class="seg small" role="group" aria-label="Contract">' + [['alle', 'Iedereen'], ['vast', 'Vaste uren'], ['flex', 'Flex']].map(o => '<button class="' + (ct === o[0] ? 'on' : '') + '" aria-pressed="' + (ct === o[0]) + '" data-act="pl-ct" data-v="' + o[0] + '">' + o[1] + ' <span class="muted">' + cnt(o[0]) + '</span></button>').join('') + '</div>' +
+      (UNITS(R).functions.length ? '<label class="sr-only" for="pl-fn">Functie</label><select class="input pl-fnsel" id="pl-fn" data-plfn="1"><option value="">Alle functies</option>' + UNITS(R).functions.map(f => '<option value="' + f.id + '"' + (same(ff, f.id) ? ' selected' : '') + '>' + esc(f.name) + ' (' + R.people.filter(p => hasFunc(p, f.id)).length + ')</option>').join('') + '<option value="-"' + (ff === '-' ? ' selected' : '') + '>Zonder functie</option></select>' : '') +
       '<input class="input" id="pl-q" data-pl="q" placeholder="Zoek op naam" value="' + esc(P.q || '') + '" aria-label="Zoek op naam" autocomplete="off">' +
       (vastLeft ? '<span class="small muted">Vaste uren nog te verdelen deze week: <strong>' + fmtHM(vastLeft) + ' u</strong></span>' : '') + '</div>' +
     '<div class="pl-list">' + (groups.filter(g => g[3].length).map(g => '<div class="pl-grp ' + g[0] + '"><div class="pl-grp-h"><strong>' + esc(g[1]) + '</strong><span class="muted"> · ' + g[3].length + '</span>' + (g[2] ? '<small>' + esc(g[2]) + '</small>' : '') + '</div>' + g[3].map(row).join('') + '</div>').join('') || '<div class="empty">Niemand gevonden.</div>') + '</div>' +
@@ -312,6 +318,7 @@ document.getElementById('app').addEventListener('input', e => {
   const k = el.dataset.pl;
   if (k === 'q') { S.plPick.q = el.value; clearTimeout(S.plqT); S.plqT = setTimeout(() => renderKeepFocus(), 200); return; }
 });
+document.getElementById('app').addEventListener('change', e => { const el = e.target; if (el.dataset.plfn && S.plPick) { S.plPick.fn = el.value; render(); } });
 // tijden: tijdens het typen niets opnieuw tekenen (anders springt de cursor weg); pas bij verlaten van het veld
 function plTimeSub() {
   const P = S.plPick; const el = document.querySelector('.pl-pop .item-top p'); if (!P || !el || !P.start || !P.end) return;

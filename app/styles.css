@@ -1653,3 +1653,10 @@ body.ro-big .pl-name { min-height: 26px; font-size: 13px; }
 .pl-first-chip.dragging { opacity: .5; }
 .pl-first-hint { color: #B54708; opacity: .75; font-size: 12px; }
 .pl-card.drop-over { outline: 3px solid var(--accent, #1D6E7B); outline-offset: 1px; z-index: 5; }
+/* pop-up: functies en afdelingen per persoon */
+.pl-fn { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 6px; font-size: 11px; font-weight: 700; background: color-mix(in srgb, var(--fc) 14%, #fff); color: color-mix(in srgb, var(--fc) 75%, #101828); border: 1px solid color-mix(in srgb, var(--fc) 30%, #fff); }
+.pl-fn.match { background: var(--fc); color: #fff; border-color: var(--fc); }
+.pl-fn.none { background: #F2F4F7; color: #98A2B3; border-color: #EAECF0; font-weight: 500; }
+.pl-dp { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #F2F4F7; color: #344054; }
+.pl-dp i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.pl-fnsel { max-width: 190px; min-height: 38px; }
