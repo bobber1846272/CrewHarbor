@@ -107,7 +107,7 @@ function plDayHead(R, d) {
 }
 function rosterCal(R) {
   const tail = '<p class="small muted">Klik in een lege plek of op <strong>+</strong> om iemand in te plannen. Sleep een naam naar een andere dag om te verplaatsen (Ctrl ingedrukt = kopiëren). Gearceerd = dicht, rood = nog niet gevuld.</p>' + (S.plPick ? modal(plPopup(R), 'pl-x') : '');
-  return '<div class="pl-dirbar">' + plFirstBar(R) + plDirSwitch() + roBigBtn() + '</div>' + (plDir() === 'h' ? rosterCalH(R) : rosterCalV(R)) + tail;
+  return plFirstBar(R) + (plDir() === 'h' ? rosterCalH(R) : rosterCalV(R)) + tail;
 }
 // horizontaal: elke dag een rij, de uren van links naar rechts
 const PL_LANE = 62;

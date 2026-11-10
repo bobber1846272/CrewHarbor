@@ -1455,7 +1455,7 @@ a.db-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
 
 /* ---------- rooster: weekkalender voor de roostermaker ---------- */
 .avatar.xs { width: 20px; height: 20px; font-size: 9px; flex: none; }
-.pl-first { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; margin-bottom: 12px; border-radius: 12px; background: #FFF8EB; border: 1px solid #FEDF89; }
+.pl-first { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; margin-bottom: 0; border-radius: 12px; background: #FFF8EB; border: 1px solid #FEDF89; }
 .pl-first.ok { background: #ECFDF3; border-color: #ABEFC6; color: #085D3A; font-size: 14px; }
 .pl-first-lab { font-size: 13px; color: #7A2E0E; margin-right: 4px; }
 .pl-first-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px 0 5px; border-radius: 99px; border: 1px solid #FEDF89; background: #fff; font-size: 13px; cursor: pointer; }
@@ -1604,3 +1604,28 @@ body.ro-big .pl-dirbar { margin-bottom: 0; }
 body.ro-big .pl-dirbar .pl-first { padding: 6px 10px; }
 body.ro-big .pl-card.shift { font-size: 13px; }
 body.ro-big .pl-name { min-height: 26px; font-size: 13px; }
+
+/* rooster: nette indeling voor de roostermaker */
+.ro-head { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+.ro-head .ro-title h1 { font-size: 28px; letter-spacing: -0.01em; }
+.ro-head .weeknav strong { min-width: 170px; }
+.ro-viewbar { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; }
+.ro-viewbar-r { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+.ro-viewbar .compare-toggle { margin: 0; }
+.ro-tools.rt { gap: 0; padding: 0; overflow: visible; }
+.rt-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; }
+.rt-row + .rt-row { border-top: 1px solid var(--line); background: #FAFCFC; border-radius: 0 0 14px 14px; }
+.rt-actions .btn svg { width: 16px; height: 16px; }
+.rt-sep { width: 1px; height: 26px; background: var(--line); margin: 0 4px; }
+.rt-push { flex: 1; }
+.rt-actions .ro-search { max-width: 190px; min-height: 36px; }
+.rt-filters { align-items: flex-start; gap: 10px 28px; }
+.rt-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rt-grow { flex: 1 1 340px; }
+.rt-lab { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.rt-hint { font-weight: 500; text-transform: none; letter-spacing: 0; color: #98A2B3; margin-left: 4px; }
+.rt .ro-depts .dept-chip { min-height: 32px; padding: 4px 12px; }
+.rt .ro-palette .shift { padding: 5px 10px; }
+.rt .ro-tpl-edit { padding: 5px 10px; }
+.ro-menu.right { right: 0; }
+@media (max-width: 760px) { .rt-push { display: none; } .ro-viewbar-r { margin-left: 0; } }

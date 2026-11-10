@@ -1691,6 +1691,26 @@ function viewRoster() {
   const view = S.rosterView || (R.canPlan ? 'week' : 'mijn');
   const month = view === 'maand', mineView = view === 'mijn', dayView = view === 'dag';
   const cal = R.canPlan && view === 'week' && typeof rosterCal === 'function';
+  const planUI = R.canPlan && !mineView && !month;
+  if (planUI) {
+    // nette indeling voor de roostermaker: titel + week, dan weergave + richting, dan één gereedschapskaart
+    let h = '<header class="ro-head"><div class="ro-title"><h1>Rooster</h1>' + (dayView ? '' : pubPill(R)) + '</div>' + (dayView ? '' : weekNav('ro-week', R.weekStart)) + '</header>';
+    h += '<div class="ro-viewbar"><div class="seg" role="group" aria-label="Weergave">' + [['mijn', 'Mijn week'], ['week', 'Week'], ['mensen', 'Per persoon'], ['dag', 'Dag'], ['maand', 'Maand']].map(v =>
+      '<button data-act="ro-view" data-v="' + v[0] + '" class="' + (view === v[0] ? 'on' : '') + '" aria-pressed="' + (view === v[0]) + '">' + v[1] + '</button>').join('') + '</div>' +
+      locFilterSelect() + '<div class="ro-viewbar-r">' +
+      (R.canSeeWorked && !dayView && !cal ? '<label class="check compare-toggle"><input type="checkbox" data-in="rocompare"' + (S.rosterCompare ? ' checked' : '') + '> Vergelijk met gewerkt</label>' : '') +
+      (cal && typeof plDirSwitch === 'function' ? plDirSwitch() : '') + (typeof roBigBtn === 'function' && !dayView ? roBigBtn() : '') + '</div></div>';
+    const swM2 = typeof swapOfferModal === 'function' ? (S.swOffer ? modal(swapOfferModal(R), 'sw-offer-x') : '') + (S.swReview ? modal(swapReviewModal(R), 'sw-review-x') : '') : '';
+    if (typeof swapPendingBar === 'function') h += swapPendingBar();
+    const RV2 = roView(R);
+    h += rosterPanels(RV2);
+    if (S.shiftEdit) h += modal(shiftForm(R), 'sh-cancel');
+    if (!R.people.length) return h + '<div class="empty">Nog geen actieve medewerkers.</div>';
+    const tplM = S.tplModal ? modal(templatesModal(R), 'tpl-x') : '';
+    if (dayView) return h + rosterToolbar(RV2, 'dag') + rosterDayView(RV2) + tplM + swM2;
+    if (cal) return h + rosterToolbar(RV2, true) + rosterCal(RV2) + tplM + swM2;
+    return h + rosterToolbar(RV2) + rosterWeek(RV2) + rosterLegend(R) + tplM + swM2;
+  }
   let h = '<header class="page-head"><div><div class="ro-title"><h1>Rooster</h1>' + (R.canPlan && !mineView && !month ? pubPill(R) : '') + '</div><p>' + (mineView ? 'Jouw diensten van deze week.' : cal ? 'Je ziet de week per dag. Klik in een dag of op <strong>+</strong>: je krijgt alle mensen te zien, met de vaste uren bovenaan.' : R.canPlan && !month ? 'Klik op <strong>+</strong> of sleep een vaste dienst naar een vakje. Sleep een dienst om hem te verplaatsen (met Ctrl ingedrukt: kopiëren).' : 'Wie wanneer werkt.') + '</p></div></header>';
   h += '<div class="roster-bar"><div class="seg" role="group" aria-label="Weergave">' + (R.canPlan ? [['mijn', 'Mijn week'], ['week', 'Week'], ['mensen', 'Per persoon'], ['dag', 'Dag'], ['maand', 'Maand']] : [['mijn', 'Mijn week'], ['week', 'Iedereen'], ['dag', 'Dag'], ['maand', 'Maand']]).map(v =>
     '<button data-act="ro-view" data-v="' + v[0] + '" class="' + (view === v[0] ? 'on' : '') + '" aria-pressed="' + (view === v[0]) + '">' + v[1] + '</button>').join('') + '</div>';

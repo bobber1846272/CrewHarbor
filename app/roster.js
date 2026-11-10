@@ -139,31 +139,39 @@ function rosterToolbar(R, cal) {
   if (!R.canPlan) return '';
   const tpls = R.templates || [];
   const F = S.roFilter || {};
-  return deptBar(R) + '<div class="ro-tools">' +
-    '<div class="ro-palette">' + (tpls.length ? '<span class="small muted">' + (cal ? 'Sleep naar een dag:' : 'Sleep naar een vakje:') + '</span>' + tpls.map(t => { const i = tpls.indexOf(t) % 6;
-      const dp = deptOf(t.departmentId, R), fn = funcOf(t.functionId, R);
-      const fc = fn && fn.color;
-      return '<span class="shift ' + (fc ? 'has-fc' : 't' + i) + ' ro-drag" draggable="true" data-tpl-drag="' + t.id + '" style="' + (dp ? 'box-shadow:inset 4px 0 0 ' + esc(dp.color) + ';' : '') + (fc ? '--fc:' + esc(fc) : '') + '"' + ' title="Sleep naar een medewerker en dag">' + esc(t.name) + '<small>' + esc(t.start + '–' + t.end) + (fn ? ' · ' + esc(fn.name) : '') + '</small></span>'; }).join('')
-      + '<button class="ro-tpl-edit" data-act="tpl-open" title="Vaste diensten toevoegen of aanpassen">✎ Aanpassen</button>'
-      : '<span class="small muted">Nog geen vaste diensten.</span><button class="btn small" data-act="tpl-open">+ Vaste dienst maken</button>') + '</div>' +
-    '<div class="ro-actions">' +
-      (cal ? '<button class="btn small primary" data-act="pl-new" data-v="' + (mondayOf(today()) === R.weekStart ? today() : R.weekStart) + '">👥 Mensen inplannen</button>' : '<div class="seg small" role="group" aria-label="Contract">' + [['alle', 'Iedereen'], ['vast', 'Vaste uren'], ['flex', 'Flex']].map(o => { const n = o[0] === 'alle' ? R.people.length : R.people.filter(p => (p.contractType === 'vast') === (o[0] === 'vast')).length;
+  const day = cal === 'dag';
+  const U = UNITS(R);
+  const cnt = id => (R.allShifts || R.shifts).filter(s => same(s.departmentId, id)).length;
+  // rij 1: wat je doet
+  const actions = '<div class="rt-row rt-actions">' +
+    (cal && !day ? '<button class="btn small primary" data-act="pl-new" data-v="' + (mondayOf(today()) === R.weekStart ? today() : R.weekStart) + '">' + NI.mensen + 'Mensen inplannen</button>' : '') +
+    '<button class="btn small" data-act="rx-open">Open plekken</button>' +
+    '<button class="btn small" data-act="rx-propose">Voorstel maken</button>' +
+    (!cal ? '<span class="rt-sep"></span><div class="seg small" role="group" aria-label="Contract">' + [['alle', 'Iedereen'], ['vast', 'Vaste uren'], ['flex', 'Flex']].map(o => { const n = o[0] === 'alle' ? R.people.length : R.people.filter(p => (p.contractType === 'vast') === (o[0] === 'vast')).length;
         return '<button class="' + ((F.ct || 'alle') === o[0] ? 'on' : '') + '" aria-pressed="' + ((F.ct || 'alle') === o[0]) + '" data-act="rx-ct" data-v="' + o[0] + '">' + o[1] + ' <span class="muted">' + n + '</span></button>'; }).join('') + '</div>' +
       '<input class="input ro-search" data-in="roq" placeholder="Zoek medewerker" value="' + esc(F.q || '') + '" aria-label="Zoek medewerker">' +
-      '<label class="check small"><input type="checkbox" data-in="roleft"' + (F.left ? ' checked' : '') + '> Alleen met uren over</label>') +
-      '<button class="btn small" data-act="rx-open">Open plekken</button>' +
-      '<button class="btn small" data-act="rx-propose">Voorstel maken</button>' +
-      '<details class="ro-more"><summary class="btn small">Instellen ▾</summary><div class="ro-menu">' +
-        '<button class="link-btn" data-act="tpl-open">Vaste diensten</button>' +
-        '<button class="link-btn" data-act="rx-hours">Openingstijden</button>' +
-        '<button class="link-btn" data-act="rx-needs">Bezetting per dienst</button>' +
-        '<button class="link-btn" data-act="rx-units">Afdelingen &amp; functies</button></div></details>' +
-      '<details class="ro-more"><summary class="btn small">Meer ▾</summary><div class="ro-menu">' +
-        '<button class="link-btn" data-act="rx-std-apply"' + (R.standardCount ? '' : ' disabled') + '>Standaardweek invullen' + (R.standardCount ? ' (' + R.standardCount + ' diensten)' : '') + '</button>' +
-        '<button class="link-btn" data-act="rx-std-save">Deze week opslaan als standaardweek</button>' +
-        '<button class="link-btn" data-act="ro-copy">Vorige week kopiëren</button></div></details>' +
-      (cal ? '' : roBigBtn()) +
-    '</div></div>';
+      '<label class="check small"><input type="checkbox" data-in="roleft"' + (F.left ? ' checked' : '') + '> Alleen met uren over</label>' : '') +
+    '<span class="rt-push"></span>' +
+    '<details class="ro-more"><summary class="btn small">Instellen ▾</summary><div class="ro-menu">' +
+      '<button class="link-btn" data-act="tpl-open">Vaste diensten</button>' +
+      '<button class="link-btn" data-act="rx-hours">Openingstijden</button>' +
+      '<button class="link-btn" data-act="rx-needs">Bezetting per dienst</button>' +
+      '<button class="link-btn" data-act="rx-units">Afdelingen &amp; functies</button></div></details>' +
+    '<details class="ro-more"><summary class="btn small">Meer ▾</summary><div class="ro-menu right">' +
+      '<button class="link-btn" data-act="rx-std-apply"' + (R.standardCount ? '' : ' disabled') + '>Standaardweek invullen' + (R.standardCount ? ' (' + R.standardCount + ' diensten)' : '') + '</button>' +
+      '<button class="link-btn" data-act="rx-std-save">Deze week opslaan als standaardweek</button>' +
+      '<button class="link-btn" data-act="ro-copy">Vorige week kopiëren</button></div></details></div>';
+  // rij 2: afdeling en vaste diensten
+  const depts = U.departments.length ? '<div class="rt-group"><span class="rt-lab">Afdeling</span><div class="ro-depts" role="group" aria-label="Afdeling"><button class="dept-chip' + (!F.dept ? ' on' : '') + '" data-act="rx-dept" data-v="">Alle</button>' +
+    U.departments.map(d => '<button class="dept-chip' + (same(F.dept, d.id) ? ' on' : '') + '" style="--c:' + esc(d.color) + '" data-act="rx-dept" data-v="' + d.id + '"><i></i>' + esc(d.name) + ' <span class="muted">' + cnt(d.id) + '</span></button>').join('') + '</div></div>' : '';
+  const palette = day ? '' : '<div class="rt-group rt-grow"><span class="rt-lab">Vaste diensten' + (tpls.length ? ' <span class="rt-hint">sleep naar ' + (cal ? 'een dag' : 'een vakje') + '</span>' : '') + '</span><div class="ro-palette">' + (tpls.length ? tpls.map(t => { const i = tpls.indexOf(t) % 6;
+      const dp = deptOf(t.departmentId, R), fn = funcOf(t.functionId, R);
+      const fc = fn && fn.color;
+      return '<span class="shift ' + (fc ? 'has-fc' : 't' + i) + ' ro-drag" draggable="true" data-tpl-drag="' + t.id + '" style="' + (dp ? 'box-shadow:inset 4px 0 0 ' + esc(dp.color) + ';' : '') + (fc ? '--fc:' + esc(fc) : '') + '"' + ' title="Sleep naar ' + (cal ? 'een dag' : 'een medewerker en dag') + '">' + esc(t.name) + '<small>' + esc(t.start + '–' + t.end) + (fn ? ' · ' + esc(fn.name) : '') + '</small></span>'; }).join('')
+      + '<button class="ro-tpl-edit" data-act="tpl-open" title="Vaste diensten toevoegen of aanpassen">✎ Aanpassen</button>'
+      : '<span class="small muted">Nog geen vaste diensten.</span><button class="btn small" data-act="tpl-open">+ Vaste dienst maken</button>') + '</div></div>';
+  const row2 = depts || palette ? '<div class="rt-row rt-filters">' + depts + palette + '</div>' : '';
+  return '<div class="ro-tools rt">' + actions + row2 + '</div>';
 }
 function rosterPeople(R) {
   const F = S.roFilter || {}; const q = (F.q || '').trim().toLowerCase();
