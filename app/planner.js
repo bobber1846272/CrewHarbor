@@ -40,6 +40,13 @@ function plGroups(R, d) {
   return list;
 }
 
+// functiekleur van een persoon: de functie van de dienst, anders de (eerste) functie van de persoon
+function plFn(R, pid, fid) {
+  const f = fid && funcOf(fid, R); if (f) return f;
+  const p = R.people.find(x => same(x.id, pid)); if (!p) return null;
+  const L = (p.functionIds || []).map(x => funcOf(x, R)).filter(Boolean);
+  return L.find(x => x.color) || L[0] || null;
+}
 function plCard(R, g, d, top, pos) {
   const fn = funcOf(g.functionId, R), dp = deptOf(g.departmentId, R);
   const tp = g.tpl ? { i: (R.templates || []).indexOf(g.tpl) % 6, t: g.tpl } : (g.shifts[0] ? tplOf(R, g.shifts[0]) : null);
@@ -48,14 +55,15 @@ function plCard(R, g, d, top, pos) {
   const cov = g.need ? '<span class="pl-cov ' + (g.have >= g.need ? 'ok' : g.have ? 'half' : 'bad') + '" title="' + Math.min(g.have, g.need) + ' van ' + g.need + ' ingepland">' + Math.min(g.have, g.need) + '/' + g.need + '</span>' : '';
   const names = g.shifts.slice().sort((x, y) => x.memberName.localeCompare(y.memberName)).map(s => {
     const iss = shiftIssues(R, s);
-    return '<button class="pl-name' + (iss.length ? ' warn' : '') + '" draggable="true" data-shift-drag="' + s.id + '" data-act="sh-edit" data-id="' + s.id + '" title="' + esc(s.memberName + (s.note ? ' · ' + s.note : '') + (iss.length ? '\nLet op: ' + iss.join('; ') : '')) + '">' +
-      (g.lanes > 2 && !pos ? '' : avatar(s.memberId, s.memberName, 'xs')) + '<span>' + esc(g.lanes > 1 || pos ? s.memberName.split(' ')[0] : s.memberName) + '</span>' + (iss.length ? '<b class="ro-warn">!</b>' : '') + '</button>';
+    const pf = plFn(R, s.memberId, s.functionId);
+    return '<button class="pl-name' + (iss.length ? ' warn' : '') + (pf ? ' has-fn' : '') + '"' + (pf ? ' style="--pf:' + esc(pf.color || '#475467') + '"' : '') + ' draggable="true" data-shift-drag="' + s.id + '" data-act="sh-edit" data-id="' + s.id + '" title="' + esc(s.memberName + (pf ? ' · ' + pf.name : '') + (s.note ? ' · ' + s.note : '') + (iss.length ? '\nLet op: ' + iss.join('; ') : '')) + '">' +
+      (g.lanes > 2 && !pos ? '' : avatar(s.memberId, s.memberName, 'xs')) + '<span>' + esc(g.lanes > 1 || pos ? s.memberName.split(' ')[0] : s.memberName) + '</span>' + (pf && (pos || g.lanes < 3) ? '<em class="pl-name-fn">' + esc(pf.name) + '</em>' : '') + (iss.length ? '<b class="ro-warn">!</b>' : '') + '</button>';
   }).join('');
   const sub = tp || fn || dp ? (fn ? '<b class="func-tag">' + esc(fn.name) + '</b> ' : '') + esc([tp ? tp.t.name : '', dp && !(S.roFilter || {}).dept ? dp.name : ''].filter(Boolean).join(' · ')) : '';
   const spec = d + '|' + g.start + '|' + g.end + '|' + g.functionId + '|' + g.departmentId;
   const missing = g.need ? Math.max(0, g.need - g.have) : 0;
-  const style = (pos || ('top:' + top + 'px;height:' + h + 'px;left:calc(' + (g.lane / g.lanes * 100) + '% + 3px);width:calc(' + (100 / g.lanes) + '% - 6px);')) + (fc ? '--fc:' + esc(fc) + ';' : '') + (dp ? '--dept:' + esc(dp.color) + ';' : '');
-  return '<div class="pl-card shift' + (pos ? ' h' : '') + (fc ? ' has-fc' : tp ? ' t' + tp.i : '') + (dp ? ' has-dept' : '') + (!g.shifts.length ? ' empty' : '') + (missing ? ' short' : '') + '" style="' + style + '" data-act="pl-pick" data-v="' + esc(spec) + '">' +
+  const style = (pos || ('top:' + top + 'px;height:' + h + 'px;left:calc(' + (g.lane / g.lanes * 100) + '% + 3px);width:calc(' + (100 / g.lanes) + '% - 6px);')) + (fc ? '--fc:' + esc(fc) + ';' : '');
+  return '<div class="pl-card shift' + (pos ? ' h' : '') + (fc ? ' has-fc' : tp ? ' t' + tp.i : '') + (!g.shifts.length ? ' empty' : '') + (missing ? ' short' : '') + '" style="' + style + '" data-act="pl-pick" data-v="' + esc(spec) + '">' +
     '<div class="pl-card-top"><strong>' + esc(plShort(g.start) + '–' + plShort(g.end)) + '</strong>' + cov + (pos && sub ? '<span class="pl-card-sub">' + sub + '</span>' : '') + '</div>' +
     (!pos && sub ? '<div class="pl-card-sub">' + sub + '</div>' : '') +
     '<div class="pl-names">' + names + '</div>' +
@@ -70,7 +78,7 @@ function plFirstBar(R) {
   if (!list.length) return R.people.some(p => contractMin(p)) ? '<div class="pl-first ok"><span>✓ Iedereen met vaste uren heeft deze week zijn contracturen.</span></div>' : '';
   const tot = list.reduce((a, x) => a + x.left, 0);
   return '<div class="pl-first"><span class="pl-first-lab"><strong>Eerst inplannen</strong> · vaste uren nog ' + fmtHM(tot) + ' u <span class="pl-first-hint">· sleep een naam naar het rooster</span></span>' +
-    list.slice(0, 12).map(x => '<button class="pl-first-chip" draggable="true" data-person-drag="' + x.p.id + '" data-act="pl-person" data-id="' + x.p.id + '" title="Sleep naar een dag of dienst om in te plannen, of klik">' + avatar(x.p.id, x.p.name, 'xs') + esc(x.p.name.split(' ')[0]) + ' <b>' + fmtHM(x.left) + '</b></button>').join('') +
+    list.slice(0, 12).map(x => { const pf = plFn(R, x.p.id); return '<button class="pl-first-chip' + (pf ? ' has-fn' : '') + '"' + (pf ? ' style="--pf:' + esc(pf.color || '#475467') + '"' : '') + ' draggable="true" data-person-drag="' + x.p.id + '" data-act="pl-person" data-id="' + x.p.id + '" title="' + esc((pf ? pf.name + ' · ' : '') + 'Sleep naar een dag of dienst om in te plannen, of klik') + '">' + avatar(x.p.id, x.p.name, 'xs') + esc(x.p.name.split(' ')[0]) + (pf ? '<em class="pl-name-fn">' + esc(pf.name) + '</em>' : '') + ' <b>' + fmtHM(x.left) + '</b></button>'; }).join('') +
     (list.length > 12 ? '<span class="small muted">+' + (list.length - 12) + '</span>' : '') + '</div>';
 }
 
