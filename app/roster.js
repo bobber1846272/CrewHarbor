@@ -156,7 +156,8 @@ function rosterToolbar(R, cal) {
       '<button class="link-btn" data-act="tpl-open">Vaste diensten</button>' +
       '<button class="link-btn" data-act="rx-hours">Openingstijden</button>' +
       '<button class="link-btn" data-act="rx-needs">Bezetting per dienst</button>' +
-      '<button class="link-btn" data-act="rx-units">Afdelingen &amp; functies</button></div></details>' +
+      '<button class="link-btn" data-act="rx-units">Afdelingen &amp; functies</button>' +
+      '<hr class="ro-menu-hr"><button class="link-btn" data-act="pl-help">❓ Uitleg rooster</button></div></details>' +
     '<details class="ro-more"><summary class="btn small">Meer ▾</summary><div class="ro-menu right">' +
       '<button class="link-btn" data-act="rx-std-apply"' + (R.standardCount ? '' : ' disabled') + '>Standaardweek invullen' + (R.standardCount ? ' (' + R.standardCount + ' diensten)' : '') + '</button>' +
       '<button class="link-btn" data-act="rx-std-save">Deze week opslaan als standaardweek</button>' +
@@ -266,6 +267,7 @@ function rosterPanels(R) {
   else if (S.roUnitsEdit) h += modal(unitsEditor(), 'rx-units-x');
   else if (S.roOpenPanel) h += modal(openSpots(R), 'rx-open-x');
   else if (S.roProposal) h += modal(proposalPanel(R), 'rx-propose-x');
+  else if (S.roHelp && typeof roHelp === 'function') h += modal(roHelp(), 'pl-help-x');
   return h;
 }
 const DEPT_COLORS = ['#1D9BAE', '#16A34A', '#F59E0B', '#DC2626', '#7C3AED', '#2563EB', '#DB2777', '#EA580C', '#0F766E', '#64748B'];
@@ -410,7 +412,7 @@ function rosterDayView(R) {
         return '<button class="tl-shift shift' + (tp ? ' t' + tp.i : '') + '"' + (R.canPlan ? ' data-act="sh-edit" data-id="' + s.id + '"' : '') + ' style="left:' + pos(a) + ';width:' + ((b - a) / span * 100) + '%" title="' + esc(s.memberName + ' ' + s.start + '–' + s.end + (s.note ? ' · ' + s.note : '')) + '">' + esc(s.start + '–' + s.end) + (tp ? ' · ' + esc(tp.t.name) : '') + '</button>'; }).join('') +
       (R.canPlan && !mine.length && !(ab && ab.status === 'goedgekeurd') && !(p.leavingOn && d > p.leavingOn) ? '<button class="tl-add" data-act="sh-new" data-id="' + p.id + '" data-v="' + d + '">+ inplannen</button>' : '') + '</div></div>';
   }).join('');
-  return h + '</div><p class="small muted">Groene achtergrond = heeft aangegeven te kunnen. De bovenste balk laat per uur zien hoeveel mensen er werken.</p>';
+  return h + '</div>';
 }
 
 // ---------- klikken ----------

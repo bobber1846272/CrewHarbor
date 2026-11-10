@@ -1629,3 +1629,15 @@ body.ro-big .pl-name { min-height: 26px; font-size: 13px; }
 .rt .ro-tpl-edit { padding: 5px 10px; }
 .ro-menu.right { right: 0; }
 @media (max-width: 760px) { .rt-push { display: none; } .ro-viewbar-r { margin-left: 0; } }
+
+/* uitleg rooster */
+.modal:has(.ro-help) { width: min(980px, 100%); }
+.rh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.rh-sec { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #FAFCFC; }
+.rh-sec h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 15px; }
+.rh-sec ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 1.45; color: var(--ink-2, #344054); }
+.rh-sw { display: inline-block; width: 22px; height: 12px; border-radius: 3px; vertical-align: middle; margin-right: 2px; }
+.rh-sw.dash { border: 1.5px dashed #F79009; background: #fff; }
+.rh-sw.closed { background: repeating-linear-gradient(-45deg, #F5F7F8 0 4px, #DDE3E5 4px 8px); }
+.rh-sw.gap { width: 5px; background: #F04438; }
+.ro-menu-hr { border: 0; border-top: 1px solid var(--line); margin: 6px 0; }

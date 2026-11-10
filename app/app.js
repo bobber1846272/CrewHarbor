@@ -3300,7 +3300,7 @@ setInterval(async () => {
   const r = route(); const a = document.activeElement;
   const typing = a && /INPUT|TEXTAREA|SELECT/.test(a.tagName);
   try {
-    const editing = S.plPick || S.hEdit || S.shiftEdit || S.rejectFor || S.roNeedsEdit || S.roHoursEdit || S.roProposal || S.roMenu;
+    const editing = S.plPick || S.roHelp || S.hEdit || S.shiftEdit || S.rejectFor || S.roNeedsEdit || S.roHoursEdit || S.roProposal || S.roMenu;
     if (['overzicht', 'terugbellen', 'taken', 'team', 'uren', 'goedkeuren', 'rooster', 'verlof', 'urenoverzicht'].includes(r) && !typing && !editing && !S.absForm && !S.absReject && !document.hidden) {
       const y = window.scrollY; await loadRoute(); render(); window.scrollTo(0, y);
     } else {

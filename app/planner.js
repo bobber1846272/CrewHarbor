@@ -74,6 +74,21 @@ function plFirstBar(R) {
     (list.length > 12 ? '<span class="small muted">+' + (list.length - 12) + '</span>' : '') + '</div>';
 }
 
+// ---------- uitleg: alles over het rooster op één plek ----------
+function roHelp() {
+  const sec = (ic, t, items) => '<div class="rh-sec"><h3><span>' + ic + '</span>' + t + '</h3><ul>' + items.map(i => '<li>' + i + '</li>').join('') + '</ul></div>';
+  return '<section class="card stack ro-help" style="gap:16px;max-width:none"><div class="item-top"><div><h2 style="margin:0">Uitleg rooster</h2><p class="small muted" style="margin:4px 0 0">Alles wat je kunt doen, op één plek.</p></div><button class="icon-btn" data-act="pl-help-x" aria-label="Sluiten">' + ICON.x + '</button></div>' +
+    '<div class="rh-grid">' +
+    sec('👀', 'Weergaven', ['<strong>Week</strong>: de week per dag, met de diensten op een tijdlijn. Kies rechtsboven <strong>Verticaal</strong> of <strong>Horizontaal</strong>.', '<strong>Per persoon</strong>: elke medewerker een rij, handig om uren per persoon te zien.', '<strong>Dag</strong>: één dag als tijdlijn. Klik op een dag in de kop om er snel heen te gaan.', '<strong>Groot beeld</strong>: het rooster over het hele scherm. Terug met <strong>Esc</strong>.']) +
+    sec('➕', 'Inplannen', ['Klik in een <strong>lege plek</strong> van een dag, op <strong>+</strong> of op een blok. Je krijgt alle mensen te zien.', 'Bovenaan staan de mensen met <strong>vaste uren die nog uren over hebben</strong>, daarna flex die kan, daarna de rest.', 'Filter op <strong>Vaste uren</strong> of <strong>Flex</strong>, of zoek op naam.', 'Klik op een naam en hij staat erin. De pop-up blijft open, zodat je meer mensen kunt toevoegen.', 'De strook <strong>Eerst inplannen</strong> laat zien wie nog vaste uren over heeft deze week.']) +
+    sec('✋', 'Slepen', ['Sleep een <strong>vaste dienst</strong> naar een dag: de pop-up opent al ingevuld.', 'Sleep een <strong>naam</strong> naar een andere dag om de dienst te verplaatsen.', 'Houd <strong>Ctrl</strong> ingedrukt tijdens het slepen om te kopiëren.', 'Klik op een naam om de dienst te wijzigen of te verwijderen.']) +
+    sec('🎨', 'Kleuren en tekens', ['<span class="pl-cov ok">2/2</span> <span class="pl-cov half">1/2</span> <span class="pl-cov bad">0/2</span> hoeveel mensen er staan van het aantal dat nodig is.', '<span class="rh-sw dash"></span> Stippellijn: hier is nog niemand ingepland, maar er is wel iemand nodig.', '<span class="rh-sw closed"></span> Gearceerd: je bent dan dicht (Openingstijden).', '<span class="rh-sw gap"></span> Rode streep: tijdens openingstijden werkt er (te) weinig mensen.', '<span class="ro-warn">!</span> Let op: bijvoorbeeld dubbel ingepland, boven contracturen of heeft aangegeven niet te kunnen.', 'De kleur van een blok komt van de <strong>functie</strong> of de <strong>vaste dienst</strong>.']) +
+    sec('⚙️', 'Instellen', ['<strong>Vaste diensten</strong>: diensten die vaak terugkomen, met tijden, functie en afdeling.', '<strong>Openingstijden</strong>: dan zie je gaten in het rooster.', '<strong>Bezetting per dienst</strong>: hoeveel mensen je per dienst nodig hebt, ook per functie.', '<strong>Afdelingen &amp; functies</strong>: met de afdelingsknoppen laat je alleen die afdeling zien.']) +
+    sec('📤', 'Klaar en versturen', ['Een nieuwe week is een <strong>Concept</strong>: alleen planners zien hem.', 'Klik op <strong>Versturen</strong>: iedereen met een dienst krijgt een melding.', '<strong>Concept verwijderen</strong> haalt alle diensten van die week weg.', '<strong>Voorstel maken</strong> vult open plekken automatisch; jij vinkt aan wat je wilt.', 'Via <strong>Meer</strong>: vorige week kopiëren of een standaardweek gebruiken.']) +
+    sec('⌨️', 'Sneltoetsen', ['<strong>Ctrl+Z</strong>: ongedaan maken. <strong>Ctrl+Shift+Z</strong>: opnieuw.', '<strong>Esc</strong>: pop-up sluiten of groot beeld uit.']) +
+    '</div></section>';
+}
+
 // ---------- groot beeld: alleen het rooster, over het hele scherm ----------
 function roBigBtn() { return '<button class="btn small ro-big-btn' + (S.roBig ? ' on' : '') + '" data-act="pl-big" aria-pressed="' + !!S.roBig + '" title="' + (S.roBig ? 'Terug naar normaal (Esc)' : 'Rooster op groot beeld') + '">' + (S.roBig ? '✕ Klein beeld' : '⛶ Groot beeld') + '</button>'; }
 function roBigSet(on) {
@@ -106,7 +121,7 @@ function plDayHead(R, d) {
     '<button class="pl-dh-add" data-act="pl-new" data-v="' + d + '" aria-label="Dienst inplannen op ' + esc(dayShort(d)) + '">+</button></div>';
 }
 function rosterCal(R) {
-  const tail = '<p class="small muted">Klik in een lege plek of op <strong>+</strong> om iemand in te plannen. Sleep een naam naar een andere dag om te verplaatsen (Ctrl ingedrukt = kopiëren). Gearceerd = dicht, rood = nog niet gevuld.</p>' + (S.plPick ? modal(plPopup(R), 'pl-x') : '');
+  const tail = S.plPick ? modal(plPopup(R), 'pl-x') : '';
   return plFirstBar(R) + (plDir() === 'h' ? rosterCalH(R) : rosterCalV(R)) + tail;
 }
 // horizontaal: elke dag een rij, de uren van links naar rechts
@@ -225,7 +240,7 @@ function plPopup(R) {
       '<input class="input" id="pl-q" data-pl="q" placeholder="Zoek op naam" value="' + esc(P.q || '') + '" aria-label="Zoek op naam" autocomplete="off">' +
       (vastLeft ? '<span class="small muted">Vaste uren nog te verdelen deze week: <strong>' + fmtHM(vastLeft) + ' u</strong></span>' : '') + '</div>' +
     '<div class="pl-list">' + (groups.filter(g => g[3].length).map(g => '<div class="pl-grp ' + g[0] + '"><div class="pl-grp-h"><strong>' + esc(g[1]) + '</strong><span class="muted"> · ' + g[3].length + '</span>' + (g[2] ? '<small>' + esc(g[2]) + '</small>' : '') + '</div>' + g[3].map(row).join('') + '</div>').join('') || '<div class="empty">Niemand gevonden.</div>') + '</div>' +
-    '<p class="small muted" style="margin:0">Klik op iemand om meteen in te plannen. De pop-up blijft open, zodat je meer mensen kunt toevoegen. Ctrl+Z zet het terug.</p></section>';
+    '</section>';
 }
 
 function plOpen(over) {
@@ -261,6 +276,8 @@ document.getElementById('app').addEventListener('click', async e => {
         else plOpen({ date: el.dataset.plDay, start: hhmm(m), end: hhmm(Math.min(m + 4 * 60, 1439)), functionId: '', departmentId: (S.roFilter || {}).dept || '' });
         return;
       }
+      case 'pl-help': { const dd = el.closest('details'); if (dd) dd.open = false; S.roHelp = true; render(); return; }
+      case 'pl-help-x': S.roHelp = false; render(); return;
       case 'pl-big': roBigSet(!S.roBig); return;
       case 'pl-dir': S.plDir = v; try { localStorage.setItem('ch-pl-dir', v); } catch (err) { /* */ } render(); return;
       case 'pl-day': S.plPick.date = v; render(); return;
