@@ -1894,7 +1894,19 @@ function periodRange(key) {
 async function loadReport() {
   const [f, t] = periodRange(S.repPeriod);
   S.repFrom = f; S.repTo = t;
-  S.report = await rpc('cd_hours_report', { p_from: f, p_to: t });
+  const [rep, clk] = await Promise.all([rpc('cd_hours_report', { p_from: f, p_to: t }), rpc('cd_clock_today').catch(() => null)]);
+  S.report = rep; S.clockToday = clk;
+}
+// inklokstatus van vandaag: groen = binnen, oranje = vandaag gewerkt en weer uitgeklokt
+function clockOf(id) { const C = S.clockToday; const c = C && C[String(id)]; if (!c) return null; return c.in ? 'in' : c.todayMin > 0 ? 'uit' : null; }
+function clockDot(id) {
+  const c = S.clockToday && S.clockToday[String(id)]; const k = clockOf(id); if (!k) return '';
+  const t = k === 'in' ? 'Ingeklokt sinds ' + (c.sinceDate ? dayShort(c.sinceDate) + ' ' : '') + c.since : 'Uitgeklokt om ' + c.outAt + ' · vandaag ' + fmtHM(c.todayMin) + ' gewerkt';
+  return '<span class="clk-dot ' + k + '" title="' + esc(t) + '" aria-label="' + esc(t) + '"></span>';
+}
+function clockSub(id) {
+  const c = S.clockToday && S.clockToday[String(id)]; const k = clockOf(id); if (!k) return '';
+  return '<span class="clk-sub ' + k + '">' + (k === 'in' ? 'Binnen sinds ' + esc((c.sinceDate ? dayShort(c.sinceDate) + ' ' : '') + c.since) + (c.todayMin ? ' · eerder vandaag ' + fmtHM(c.todayMin) : '') : 'Vandaag ' + fmtHM(c.todayMin) + ' gewerkt · uit om ' + esc(c.outAt)) + '</span>';
 }
 function viewReport() {
   const R = reportFiltered(S.report);
@@ -1913,12 +1925,21 @@ function viewReport() {
   h += '<p class="small muted" style="margin:0">' + esc(dayShort(R.from)) + ' t/m ' + esc(dayShort(R.to)) + ' · ' + R.workdays + ' werkdagen</p>';
   h += '<div class="stats">' + stat('Goedgekeurd', fmtHM(sum('approvedMin')), 'var(--green)') + stat('Ingediend, wacht', fmtHM(sum('submittedMin')), 'var(--orange)') +
     stat('Nog niet ingediend', fmtHM(sum('conceptMin'))) + stat('Medewerkers', R.people.length) + '</div>';
+  if (S.clockToday) {
+    const nIn = R.people.filter(p => clockOf(p.id) === 'in').length, nOut = R.people.filter(p => clockOf(p.id) === 'uit').length;
+    const cf = S.repClock || 'alle';
+    h += '<div class="clk-filter"><span class="small muted">Vandaag:</span><div class="seg small" role="group" aria-label="Inklokstatus vandaag">' +
+      [['alle', 'Iedereen', R.people.length, ''], ['in', 'Ingeklokt', nIn, 'in'], ['uit', 'Uitgeklokt', nOut, 'uit']].map(o => '<button class="' + (cf === o[0] ? 'on' : '') + '" aria-pressed="' + (cf === o[0]) + '" data-act="rep-clock" data-v="' + o[0] + '">' + (o[3] ? '<span class="clk-dot ' + o[3] + '"></span>' : '') + o[1] + ' <span class="muted">' + o[2] + '</span></button>').join('') + '</div></div>';
+  }
+  const cfil = S.repClock && S.repClock !== 'alle' ? S.repClock : null;
+  const shown = cfil ? R.people.filter(p => clockOf(p.id) === cfil) : R.people;
   h += '<div class="table-wrap"><table><thead><tr><th>Naam</th><th>Contract</th><th>Verlof</th><th>Ziek</th><th>Verwacht</th><th>Goedgekeurd</th><th>Ingediend</th><th>Niet ingediend</th><th>Verschil</th></tr></thead><tbody>' +
-    R.people.map(p => {
+    (shown.length ? '' : '<tr><td colspan="9" class="pad muted">' + (cfil === 'in' ? 'Nu is er niemand ingeklokt.' : 'Vandaag is nog niemand uitgeklokt.') + '</td></tr>') +
+    shown.map(p => {
       const worked = p.approvedMin + p.submittedMin;
       const diff = p.expectedMin == null ? null : worked - p.expectedMin;
       const cell = c => '<td><button class="rowbtn" data-act="p-view" data-id="' + p.id + '" data-v="' + mondayOf(R.from) + '">' + c + '</button></td>';
-      return '<tr>' + cell('<strong>' + esc(p.name) + '</strong>' + (p.active ? '' : ' <span class="small muted">(gedeactiveerd)</span>')) + cell('<span class="small">' + esc(contractShort(p)) + '</span>') +
+      return '<tr>' + cell('<span class="clk-name">' + clockDot(p.id) + '<span><strong>' + esc(p.name) + '</strong>' + (p.active ? '' : ' <span class="small muted">(gedeactiveerd)</span>') + clockSub(p.id) + '</span></span>') + cell('<span class="small">' + esc(contractShort(p)) + '</span>') +
         cell(p.leaveDays ? p.leaveDays + ' d' : '–') + cell(p.sickDays ? '<span style="color:var(--red)">' + p.sickDays + ' d</span>' : '–') +
         cell(p.expectedMin == null ? '–' : fmtHM(p.expectedMin)) + cell('<strong>' + fmtHM(p.approvedMin) + '</strong>') + cell(p.submittedMin ? fmtHM(p.submittedMin) : '–') +
         cell(p.conceptMin ? fmtHM(p.conceptMin) : '–') +
@@ -2990,6 +3011,7 @@ $app.addEventListener('click', async e => {
       }
 
       // urenoverzicht
+      case 'rep-clock': S.repClock = el.dataset.v; render(); return;
       case 'rep-period': S.repPeriod = el.dataset.v; if (S.repPeriod === 'eigen') { render(); return; } break;
       case 'rep-custom': {
         const f = document.getElementById('rep-from').value, t = document.getElementById('rep-to').value;
@@ -3257,7 +3279,7 @@ setInterval(async () => {
   const typing = a && /INPUT|TEXTAREA|SELECT/.test(a.tagName);
   try {
     const editing = S.plPick || S.hEdit || S.shiftEdit || S.rejectFor || S.roNeedsEdit || S.roHoursEdit || S.roProposal || S.roMenu;
-    if (['overzicht', 'terugbellen', 'taken', 'team', 'uren', 'goedkeuren', 'rooster', 'verlof'].includes(r) && !typing && !editing && !S.absForm && !S.absReject && !document.hidden) {
+    if (['overzicht', 'terugbellen', 'taken', 'team', 'uren', 'goedkeuren', 'rooster', 'verlof', 'urenoverzicht'].includes(r) && !typing && !editing && !S.absForm && !S.absReject && !document.hidden) {
       const y = window.scrollY; await loadRoute(); render(); window.scrollTo(0, y);
     } else {
       await Promise.all([loadCounts(), loadPresence()]);

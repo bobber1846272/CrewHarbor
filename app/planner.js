@@ -40,7 +40,7 @@ function plGroups(R, d) {
   return list;
 }
 
-function plCard(R, g, d, top) {
+function plCard(R, g, d, top, pos) {
   const fn = funcOf(g.functionId, R), dp = deptOf(g.departmentId, R);
   const tp = g.tpl ? { i: (R.templates || []).indexOf(g.tpl) % 6, t: g.tpl } : (g.shifts[0] ? tplOf(R, g.shifts[0]) : null);
   const fc = fn && fn.color;
@@ -49,16 +49,17 @@ function plCard(R, g, d, top) {
   const names = g.shifts.slice().sort((x, y) => x.memberName.localeCompare(y.memberName)).map(s => {
     const iss = shiftIssues(R, s);
     return '<button class="pl-name' + (iss.length ? ' warn' : '') + '" draggable="true" data-shift-drag="' + s.id + '" data-act="sh-edit" data-id="' + s.id + '" title="' + esc(s.memberName + (s.note ? ' · ' + s.note : '') + (iss.length ? '\nLet op: ' + iss.join('; ') : '')) + '">' +
-      (g.lanes > 2 ? '' : avatar(s.memberId, s.memberName, 'xs')) + '<span>' + esc(g.lanes > 1 ? s.memberName.split(' ')[0] : s.memberName) + '</span>' + (iss.length ? '<b class="ro-warn">!</b>' : '') + '</button>';
+      (g.lanes > 2 && !pos ? '' : avatar(s.memberId, s.memberName, 'xs')) + '<span>' + esc(g.lanes > 1 || pos ? s.memberName.split(' ')[0] : s.memberName) + '</span>' + (iss.length ? '<b class="ro-warn">!</b>' : '') + '</button>';
   }).join('');
+  const sub = tp || fn || dp ? (fn ? '<b class="func-tag">' + esc(fn.name) + '</b> ' : '') + esc([tp ? tp.t.name : '', dp && !(S.roFilter || {}).dept ? dp.name : ''].filter(Boolean).join(' · ')) : '';
   const spec = d + '|' + g.start + '|' + g.end + '|' + g.functionId + '|' + g.departmentId;
   const missing = g.need ? Math.max(0, g.need - g.have) : 0;
-  const style = 'top:' + top + 'px;height:' + h + 'px;left:calc(' + (g.lane / g.lanes * 100) + '% + 3px);width:calc(' + (100 / g.lanes) + '% - 6px);' + (fc ? '--fc:' + esc(fc) + ';' : '') + (dp ? '--dept:' + esc(dp.color) + ';' : '');
-  return '<div class="pl-card shift' + (fc ? ' has-fc' : tp ? ' t' + tp.i : '') + (dp ? ' has-dept' : '') + (!g.shifts.length ? ' empty' : '') + (missing ? ' short' : '') + '" style="' + style + '" data-act="pl-pick" data-v="' + esc(spec) + '">' +
-    '<div class="pl-card-top"><strong>' + esc(plShort(g.start) + '–' + plShort(g.end)) + '</strong>' + cov + '</div>' +
-    (tp || fn || dp ? '<div class="pl-card-sub">' + (fn ? '<b class="func-tag">' + esc(fn.name) + '</b> ' : '') + esc([tp ? tp.t.name : '', dp && !(S.roFilter || {}).dept ? dp.name : ''].filter(Boolean).join(' · ')) + '</div>' : '') +
+  const style = (pos || ('top:' + top + 'px;height:' + h + 'px;left:calc(' + (g.lane / g.lanes * 100) + '% + 3px);width:calc(' + (100 / g.lanes) + '% - 6px);')) + (fc ? '--fc:' + esc(fc) + ';' : '') + (dp ? '--dept:' + esc(dp.color) + ';' : '');
+  return '<div class="pl-card shift' + (pos ? ' h' : '') + (fc ? ' has-fc' : tp ? ' t' + tp.i : '') + (dp ? ' has-dept' : '') + (!g.shifts.length ? ' empty' : '') + (missing ? ' short' : '') + '" style="' + style + '" data-act="pl-pick" data-v="' + esc(spec) + '">' +
+    '<div class="pl-card-top"><strong>' + esc(plShort(g.start) + '–' + plShort(g.end)) + '</strong>' + cov + (pos && sub ? '<span class="pl-card-sub">' + sub + '</span>' : '') + '</div>' +
+    (!pos && sub ? '<div class="pl-card-sub">' + sub + '</div>' : '') +
     '<div class="pl-names">' + names + '</div>' +
-    '<button class="pl-add" data-act="pl-pick" data-v="' + esc(spec) + '">' + (g.lanes > 2 ? '+' + (missing ? ' ' + missing : '') : '+ ' + (missing ? 'nog ' + missing + ' nodig' : 'Inplannen')) + '</button></div>';
+    '<button class="pl-add" data-act="pl-pick" data-v="' + esc(spec) + '">' + (g.lanes > 2 && !pos ? '+' + (missing ? ' ' + missing : '') : '+ ' + (missing ? 'nog ' + missing + ' nodig' : 'Inplannen')) + '</button></div>';
 }
 
 // "eerst inplannen": vaste mensen die nog uren over hebben
@@ -73,29 +74,64 @@ function plFirstBar(R) {
     (list.length > 12 ? '<span class="small muted">+' + (list.length - 12) + '</span>' : '') + '</div>';
 }
 
+function plDir() { if (!S.plDir) { try { S.plDir = localStorage.getItem('ch-pl-dir') || 'v'; } catch (e) { S.plDir = 'v'; } } return S.plDir; }
+function plDirSwitch() {
+  const d = plDir();
+  return '<div class="seg small pl-dir" role="group" aria-label="Richting">' + [['v', '↕ Verticaal'], ['h', '↔ Horizontaal']].map(o => '<button class="' + (d === o[0] ? 'on' : '') + '" aria-pressed="' + (d === o[0]) + '" data-act="pl-dir" data-v="' + o[0] + '">' + o[1] + '</button>').join('') + '</div>';
+}
+function plDayHead(R, d) {
+  const l = R.shifts.filter(s => s.date === d); const n = new Set(l.map(s => String(s.memberId))).size;
+  const c = coverage(R, d), o = openFor(R, d), G = gaps(R, d);
+  const off = R.people.filter(p => blockedAbs(R, p.id, d));
+  let st = '';
+  if (!o && Object.keys(R.opening || {}).length) st = '<span class="ro-gap closed">Dicht</span>';
+  else if (G.length) st = '<span class="ro-gap" title="' + esc('Nog niemand (genoeg) ingepland: ' + G.map(gapTxt).join(', ')) + '">Gat ' + esc(gapTxt(G[0])) + (G.length > 1 ? ' +' + (G.length - 1) : '') + '</span>';
+  else if (c.need) st = '<span class="ro-gap ' + (c.have >= c.need ? 'ok' : '') + '">' + (c.have >= c.need ? '✓ ' : '') + c.have + '/' + c.need + ' bezet</span>';
+  else if (o) st = '<span class="ro-gap ok">✓ ' + hhmm(o.from) + '–' + hhmm(o.to) + '</span>';
+  return '<div class="pl-dh' + (d === today() ? ' today' : '') + (d < today() ? ' past' : '') + '"><button class="pl-dh-top" data-act="rx-day" data-v="' + d + '" title="Dagweergave"><span>' + esc(dayShort(d).split(' ')[0]) + '</span><b>' + pd(d).getDate() + '</b></button>' +
+    '<div class="pl-dh-info"><span>' + n + (n === 1 ? ' persoon' : ' mensen') + ' · ' + fmtHM(l.reduce((a, s) => a + shiftMin(s), 0)) + ' u</span>' + st +
+    (off.length ? '<span class="pl-off" title="' + esc('Verlof of ziek: ' + off.map(p => p.name).join(', ')) + '">' + off.length + ' vrij/ziek</span>' : '') + '</div>' +
+    '<button class="pl-dh-add" data-act="pl-new" data-v="' + d + '" aria-label="Dienst inplannen op ' + esc(dayShort(d)) + '">+</button></div>';
+}
 function rosterCal(R) {
+  const tail = '<p class="small muted">Klik in een lege plek of op <strong>+</strong> om iemand in te plannen. Sleep een naam naar een andere dag om te verplaatsen (Ctrl ingedrukt = kopiëren). Gearceerd = dicht, rood = nog niet gevuld.</p>' + (S.plPick ? modal(plPopup(R), 'pl-x') : '');
+  return '<div class="pl-dirbar">' + plFirstBar(R) + plDirSwitch() + '</div>' + (plDir() === 'h' ? rosterCalH(R) : rosterCalV(R)) + tail;
+}
+// horizontaal: elke dag een rij, de uren van links naar rechts
+const PL_LANE = 62;
+function rosterCalH(R) {
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
+  const rg = plRange(R, days); const span = rg.to - rg.from;
+  const x = m => ((Math.max(rg.from, Math.min(rg.to, m)) - rg.from) / span * 100).toFixed(3) + '%';
+  const w = (a, b) => ((Math.min(b, rg.to) - Math.max(a, rg.from)) / span * 100).toFixed(3) + '%';
+  const hours = []; for (let m = rg.from; m <= rg.to; m += 60) hours.push(m);
+  const nowM = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
+  let h = '<div class="pl-scroll"><div class="plh"><div class="plh-head"><div class="plh-corner"></div><div class="plh-hours">' + hours.map((m, i) => '<span style="left:' + x(m) + '"' + (i === hours.length - 1 ? ' class="last"' : i === 0 ? ' class="first"' : '') + '>' + String(m / 60).padStart(2, '0') + ':00</span>').join('') + '</div></div>';
+  h += days.map(d => {
+    const G = plGroups(R, d);
+    // per dag onder elkaar stapelen als diensten overlappen
+    const lane = []; G.slice().sort((p, q) => p.a - q.a || q.b - p.b).forEach(g => { let i = lane.findIndex(e => e <= g.a); if (i < 0) { i = lane.length; lane.push(0); } lane[i] = g.b; g.row = i; });
+    const rows = Math.max(1, lane.length);
+    const o = openFor(R, d);
+    const shade = o ? '<span class="pl-closed" style="top:0;bottom:0;left:0;width:' + x(o.from) + '"></span><span class="pl-closed" style="top:0;bottom:0;left:' + x(o.to) + ';right:0"></span>' + gaps(R, d).map(g => '<span class="pl-gap h" style="left:' + x(g.from) + ';width:' + w(g.from, g.to) + '" title="Nog niet gevuld ' + gapTxt(g) + '"></span>').join('')
+      : (Object.keys(R.opening || {}).length ? '<span class="pl-closed" style="top:0;bottom:0;left:0;right:0"></span>' : '');
+    return '<div class="plh-row' + (d === today() ? ' today' : '') + '">' + plDayHead(R, d) +
+      '<div class="pl-col plh-track" data-act="pl-hclick" data-pl-day="' + d + '" data-from="' + rg.from + '" data-span="' + span + '" style="height:' + (rows * PL_LANE + 8) + 'px">' +
+        hours.map(m => '<i class="pl-line v" style="left:' + x(m) + '"></i>').join('') + shade +
+        (d === today() && nowM > rg.from && nowM < rg.to ? '<span class="pl-now v" style="left:' + x(nowM) + '"></span>' : '') +
+        G.map(g => plCard(R, g, d, 0, 'left:calc(' + x(g.a) + ' + 2px);width:calc(' + w(g.a, g.b) + ' - 4px);top:' + (g.row * PL_LANE + 5) + 'px;height:' + (PL_LANE - 6) + 'px;')).join('') +
+      '</div></div>';
+  }).join('');
+  return h + '</div></div>';
+}
+function rosterCalV(R) {
   const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
   const rg = plRange(R, days); const span = rg.to - rg.from; const H = span / 60 * PL_H;
   const y = m => (Math.max(rg.from, Math.min(rg.to, m)) - rg.from) / 60 * PL_H;
   const hours = []; for (let m = rg.from; m <= rg.to; m += 60) hours.push(m);
   const nowM = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
-  const head = d => {
-    const l = R.shifts.filter(s => s.date === d); const n = new Set(l.map(s => String(s.memberId))).size;
-    const c = coverage(R, d), o = openFor(R, d), G = gaps(R, d);
-    const off = R.people.filter(p => blockedAbs(R, p.id, d));
-    const dt = pd(d);
-    let st = '';
-    if (!o && Object.keys(R.opening || {}).length) st = '<span class="ro-gap closed">Dicht</span>';
-    else if (G.length) st = '<span class="ro-gap" title="' + esc('Nog niemand (genoeg) ingepland: ' + G.map(gapTxt).join(', ')) + '">Gat ' + esc(gapTxt(G[0])) + (G.length > 1 ? ' +' + (G.length - 1) : '') + '</span>';
-    else if (c.need) st = '<span class="ro-gap ' + (c.have >= c.need ? 'ok' : '') + '">' + (c.have >= c.need ? '✓ ' : '') + c.have + '/' + c.need + ' bezet</span>';
-    else if (o) st = '<span class="ro-gap ok">✓ ' + hhmm(o.from) + '–' + hhmm(o.to) + '</span>';
-    return '<div class="pl-dh' + (d === today() ? ' today' : '') + (d < today() ? ' past' : '') + '"><button class="pl-dh-top" data-act="rx-day" data-v="' + d + '" title="Dagweergave"><span>' + esc(dayShort(d).split(' ')[0]) + '</span><b>' + dt.getDate() + '</b></button>' +
-      '<div class="pl-dh-info"><span>' + n + (n === 1 ? ' persoon' : ' mensen') + ' · ' + fmtHM(l.reduce((a, s) => a + shiftMin(s), 0)) + ' u</span>' + st +
-      (off.length ? '<span class="pl-off" title="' + esc('Verlof of ziek: ' + off.map(p => p.name).join(', ')) + '">' + off.length + ' vrij/ziek</span>' : '') + '</div>' +
-      '<button class="pl-dh-add" data-act="pl-new" data-v="' + d + '" aria-label="Dienst inplannen op ' + esc(dayShort(d)) + '">+</button></div>';
-  };
-  let h = plFirstBar(R);
-  h += '<div class="pl-scroll"><div class="pl"><div class="pl-head"><div class="pl-corner"></div>' + days.map(head).join('') + '</div>' +
+  const head = d => plDayHead(R, d);
+  let h = '<div class="pl-scroll"><div class="pl"><div class="pl-head"><div class="pl-corner"></div>' + days.map(head).join('') + '</div>' +
     '<div class="pl-body" style="height:' + H + 'px"><div class="pl-axis">' + hours.map(m => '<span style="top:' + y(m) + 'px">' + String(m / 60).padStart(2, '0') + ':00</span>').join('') + '</div>' +
     days.map(d => {
       const o = openFor(R, d);
@@ -105,9 +141,8 @@ function rosterCal(R) {
         hours.map(m => '<i class="pl-line" style="top:' + y(m) + 'px"></i>').join('') + shade +
         (d === today() && nowM > rg.from && nowM < rg.to ? '<span class="pl-now" style="top:' + y(nowM) + 'px"></span>' : '') +
         plGroups(R, d).map(g => plCard(R, g, d, y(g.a) + 1)).join('') + '</div>';
-    }).join('') + '</div></div></div>' +
-    '<p class="small muted">Klik in een lege plek of op <strong>+</strong> om iemand in te plannen. Sleep een naam naar een andere dag om te verplaatsen (Ctrl ingedrukt = kopiëren). Gearceerd = dicht, rood = nog niet gevuld.</p>';
-  return h + (S.plPick ? modal(plPopup(R), 'pl-x') : '');
+    }).join('') + '</div></div></div>';
+  return h;
 }
 
 // ---------- pop-up: wie plan je in? ----------
@@ -203,6 +238,15 @@ document.getElementById('app').addEventListener('click', async e => {
         else plOpen({ date: el.dataset.plDay, start: hhmm(m), end: hhmm(Math.min(m + 4 * 60, 1439)), functionId: '', departmentId: (S.roFilter || {}).dept || '' });
         return;
       }
+      case 'pl-hclick': {
+        const r = el.getBoundingClientRect(); const m = Number(el.dataset.from) + Math.floor((e.clientX - r.left) / r.width * Number(el.dataset.span) / 60) * 60;
+        const T = R.templates || [];
+        const t = T.find(x => toMin(x.start) <= m && plEnd(x) > m);
+        if (t) plOpen({ date: el.dataset.plDay, start: t.start, end: t.end, functionId: t.functionId || '', departmentId: t.departmentId || (S.roFilter || {}).dept || '' });
+        else plOpen({ date: el.dataset.plDay, start: hhmm(m), end: hhmm(Math.min(m + 4 * 60, 1439)), functionId: '', departmentId: (S.roFilter || {}).dept || '' });
+        return;
+      }
+      case 'pl-dir': S.plDir = v; try { localStorage.setItem('ch-pl-dir', v); } catch (err) { /* */ } render(); return;
       case 'pl-day': S.plPick.date = v; render(); return;
       case 'pl-ct': S.plPick.ct = v; render(); return;
       case 'pl-tpl': { const t = (R.templates || []).find(x => same(x.id, id)); Object.assign(S.plPick, { start: t.start, end: t.end, functionId: t.functionId || '', departmentId: t.departmentId || (S.roFilter || {}).dept || '' }); render(); return; }

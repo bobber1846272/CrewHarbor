@@ -1548,3 +1548,46 @@ a.db-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
 .pl-row-btn.over { background: #fff; color: #B54708; border: 1px solid #FEDF89; }
 .pl-row[disabled] .pl-row-btn { display: none; }
 @media (max-width: 640px) { .pl-row-hrs { display: none; } .pl-times { margin-left: 0; } .pl-row-btn { padding: 6px 8px; } }
+
+/* urenoverzicht: inklokstatus van vandaag */
+.clk-dot { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.clk-dot.in { background: #16A34A; box-shadow: 0 0 0 3px rgba(22,163,74,.18); animation: clkPulse 2s ease-in-out infinite; }
+.clk-dot.uit { background: #F59E0B; box-shadow: 0 0 0 3px rgba(245,158,11,.18); }
+@keyframes clkPulse { 50% { box-shadow: 0 0 0 6px rgba(22,163,74,.05); } }
+@media (prefers-reduced-motion: reduce) { .clk-dot.in { animation: none; } }
+.clk-name { display: inline-flex; align-items: flex-start; gap: 4px; }
+.clk-name .clk-dot { margin-top: 5px; }
+.clk-name > span:last-child { display: flex; flex-direction: column; }
+.clk-sub { font-size: 12px; font-weight: 500; }
+.clk-sub.in { color: #067647; } .clk-sub.uit { color: #B54708; }
+.clk-filter { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.clk-filter .seg button { display: inline-flex; align-items: center; gap: 5px; }
+.clk-filter .seg .clk-dot { margin-right: 0; }
+
+/* rooster: kiezen tussen verticaal en horizontaal */
+.pl-dirbar { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.pl-dirbar .pl-first { flex: 1 1 400px; margin: 0; }
+.pl-dirbar .pl-dir { margin-left: auto; }
+.plh { min-width: 1080px; }
+.plh-head { display: grid; grid-template-columns: 170px 1fr; position: sticky; top: 0; z-index: 4; background: #fff; border-bottom: 1px solid var(--line); }
+.plh-corner { border-right: 1px solid var(--line); }
+.plh-hours { position: relative; height: 32px; }
+.plh-hours span { position: absolute; top: 9px; transform: translateX(-50%); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.plh-hours span.first { transform: translateX(3px); } .plh-hours span.last { transform: translateX(calc(-100% - 3px)); }
+.plh-row { display: grid; grid-template-columns: 170px 1fr; border-bottom: 1px solid var(--line); }
+.plh-row:last-child { border-bottom: 0; }
+.plh-row .pl-dh { border-left: 0; border-right: 1px solid var(--line); padding-right: 40px; }
+.plh-row.today { background: rgba(29,155,174,.04); }
+.plh-track.pl-col { border-left: 0; min-height: 70px; }
+.plh-row.today .plh-track { background: transparent; }
+.pl-line.v { top: 0; bottom: 0; left: 0; width: 0; height: auto; right: auto; border-top: 0; border-left: 1px solid #EEF2F3; }
+.pl-gap.h { top: 0; height: 4px; width: auto; border-radius: 0 0 3px 3px; }
+.pl-now.v { top: 0; bottom: 0; left: 0; right: auto; width: 2px; height: auto; }
+.pl-now.v::before { left: -3px; top: -4px; }
+.pl-card.h { padding: 5px 8px; flex-direction: column; }
+.pl-card.h .pl-card-top { flex-wrap: nowrap; justify-content: flex-start; gap: 8px; }
+.pl-card.h .pl-card-sub { display: inline; min-width: 0; }
+.pl-card.h .pl-names { flex-direction: row; flex-wrap: nowrap; gap: 4px; overflow: hidden; }
+.pl-card.h .pl-name { width: auto; flex: none; max-width: 140px; }
+.pl-card.h .pl-add { position: absolute; right: 4px; top: 4px; margin: 0; align-self: auto; background: rgba(255,255,255,.75); }
+.pl-card.h .pl-card-top { padding-right: 90px; }
