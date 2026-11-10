@@ -30,13 +30,22 @@ async function mfaAuto() {
   const M = S.mfa;
   if (!M || M.mode !== 'verify' || M.autoTried || !appTotp()) return;
   M.autoTried = true;
+  const done = err => { M.autoDone = true; M.busy = false; if (err) M.err = err; render(); const c = document.getElementById('mfa-code'); if (c) c.focus(); };
   let id = null;
-  try { const mine = appTotpIds(); id = ((await window.CHMFA.factors()).verified.find(f => mine.includes(f.id)) || {}).id; } catch (e) { return; }
+  try { const mine = appTotpIds(); id = ((await window.CHMFA.factors()).verified.find(f => mine.includes(f.id)) || {}).id; } catch (e) { done(); return; }
   const code = id && appTotpCode(id);
-  if (!code) return;
-  M.auto = true; render();
-  const inp = document.getElementById('mfa-code'), form = document.querySelector('form[data-form="ac-mfa"]');
-  if (inp && form) { inp.value = code; M.autoFactor = id; form.requestSubmit(); }
+  if (!code) { done(); return; } // deze telefoon heeft geen sleutel voor dit account (of de app is op slot)
+  try { await window.CHMFA.verify(id, code); }
+  catch (x) { done('Bevestigen met deze telefoon lukte niet. Vul de code uit je authenticator-app in.'); return; }
+  M.autoDone = true;
+  await mfaSuccess(M);
+}
+/** Wacht de app nog op het automatisch bevestigen? Dan geen invulveld laten zien. */
+const mfaWaiting = M => M.mode === 'verify' && !M.autoDone && !M.err && appTotp() && appTotpIds().length > 0;
+async function mfaSuccess(M) {
+  try { await rpc('cd_mfa_log', { p_event: M.mode === 'setup' ? '2fa-aangezet' : '2fa-bevestigd' }); } catch (y) { /* */ }
+  if (M.voluntary) { S.mfa = null; await loadSession(); await loadSecurity(); render(); toast('Tweestapsverificatie staat aan.'); return; }
+  await enterApp(M.mode === 'setup' ? 'Tweestapsverificatie staat aan.' : M.after);
 }
 // "Ingelogd blijven": aan (standaard) = sessie blijft bewaard; uit = uitgelogd zodra de browser of app dicht gaat
 const rememberMe = () => { try { return localStorage.getItem('crewharbor-remember') !== '0'; } catch (e) { return true; } };
@@ -142,6 +151,13 @@ async function loadToken() {
 function viewMfa() {
   const M = S.mfa;
   const setup = M.mode === 'setup';
+  if (mfaWaiting(M)) {
+    return '<div class="login">' + brandPanel('Extra beveiliging.', 'Zo kan niemand inloggen met alleen je wachtwoord.') + '<section class="login-main"><div class="login-card mfa-wait" aria-live="polite">' +
+      '<span class="mfa-spin" aria-hidden="true"></span><h2>Inloggen bevestigen</h2>' +
+      '<p class="muted" style="margin:0">Deze telefoon bevestigt je inlog. Je hoeft niets in te vullen.</p>' +
+      '<p class="switch"><button type="button" class="linkbtn" data-act="ac-mfa-logout">Annuleren</button></p></div>' +
+      '<p class="login-foot">Een product van <strong>Spark Apps</strong></p></section></div>';
+  }
   let body = '<div><h2>' + (setup ? 'Tweestapsverificatie instellen' : 'Tweestapsverificatie') + '</h2>' +
     '<p class="muted" style="margin:6px 0 0;font-size:14px">' + esc(setup ? (M.required ? M.msg : 'Een extra slot op je account: naast je wachtwoord vul je een code uit een app op je telefoon in.') : 'Vul de 6 cijfers uit je authenticator-app of de CrewHarbor-app in.') + '</p></div>' +
     (M.err ? '<div class="alert error" role="alert">' + ICON.alert + '<span>' + esc(M.err) + '</span></div>' : '');
@@ -158,7 +174,6 @@ function viewMfa() {
         : (M.err ? '<button type="button" class="btn" data-act="ac-mfa-retry">Opnieuw proberen</button>' : '<p class="muted">QR-code maken…</p>'));
   }
   const devSetup = setup && appTotp();
-  if (M.auto && !M.err) body += '<div class="alert info"><span>Bevestigen met deze telefoon…</span></div>';
   body += '<div class="field"><label for="mfa-code">Code uit de app</label><input class="input code-input" id="mfa-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" pattern="\\d{6}" required></div>' +
     '<button class="btn ' + (devSetup ? '' : 'primary') + '" type="submit"' + (M.busy ? ' disabled' : '') + '>' + (M.busy ? 'Controleren…' : setup ? 'Aanzetten' : 'Bevestigen') + '</button>' + (devSetup ? '</details>' : '') +
     '<p class="switch">' + (M.voluntary ? '<button type="button" class="linkbtn" data-act="ac-mfa-cancel">Annuleren</button>' : '<button type="button" class="linkbtn" data-act="ac-mfa-logout">Uitloggen</button>') + '</p>';
@@ -423,13 +438,11 @@ document.getElementById('app').addEventListener('submit', async e => {
       try { await window.CHMFA.verify(M.mode === 'setup' ? M.factorId : null, code); }
       catch (x) {
         if (M.mode === 'setup' && appTotp() && appTotpIds().includes(M.factorId)) APP.totpRemove(M.factorId);
-        M.busy = false; M.err = M.auto ? 'Bevestigen met deze telefoon lukte niet. Vul de code uit je authenticator-app in.' : x.message; M.auto = false;
+        M.busy = false; M.err = x.message;
         try { await rpc('cd_mfa_log', { p_event: '2fa-fout' }); } catch (y) { /* */ }
         render(); const c = document.getElementById('mfa-code'); if (c) c.focus(); return;
       }
-      try { await rpc('cd_mfa_log', { p_event: M.mode === 'setup' ? '2fa-aangezet' : '2fa-bevestigd' }); } catch (y) { /* */ }
-      if (M.voluntary) { S.mfa = null; await loadSession(); await loadSecurity(); render(); toast('Tweestapsverificatie staat aan.'); return; }
-      await enterApp(M.mode === 'setup' ? 'Tweestapsverificatie staat aan.' : M.after);
+      await mfaSuccess(M);
     }
   } catch (err) {
     S.authError = err.message;
