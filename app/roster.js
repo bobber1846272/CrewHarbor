@@ -66,6 +66,7 @@ function shiftIssues(R, s) {
   if (s.functionId && p && !hasFunc(p, s.functionId)) { const f = funcOf(s.functionId, R); out.push('Heeft de functie ' + (f ? f.name : '') + ' niet'); }
   const ch = contractMin(p);
   if (ch && weekMin(R, s.memberId) > ch) out.push('Boven contracturen deze week (' + fmtHM(weekMin(R, s.memberId)) + ' van ' + fmtHM(ch) + ')');
+  if (typeof atwIssues === 'function') atwIssues(R, s.memberId, s.date, s.start, s.end, s.id).forEach(x => out.push(x.charAt(0).toUpperCase() + x.slice(1)));
   return out;
 }
 async function roReload() { S.quiet = true; try { await loadRoster(); } finally { S.quiet = false; } render(); }
@@ -189,7 +190,7 @@ function rosterWeek(R) {
   const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
   const people = R.canPlan ? rosterPeople(R) : R.people;
   const head = d => {
-    let x = '<button class="ro-dayhead" data-act="rx-day" data-v="' + d + '" title="Dagweergave">' + esc(dayShort(d)) + '</button>';
+    let x = '<button class="ro-dayhead" data-act="rx-day" data-v="' + d + '" title="Dagweergave">' + esc(dayShort(d)) + '</button>' + (typeof holidayTag === 'function' ? holidayTag(R, d) : '');
     if (R.canPlan) {
       const c = coverage(R, d);
       const o = openFor(R, d), G = gaps(R, d);

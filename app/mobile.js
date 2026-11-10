@@ -21,6 +21,7 @@ async function loadMobile() {
     }
   }
   if ((M.tab === 'code' || M.tab === 'rooster') && typeof loadOpenMine === 'function') jobs.push(loadOpenMine());
+  if (M.tab === 'rooster' && typeof loadIcs === 'function') jobs.push(loadIcs());
   if (M.tab === 'rooster') { jobs.push(loadPlan()); if (typeof loadSwaps === 'function') jobs.push(loadSwaps()); }
   if (M.tab === 'verlof') jobs.push(loadAbsences());
   if (M.tab === 'beschikbaar') jobs.push(loadAvailability());
@@ -151,7 +152,7 @@ function mRoster() {
   }
   let h = '<h1 class="m-h1">Mijn diensten</h1>';
   if (typeof openMineSection === 'function') h += openMineSection(true);
-  if (!days.length) return h + '<div class="m-empty">Je hebt de komende 4 weken geen diensten.</div>';
+  if (!days.length) return h + '<div class="m-empty">Je hebt de komende 4 weken geen diensten.</div>' + (typeof icsCard === 'function' && S.icsTok !== undefined ? icsCard(true) : '');
   let wk = null;
   days.forEach(x => {
     const w = mondayOf(x.d);
@@ -175,6 +176,7 @@ function mRoster() {
   const D = typeof SW === 'function' ? SW() : null;
   if (D && (D.open.length || D.mine.some(w => w.status === 'open' || w.status === 'aangevraagd')) && typeof swapsSection === 'function') h += swapsSection(P);
   if (S.swOffer && typeof swapOfferModal === 'function') h += modal(swapOfferModal(P), 'sw-offer-x');
+  if (typeof icsCard === 'function' && S.icsTok !== undefined) h += icsCard(true);
   return h;
 }
 

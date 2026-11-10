@@ -1177,7 +1177,7 @@ function viewSettings() {
   if (tabs.length > 1) h += '<div class="set-tabs" role="tablist">' + tabs.map(t => '<button role="tab" class="' + (t[0] === tab ? 'on' : '') + '" aria-selected="' + (t[0] === tab) + '" data-act="set-tab" data-v="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
   if (tab === 'account') return h + grid + accountCard() + (typeof selfPrefsCard === 'function' ? selfPrefsCard() : '') + mailPrefsCard() + '</div>';
   if (tab === 'bedrijf') return h + grid + companyCard() + locationsCard() + (hasFeature('phone') ? viewPhoneLink() : '') + '</div>';
-  if (tab === 'uren') return h + grid + breakRulesCard() + leaveRulesCard() + payrollSettingsCard() + '</div>';
+  if (tab === 'uren') return h + grid + breakRulesCard() + leaveRulesCard() + (typeof holidaysCard === 'function' ? holidaysCard() : '') + payrollSettingsCard() + '</div>';
   if (tab === 'beveiliging') return h + grid + securityCards() + (S.me.isOwner ? pinWindowCard() : '') + '</div>';
   if (tab === 'abonnement') return h + grid + billingCard() + '</div>';
   return h;
@@ -1500,7 +1500,7 @@ function contractFields(u) {
       '<option value="vast"' + (!flex ? ' selected' : '') + '>Vast contract</option><option value="flex"' + (flex ? ' selected' : '') + '>Flex / 0-uren</option></select></div>' +
     '<div class="field"><label for="m-chours">Uren per week</label><input class="input" id="m-chours" inputmode="decimal" value="' + (flex ? '' : esc(String(Number(u.contractHours) || '').replace('.', ','))) + '"' + (flex ? ' disabled placeholder="Niet van toepassing"' : ' placeholder="Bijv. 32"') + '></div></div>' +
     '<span class="small muted">Wordt gebruikt bij Mijn uren en het urenoverzicht om gewerkte uren naast het contract te zetten.</span>' +
-    '<label class="check"><input type="checkbox" id="m-minor"' + (u.isMinor ? ' checked' : '') + '> Jonger dan 18 jaar <span class="small muted">(strengere pauzeregels)</span></label></fieldset>';
+    '<label class="check"><input type="checkbox" id="m-minor"' + (u.isMinor ? ' checked' : '') + '> Jonger dan 18 jaar <span class="small muted">(strengere pauze- en roosterregels)</span></label></fieldset>';
 }
 function breakWarn(e) { return e.requiredBreak > (e.breakMin || 0) ? '<span class="badge red" title="Wettelijk verplicht bij deze werktijd">Te weinig pauze · minimaal ' + e.requiredBreak + ' min</span>' : ''; }
 const H_STATUS = { open: ['Bezig', 'blue'], concept: ['Concept', ''], ingediend: ['Ingediend', 'orange'], goedgekeurd: ['Goedgekeurd', 'green'], afgekeurd: ['Afgekeurd', 'red'] };
@@ -1662,7 +1662,7 @@ async function loadRoster() {
   } else {
     S.roster = await rpc('cd_roster', { p_week: S.rosterWeek || today() }); S.rosterWeek = S.roster.weekStart;
   }
-  if (typeof loadOpenMine === 'function') await Promise.all([loadOpenMine(), S.rosterView !== 'maand' ? loadOpenPlan(S.roster) : Promise.resolve()]);
+  if (typeof loadOpenMine === 'function') await Promise.all([loadOpenMine(), S.rosterView !== 'maand' ? loadOpenPlan(S.roster) : Promise.resolve(), typeof loadIcs === 'function' ? loadIcs() : Promise.resolve()]);
 }
 function UNITS(R) { return (R && R.units) || (S.roster && S.roster.units) || { departments: [], functions: [] }; }
 function deptOf(id, R) { return UNITS(R).departments.find(d => same(d.id, id)); }
@@ -1815,6 +1815,7 @@ function rosterMine(R) {
   }).join('') + '</div>';
   if (typeof openMineSection === 'function') h += openMineSection();
   if (typeof swapsSection === 'function') h += swapsSection(R);
+  if (typeof icsCard === 'function' && S.icsTok !== undefined) h += icsCard();
   return h;
 }
 function weekPub(R, wk) { return (R.published || []).find(x => x.week === wk); }
@@ -2017,7 +2018,7 @@ function viewReport() {
         cell(p.conceptMin ? fmtHM(p.conceptMin) : '–') +
         cell(diff == null || !p.expectedMin ? '–' : '<span style="color:' + (diff < 0 ? 'var(--red)' : 'var(--green)') + '">' + (diff > 0 ? '+' : '') + fmtHM(diff) + '</span>') + '</tr>';
     }).join('') + '</tbody></table></div>' +
-    '<p class="small muted" style="margin:0">Verwacht = contracturen × (werkdagen − verlof- en ziektedagen) ÷ 5. Feestdagen tellen nog niet mee. Verschil = goedgekeurd + ingediend − verwacht.</p>';
+    '<p class="small muted" style="margin:0">Verwacht = contracturen × (werkdagen − verlof- en ziektedagen) ÷ 5. Feestdagen tellen niet als werkdag' + ((R.holidays || []).length ? ' (in deze periode: ' + esc(R.holidays.map(x => x.name + ' ' + dayShort(x.date)).join(', ')) + ')' : '') + '. Verschil = goedgekeurd + ingediend − verwacht.</p>';
   return h;
 }
 function exportCsv() {
