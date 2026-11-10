@@ -399,7 +399,7 @@ function render() {
     dashboard: typeof viewDashboard === 'function' ? viewDashboard : viewHome, cijfers: viewStats, logboek: viewLog, mensen: viewMembers, rollen: viewRoles, instellingen: viewSettings,
     uren: viewHours, rooster: viewRoster, prikklok: viewKioskAdmin, verlof: viewAbsence, beschikbaar: viewAvailability, meldingen: viewNotifications, goedkeuren: viewApprove, urenoverzicht: viewReport, telefonie: viewPhone, kennisbank: viewKb, documenten: viewDocs };
   // scrollpositie bewaren bij opnieuw tekenen van dezelfde pagina (bijv. na slepen in het rooster)
-  const keep = S.lastRoute === r ? ['.roster-scroll', '.nav', '.pres-panel', '.tl', '.month-grid'].map(q => { const el = document.querySelector(q); return el ? [q, el.scrollTop, el.scrollLeft] : null; }).filter(Boolean) : [];
+  const keep = S.lastRoute === r ? ['.roster-scroll', '.nav', '.pres-panel', '.tl', '.month-grid', '.pl-scroll', '.pl-list', '.modal-wrap'].map(q => { const el = document.querySelector(q); return el ? [q, el.scrollTop, el.scrollLeft] : null; }).filter(Boolean) : [];
   const wy = window.scrollY, wx = window.scrollX;
   $app.innerHTML = '<div class="shell">' + viewNav(r) + '<main class="main' + (r === 'team' || r === 'rooster' ? ' wide' : '') + '" id="main">' + (views[r] || viewHome)() + '</main>' + viewPresence() + '</div>';
   keep.forEach(([q, t, l]) => { const el = document.querySelector(q); if (el) { el.scrollTop = t; el.scrollLeft = l; } });
@@ -1688,8 +1688,9 @@ function viewRoster() {
   const R = rosterFiltered(S.roster); if (!R) return '';
   const view = S.rosterView || (R.canPlan ? 'week' : 'mijn');
   const month = view === 'maand', mineView = view === 'mijn', dayView = view === 'dag';
-  let h = '<header class="page-head"><div><div class="ro-title"><h1>Rooster</h1>' + (R.canPlan && !mineView && !month ? pubPill(R) : '') + '</div><p>' + (mineView ? 'Jouw diensten van deze week.' : R.canPlan && !month ? 'Klik op <strong>+</strong> of sleep een vaste dienst naar een vakje. Sleep een dienst om hem te verplaatsen (met Ctrl ingedrukt: kopiëren).' : 'Wie wanneer werkt.') + '</p></div></header>';
-  h += '<div class="roster-bar"><div class="seg" role="group" aria-label="Weergave">' + [['mijn', 'Mijn week'], ['week', 'Iedereen'], ['dag', 'Dag'], ['maand', 'Maand']].map(v =>
+  const cal = R.canPlan && view === 'week' && typeof rosterCal === 'function';
+  let h = '<header class="page-head"><div><div class="ro-title"><h1>Rooster</h1>' + (R.canPlan && !mineView && !month ? pubPill(R) : '') + '</div><p>' + (mineView ? 'Jouw diensten van deze week.' : cal ? 'Je ziet de week per dag. Klik in een dag of op <strong>+</strong>: je krijgt alle mensen te zien, met de vaste uren bovenaan.' : R.canPlan && !month ? 'Klik op <strong>+</strong> of sleep een vaste dienst naar een vakje. Sleep een dienst om hem te verplaatsen (met Ctrl ingedrukt: kopiëren).' : 'Wie wanneer werkt.') + '</p></div></header>';
+  h += '<div class="roster-bar"><div class="seg" role="group" aria-label="Weergave">' + (R.canPlan ? [['mijn', 'Mijn week'], ['week', 'Week'], ['mensen', 'Per persoon'], ['dag', 'Dag'], ['maand', 'Maand']] : [['mijn', 'Mijn week'], ['week', 'Iedereen'], ['dag', 'Dag'], ['maand', 'Maand']]).map(v =>
     '<button data-act="ro-view" data-v="' + v[0] + '" class="' + (view === v[0] ? 'on' : '') + '" aria-pressed="' + (view === v[0]) + '">' + v[1] + '</button>').join('') + '</div>';
   if (month) {
     const cur = monthStart(today());
@@ -1700,7 +1701,7 @@ function viewRoster() {
       R.people.map(p => '<option value="' + p.id + '"' + (same(S.rosterWho, p.id) ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select>';
   } else {
     if (!dayView) h += weekNav('ro-week', R.weekStart);
-    if (R.canSeeWorked && !mineView && !dayView) h += '<label class="check compare-toggle"><input type="checkbox" data-in="rocompare"' + (S.rosterCompare ? ' checked' : '') + '> Vergelijk met gewerkt</label>';
+    if (R.canSeeWorked && !mineView && !dayView && !cal) h += '<label class="check compare-toggle"><input type="checkbox" data-in="rocompare"' + (S.rosterCompare ? ' checked' : '') + '> Vergelijk met gewerkt</label>';
   }
   h += (mineView ? '' : locFilterSelect()) + '</div>';
   const swM = typeof swapOfferModal === 'function' ? (S.swOffer ? modal(swapOfferModal(R), 'sw-offer-x') : '') + (S.swReview && R.canPlan ? modal(swapReviewModal(R), 'sw-review-x') : '') : '';
@@ -1712,6 +1713,7 @@ function viewRoster() {
   if (S.shiftEdit) h += modal(shiftForm(R), 'sh-cancel');
   if (!R.people.length) return h + '<div class="empty">Nog geen actieve medewerkers.</div>';
   if (dayView) return h + deptBar(RV) + rosterDayView(RV) + (R.canPlan && S.tplModal ? modal(templatesModal(R), 'tpl-x') : '') + swM;
+  if (cal) return h + rosterToolbar(RV, true) + rosterCal(RV) + (S.tplModal ? modal(templatesModal(R), 'tpl-x') : '') + swM;
   return h + (month ? '' : rosterToolbar(RV)) + (month ? rosterMonth(R) : rosterWeek(RV)) + (month ? '' : rosterLegend(R)) + (R.canPlan && S.tplModal ? modal(templatesModal(R), 'tpl-x') : '') + swM;
 }
 function tplOf(R, s) {
@@ -2783,8 +2785,8 @@ $app.addEventListener('click', async e => {
       case 'h-reopen': if (!confirm('Deze goedgekeurde uren terugzetten naar concept? De medewerker kan ze dan weer aanpassen.')) return; await rpc('cd_hours_reopen', { p_id: num }); toast('Teruggezet naar concept.'); break;
 
       // rooster
-      case 'ro-week': S.rosterWeek = el.dataset.v; S.shiftEdit = null; break;
-      case 'ro-view': S.rosterView = el.dataset.v; S.shiftEdit = null; S.roMenu = null;
+      case 'ro-week': S.rosterWeek = el.dataset.v; S.shiftEdit = null; S.plPick = null; break;
+      case 'ro-view': S.rosterView = el.dataset.v; S.shiftEdit = null; S.roMenu = null; S.plPick = null;
         if (S.rosterView === 'dag') { S.rosterDay = S.rosterDay && mondayOf(S.rosterDay) === S.rosterWeek ? S.rosterDay : (mondayOf(today()) === S.rosterWeek ? today() : S.rosterWeek); }
         if (S.rosterView === 'maand' && !S.rosterMonth) S.rosterMonth = monthStart(S.rosterWeek || today());
         break;
@@ -3254,7 +3256,7 @@ setInterval(async () => {
   const r = route(); const a = document.activeElement;
   const typing = a && /INPUT|TEXTAREA|SELECT/.test(a.tagName);
   try {
-    const editing = S.hEdit || S.shiftEdit || S.rejectFor || S.roNeedsEdit || S.roHoursEdit || S.roProposal || S.roMenu;
+    const editing = S.plPick || S.hEdit || S.shiftEdit || S.rejectFor || S.roNeedsEdit || S.roHoursEdit || S.roProposal || S.roMenu;
     if (['overzicht', 'terugbellen', 'taken', 'team', 'uren', 'goedkeuren', 'rooster', 'verlof'].includes(r) && !typing && !editing && !S.absForm && !S.absReject && !document.hidden) {
       const y = window.scrollY; await loadRoute(); render(); window.scrollTo(0, y);
     } else {
