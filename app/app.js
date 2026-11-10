@@ -1181,13 +1181,24 @@ function leaveAccountBox(u) {
   if (!A && S.leaveLoading !== u.id) { S.leaveLoading = u.id; loadLeaveAcc(u.id).then(() => { S.leaveLoading = null; if (S.leaveAcc && same(S.mSel, u.id)) render(); }); }
   if (!A) return '<fieldset class="box" style="margin:0"><legend class="legend" style="padding:0 4px">Verlofsaldo</legend><p class="small muted" style="margin:0">Laden…</p></fieldset>';
   const d = A.data;
+  const custom = d.tracked && !d.auto;                 // eigen saldo ingevuld
+  const open = same(S.laCustom, u.id) || (!d.tracked && !d.auto);   // invulvelden alleen tonen als je erom vraagt
+  const basis = d.auto ? (d.auto.basis === 'vast' ? String(d.auto.weeks).replace('.', ',') + ' × ' + hrsTxt(d.auto.weekHours) + ' per week' + (d.auto.partial ? ', naar rato (gaat uit dienst)' : '')
+    : 'flex: ' + hrsTxt(d.auto.worked) + ' gewerkt × ' + String(d.auto.weeks).replace('.', ',') + '/52') : '';
+  const usedLine = d.tracked ? '<p class="small muted" style="margin:0">Opgenomen: ' + hrsTxt(d.used) + ' · over: <strong>' + hrsTxt(d.left) + '</strong>' + (d.pending ? ' · aangevraagd: ' + hrsTxt(d.pending) : '') + (Number(d.tvt) ? ' · overuren over: ' + hrsTxt(d.tvtLeft) : '') + '</p>' : '';
   return '<fieldset class="box" style="margin:0"><legend class="legend" style="padding:0 4px">Verlofsaldo</legend>' +
     '<div class="seg"><button class="' + (y === Number(today().slice(0, 4)) ? 'on' : '') + '" data-act="la-year" data-id="' + u.id + '" data-v="' + today().slice(0, 4) + '">' + today().slice(0, 4) + '</button><button class="' + (y === Number(today().slice(0, 4)) + 1 ? 'on' : '') + '" data-act="la-year" data-id="' + u.id + '" data-v="' + (Number(today().slice(0, 4)) + 1) + '">' + (Number(today().slice(0, 4)) + 1) + '</button></div>' +
-    '<div class="fields2"><div class="field"><label for="la-leave">Verlofuren in ' + y + '</label><input class="input" id="la-leave" inputmode="decimal" placeholder="Bijv. 160" value="' + (d.tracked && !d.auto ? esc(String(d.entitled).replace('.', ',')) : '') + '"></div>' +
-    '<div class="field"><label for="la-tvt">Overuren (tijd voor tijd)</label><input class="input" id="la-tvt" inputmode="decimal" placeholder="0" value="' + (d.tracked && !d.auto && Number(d.tvt) ? esc(String(d.tvt).replace('.', ',')) : '') + '"></div></div>' +
-    (d.auto ? '<p class="small" style="margin:0;color:var(--accent)">' + (d.auto.basis === 'vast' ? 'Automatisch: ' + String(d.auto.weeks).replace('.', ',') + ' × ' + hrsTxt(d.auto.weekHours) + ' per week = <strong>' + hrsTxt(d.auto.entitled) + '</strong>' + (d.auto.partial ? ' (naar rato, gaat uit dienst)' : '') : 'Automatisch, flex: ' + hrsTxt(d.auto.worked) + ' gewerkt × ' + String(d.auto.weeks).replace('.', ',') + '/52 = <strong>' + hrsTxt(d.auto.entitled) + '</strong> opgebouwd') + '. Vul zelf een getal in om dit te overschrijven.</p>' : '') +
-    (d.tracked ? '<p class="small muted" style="margin:0">Opgenomen: ' + hrsTxt(d.used) + ' · over: <strong>' + hrsTxt(d.left) + '</strong>' + (d.pending ? ' · aangevraagd: ' + hrsTxt(d.pending) : '') + (Number(d.tvt) ? ' · overuren over: ' + hrsTxt(d.tvtLeft) : '') + '</p>' : '<p class="small muted" style="margin:0">Nog geen saldo voor ' + y + '. Leeg laten = geen saldo bijhouden.</p>') +
-    '<div class="row"><button class="btn small" data-act="la-save" data-id="' + u.id + '">Saldo opslaan</button></div></fieldset>';
+    (d.auto && !custom ? '<div class="la-std"><div><span class="la-tag">Standaard</span><strong>' + hrsTxt(d.auto.entitled) + '</strong><span class="small muted">' + (d.auto.basis === 'vast' ? 'wettelijk verlof in ' : 'opgebouwd in ') + y + ' · ' + esc(basis) + '</span></div></div>' : '') +
+    (custom ? '<div class="la-std custom"><div><span class="la-tag">Aangepast</span><strong>' + hrsTxt(d.entitled) + '</strong><span class="small muted">eigen afspraak voor ' + y + (d.note ? ' · ' + esc(d.note) : '') + '</span></div></div>' : '') +
+    usedLine +
+    (open ? '<div class="la-edit"><div class="fields2"><div class="field"><label for="la-leave">Verlofuren in ' + y + '</label><input class="input" id="la-leave" inputmode="decimal" placeholder="' + (d.auto ? esc('Standaard: ' + String(d.auto.entitled).replace('.', ',')) : 'Bijv. 160') + '" value="' + (custom ? esc(String(d.entitled).replace('.', ',')) : '') + '"></div>' +
+      '<div class="field"><label for="la-tvt">Overuren (tijd voor tijd)</label><input class="input" id="la-tvt" inputmode="decimal" placeholder="0" value="' + (custom && Number(d.tvt) ? esc(String(d.tvt).replace('.', ',')) : '') + '"></div></div>' +
+      '<p class="small muted" style="margin:0">Bijvoorbeeld bij extra verlofdagen uit de cao of een afspraak met deze medewerker.</p>' +
+      '<div class="row"><button class="btn small primary" data-act="la-save" data-id="' + u.id + '">Opslaan</button>' +
+        (d.auto || custom ? '<button class="btn small ghost" data-act="la-custom" data-id="">Annuleren</button>' : '') + '</div></div>'
+      : '<div class="row">' + (custom ? '<button class="btn small ghost" data-act="la-custom" data-id="' + u.id + '">Aanpassen</button><button class="btn small ghost" data-act="la-reset" data-id="' + u.id + '">Terug naar standaard</button>'
+        : '<button class="btn small ghost" data-act="la-custom" data-id="' + u.id + '">Aangepast verlof instellen</button>') + '</div>') +
+    '</fieldset>';
 }
 async function loadLeaveAcc(id) {
   const y = S.leaveYear || Number(today().slice(0, 4));
@@ -3124,6 +3135,12 @@ $app.addEventListener('click', async e => {
       // mensen
       case 'm-sel': S.mSel = raw; S.mNew = false; S.offboard = null; S.leaveAcc = null; render(); return;
       case 'la-year': S.leaveYear = Number(el.dataset.v); await loadLeaveAcc(raw); render(); return;
+      case 'la-custom': S.laCustom = raw || null; render(); if (raw) setTimeout(() => { const i = document.getElementById('la-leave'); if (i) i.focus(); }, 30); return;
+      case 'la-reset': {
+        if (!confirm('Het aangepaste verlof weghalen? Dan geldt weer het standaard verlof.')) return;
+        el.disabled = true; await rpc('cd_leave_account_save', { p_member: raw, p_year: S.leaveYear || Number(today().slice(0, 4)), p_leave: null, p_tvt: 0 });
+        S.laCustom = null; await loadLeaveAcc(raw); render(); toast('Terug naar standaard verlof.'); return;
+      }
       case 'la-save': {
         const num2 = v => { const t = String(v || '').trim().replace(',', '.'); return t === '' ? null : Number(t); };
         const lv = num2(document.getElementById('la-leave').value), tv = num2(document.getElementById('la-tvt').value);
@@ -3131,7 +3148,7 @@ $app.addEventListener('click', async e => {
         if (lv == null && tv != null) { toast('Vul ook de verlofuren in.', true); return; }
         el.disabled = true;
         await rpc('cd_leave_account_save', { p_member: raw, p_year: S.leaveYear || Number(today().slice(0, 4)), p_leave: lv, p_tvt: tv || 0 });
-        await loadLeaveAcc(raw); render(); toast(lv == null ? 'Saldo weggehaald.' : 'Verlofsaldo opgeslagen.'); return;
+        S.laCustom = null; await loadLeaveAcc(raw); render(); toast(lv == null ? 'Terug naar standaard verlof.' : 'Aangepast verlof opgeslagen.'); return;
       }
       case 'lv-ctr-add': {
         const inp = document.getElementById('lv-new'); const h = Number(String(inp.value).trim().replace(',', '.'));
