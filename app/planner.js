@@ -194,6 +194,14 @@ function plStatus(R, p, P) {
   if (left != null) return { cat: 'eerst', why: why.join(' · '), left, av };
   return { cat: av && av.status === 'kan' ? 'kan' : 'leeg', why: why.join(' · '), left, av };
 }
+// hoe vaak staat iemand deze week al ingepland, en op welke dagen?
+function plWeekTag(R, pid, d) {
+  const L = (R.allShifts || R.shifts).filter(s => same(s.memberId, pid)).sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+  if (!L.length) return '<span class="pl-wk none">Nog niet ingepland</span>';
+  const days = [...new Set(L.map(s => s.date))];
+  const tip = L.map(s => dayShort(s.date) + ' ' + s.start + '–' + s.end).join('\n');
+  return '<span class="pl-wk" title="' + esc('Deze week ingepland:\n' + tip) + '"><b>' + L.length + '×</b> ingepland<small>' + days.map(x => '<i class="' + (x === d ? 'here' : '') + '">' + esc(dayShort(x).split(' ')[0]) + '</i>').join('') + '</small></span>';
+}
 function plPopup(R) {
   const P = S.plPick;
   const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
@@ -222,7 +230,7 @@ function plPopup(R) {
     const over = ch && wm + dur > ch;
     return '<button class="pl-row ' + r.cat + '" ' + (r.cat === 'nee' ? 'disabled' : 'data-act="pl-add" data-id="' + p.id + '"') + '>' + avatar(p.id, p.name, 'sm2') +
       '<span class="pl-row-main"><strong>' + esc(p.name) + '</strong><small>' + esc(contractShort(p)) + (r.why ? ' · ' + esc(r.why) : '') + '</small>' + (fnTags ? '<span class="pl-row-fn">' + fnTags + '</span>' : '') + '</span>' +
-      avTag +
+      plWeekTag(R, p.id, P.date) + avTag +
       '<span class="pl-row-hrs">' + (ch ? '<b>' + (r.left > 0 ? 'nog ' + fmtHM(r.left) : fmtHM(wm) + ' / ' + fmtHM(ch)) + '</b><span class="ro-bar' + (wm > ch ? ' over' : '') + '"><span style="width:' + Math.min(100, wm / ch * 100) + '%"></span></span>' : '<b>' + fmtHM(wm) + ' u</b><small>deze week</small>') + '</span>' +
       (r.cat === 'nee' ? '' : '<span class="pl-row-btn' + (over ? ' over' : '') + '">' + (over ? 'Toch inplannen' : 'Inplannen') + '</span>') + '</button>';
   };
