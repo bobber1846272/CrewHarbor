@@ -1441,7 +1441,7 @@ a.db-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
 @keyframes kdSailIn { from { transform: translateX(-260px); } to { transform: none; } }
 @keyframes kdSailOut { 0% { transform: none; } 15% { transform: translateY(-3px) rotate(3deg); } 100% { transform: translateX(300px) rotate(0deg); } }
 @keyframes kdTimer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-@media (prefers-reduced-motion: reduce) { .kd2 *, .kd2 .kiosk-check { animation-duration: .01s !important; animation-iteration-count: 1 !important; } .kd-burst, .kd-ring { display: none; } }
+@media (prefers-reduced-motion: reduce) { .kd-burst, .kd-ring { display: none; } .kd-waves { animation: none; } .kd2.in .kd-boat { animation: kdSailIn 1.2s .2s ease-out both; } }
 .kd-burst i { width: 11px; height: 11px; }
 .kd2.out .kd-burst i { width: 9px; height: 9px; }
 .kd2 .kiosk-check::after { content: ''; position: absolute; inset: -14px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--c) 35%, transparent), transparent 70%); z-index: -1; animation: kdUp .6s .2s both; }
