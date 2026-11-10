@@ -2,7 +2,7 @@
    en een pop-up met alle mensen (vaste uren eerst) om snel in te plannen */
 'use strict';
 
-const PL_H = 50; // pixels per uur
+let PL_H = 50; // pixels per uur (groter in groot beeld)
 const plEnd = s => { const a = toMin(s.start); const b = toMin(s.end); return b <= a ? 1440 : b; };
 const plShort = t => String(t || '').replace(/:00$/, '');
 
@@ -74,6 +74,18 @@ function plFirstBar(R) {
     (list.length > 12 ? '<span class="small muted">+' + (list.length - 12) + '</span>' : '') + '</div>';
 }
 
+// ---------- groot beeld: alleen het rooster, over het hele scherm ----------
+function roBigBtn() { return '<button class="btn small ro-big-btn' + (S.roBig ? ' on' : '') + '" data-act="pl-big" aria-pressed="' + !!S.roBig + '" title="' + (S.roBig ? 'Terug naar normaal (Esc)' : 'Rooster op groot beeld') + '">' + (S.roBig ? '✕ Klein beeld' : '⛶ Groot beeld') + '</button>'; }
+function roBigSet(on) {
+  S.roBig = !!on;
+  const fs = document.fullscreenElement;
+  if (on && !fs && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => { /* lukt niet overal, dan alleen de schermvullende weergave */ });
+  if (!on && fs && document.exitFullscreen) document.exitFullscreen().catch(() => { /* */ });
+  render(); window.scrollTo(0, 0);
+}
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && S.roBig) { S.roBig = false; render(); } else if (S.roBig) render(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.roBig && !document.querySelector('.modal-wrap') && !document.fullscreenElement) { S.roBig = false; render(); } });
+window.addEventListener('resize', () => { if (S.roBig && route() === 'rooster') { clearTimeout(S.roBigT); S.roBigT = setTimeout(render, 150); } });
 function plDir() { if (!S.plDir) { try { S.plDir = localStorage.getItem('ch-pl-dir') || 'v'; } catch (e) { S.plDir = 'v'; } } return S.plDir; }
 function plDirSwitch() {
   const d = plDir();
@@ -95,7 +107,7 @@ function plDayHead(R, d) {
 }
 function rosterCal(R) {
   const tail = '<p class="small muted">Klik in een lege plek of op <strong>+</strong> om iemand in te plannen. Sleep een naam naar een andere dag om te verplaatsen (Ctrl ingedrukt = kopiëren). Gearceerd = dicht, rood = nog niet gevuld.</p>' + (S.plPick ? modal(plPopup(R), 'pl-x') : '');
-  return '<div class="pl-dirbar">' + plFirstBar(R) + plDirSwitch() + '</div>' + (plDir() === 'h' ? rosterCalH(R) : rosterCalV(R)) + tail;
+  return '<div class="pl-dirbar">' + plFirstBar(R) + plDirSwitch() + roBigBtn() + '</div>' + (plDir() === 'h' ? rosterCalH(R) : rosterCalV(R)) + tail;
 }
 // horizontaal: elke dag een rij, de uren van links naar rechts
 const PL_LANE = 62;
@@ -126,7 +138,10 @@ function rosterCalH(R) {
 }
 function rosterCalV(R) {
   const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
-  const rg = plRange(R, days); const span = rg.to - rg.from; const H = span / 60 * PL_H;
+  const rg = plRange(R, days); const span = rg.to - rg.from;
+  // groot beeld: de dag vult de hoogte van het scherm
+  PL_H = S.roBig ? Math.max(50, Math.floor((window.innerHeight - 330) / (span / 60))) : 50;
+  const H = span / 60 * PL_H;
   const y = m => (Math.max(rg.from, Math.min(rg.to, m)) - rg.from) / 60 * PL_H;
   const hours = []; for (let m = rg.from; m <= rg.to; m += 60) hours.push(m);
   const nowM = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
@@ -137,7 +152,7 @@ function rosterCalV(R) {
       const o = openFor(R, d);
       const shade = o ? '<span class="pl-closed" style="top:0;height:' + y(o.from) + 'px"></span><span class="pl-closed" style="top:' + y(o.to) + 'px;bottom:0"></span>' + gaps(R, d).map(g => '<span class="pl-gap" style="top:' + y(g.from) + 'px;height:' + (y(g.to) - y(g.from)) + 'px" title="Nog niet gevuld ' + gapTxt(g) + '"></span>').join('')
         : (Object.keys(R.opening || {}).length ? '<span class="pl-closed" style="top:0;bottom:0"></span>' : '');
-      return '<div class="pl-col' + (d === today() ? ' today' : '') + '" data-act="pl-col" data-pl-day="' + d + '" data-from="' + rg.from + '">' +
+      return '<div class="pl-col' + (d === today() ? ' today' : '') + '" data-act="pl-col" data-pl-day="' + d + '" data-from="' + rg.from + '" data-ph="' + PL_H + '">' +
         hours.map(m => '<i class="pl-line" style="top:' + y(m) + 'px"></i>').join('') + shade +
         (d === today() && nowM > rg.from && nowM < rg.to ? '<span class="pl-now" style="top:' + y(nowM) + 'px"></span>' : '') +
         plGroups(R, d).map(g => plCard(R, g, d, y(g.a) + 1)).join('') + '</div>';
@@ -231,7 +246,7 @@ document.getElementById('app').addEventListener('click', async e => {
       case 'pl-new': plOpen({ date: v }); return;
       case 'pl-person': { const p = R.people.find(x => same(x.id, id)); plOpen({ q: p ? p.name : '', ct: 'alle' }); return; }
       case 'pl-col': {
-        const r = el.getBoundingClientRect(); const m = Number(el.dataset.from) + Math.floor((e.clientY - r.top) / PL_H) * 60;
+        const r = el.getBoundingClientRect(); const m = Number(el.dataset.from) + Math.floor((e.clientY - r.top) / Number(el.dataset.ph || PL_H)) * 60;
         const T = R.templates || [];
         const t = T.find(x => toMin(x.start) <= m && plEnd(x) > m);
         if (t) plOpen({ date: el.dataset.plDay, start: t.start, end: t.end, functionId: t.functionId || '', departmentId: t.departmentId || (S.roFilter || {}).dept || '' });
@@ -246,6 +261,7 @@ document.getElementById('app').addEventListener('click', async e => {
         else plOpen({ date: el.dataset.plDay, start: hhmm(m), end: hhmm(Math.min(m + 4 * 60, 1439)), functionId: '', departmentId: (S.roFilter || {}).dept || '' });
         return;
       }
+      case 'pl-big': roBigSet(!S.roBig); return;
       case 'pl-dir': S.plDir = v; try { localStorage.setItem('ch-pl-dir', v); } catch (err) { /* */ } render(); return;
       case 'pl-day': S.plPick.date = v; render(); return;
       case 'pl-ct': S.plPick.ct = v; render(); return;

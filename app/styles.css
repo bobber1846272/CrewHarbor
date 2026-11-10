@@ -1591,3 +1591,16 @@ a.db-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
 .pl-card.h .pl-name { width: auto; flex: none; max-width: 140px; }
 .pl-card.h .pl-add { position: absolute; right: 4px; top: 4px; margin: 0; align-self: auto; background: rgba(255,255,255,.75); }
 .pl-card.h .pl-card-top { padding-right: 90px; }
+
+/* rooster op groot beeld: menu en zijpanelen weg, rooster vult het scherm */
+.ro-big-btn.on { background: var(--navy, #0D2340); color: #fff; border-color: var(--navy, #0D2340); }
+body.ro-big .nav, body.ro-big .presence, body.ro-big .page-head p, body.ro-big .mob-bar { display: none !important; }
+body.ro-big .main { padding: 14px 18px; gap: 12px; flex-basis: 100%; }
+body.ro-big .page-head h1 { font-size: 22px; }
+body.ro-big .ro-tools { padding: 8px 12px; }
+body.ro-big .pl-scroll, body.ro-big .roster-scroll { max-height: none; }
+body.ro-big .roster-scroll { overflow: auto; max-height: calc(100vh - 230px); }
+body.ro-big .pl-dirbar { margin-bottom: 0; }
+body.ro-big .pl-dirbar .pl-first { padding: 6px 10px; }
+body.ro-big .pl-card.shift { font-size: 13px; }
+body.ro-big .pl-name { min-height: 26px; font-size: 13px; }

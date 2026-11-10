@@ -162,6 +162,7 @@ function rosterToolbar(R, cal) {
         '<button class="link-btn" data-act="rx-std-apply"' + (R.standardCount ? '' : ' disabled') + '>Standaardweek invullen' + (R.standardCount ? ' (' + R.standardCount + ' diensten)' : '') + '</button>' +
         '<button class="link-btn" data-act="rx-std-save">Deze week opslaan als standaardweek</button>' +
         '<button class="link-btn" data-act="ro-copy">Vorige week kopiëren</button></div></details>' +
+      (cal ? '' : roBigBtn()) +
     '</div></div>';
 }
 function rosterPeople(R) {

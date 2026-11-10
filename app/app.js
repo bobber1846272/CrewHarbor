@@ -405,6 +405,8 @@ function render() {
   keep.forEach(([q, t, l]) => { const el = document.querySelector(q); if (el) { el.scrollTop = t; el.scrollLeft = l; } });
   if (S.lastRoute === r && (window.scrollY !== wy || window.scrollX !== wx)) window.scrollTo(wx, wy);
   S.lastRoute = r;
+  if (S.roBig && r !== 'rooster') { S.roBig = false; if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => { /* */ }); }
+  document.body.classList.toggle('ro-big', !!S.roBig && r === 'rooster');
   updateTitle();
 }
 function renderKeepFocus() {
