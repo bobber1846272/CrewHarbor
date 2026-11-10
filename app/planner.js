@@ -292,6 +292,7 @@ document.getElementById('app').addEventListener('click', async e => {
       case 'pl-ct': S.plPick.ct = v; render(); return;
       case 'pl-tpl': { const t = (R.templates || []).find(x => same(x.id, id)); Object.assign(S.plPick, { start: t.start, end: t.end, functionId: t.functionId || '', departmentId: t.departmentId || (S.roFilter || {}).dept || '' }); render(); return; }
       case 'pl-add': {
+        S.plTimeDirty = false;
         const P = S.plPick; if (!P || !P.start || !P.end) return;
         el.disabled = true;
         const sp = { memberId: id, date: P.date, start: P.start, end: P.end, note: '', locationId: S.locFilter || memberLoc(id), departmentId: P.departmentId || '', functionId: P.functionId || '' };
@@ -311,10 +312,26 @@ document.getElementById('app').addEventListener('input', e => {
   const k = el.dataset.pl;
   if (k === 'q') { S.plPick.q = el.value; clearTimeout(S.plqT); S.plqT = setTimeout(() => renderKeepFocus(), 200); return; }
 });
-document.getElementById('app').addEventListener('change', e => {
+// tijden: tijdens het typen niets opnieuw tekenen (anders springt de cursor weg); pas bij verlaten van het veld
+function plTimeSub() {
+  const P = S.plPick; const el = document.querySelector('.pl-pop .item-top p'); if (!P || !el || !P.start || !P.end) return;
+  const R = S.roster; const fn = funcOf(P.functionId, R), dp = deptOf(P.departmentId, R);
+  el.textContent = dayLong(P.date) + ' · ' + P.start + '–' + P.end + ' (' + fmtHM(spanMin(P.start, P.end)) + ' u)' + (fn ? ' · ' + fn.name : '') + (dp ? ' · ' + dp.name : '');
+}
+['change', 'input'].forEach(ev => document.getElementById('app').addEventListener(ev, e => {
   const el = e.target; if (!el.dataset.pl || el.dataset.pl === 'q' || !S.plPick || !el.value) return;
-  S.plPick[el.dataset.pl] = el.value; render();
+  if (S.plPick[el.dataset.pl] !== el.value) { S.plPick[el.dataset.pl] = el.value; S.plTimeDirty = true; plTimeSub(); }
+}));
+document.getElementById('app').addEventListener('focusout', e => {
+  const el = e.target; if (!el.dataset || (el.dataset.pl !== 'start' && el.dataset.pl !== 'end') || !S.plPick) return;
+  // naar het andere tijdveld? dan nog niet tekenen
+  // naar een knop in de pop-up? die tekent zelf opnieuw (zo gaat de klik niet verloren)
+  const to = e.relatedTarget; if (to && to.closest && to.closest('.pl-pop')) return;
+  if (S.plTimeDirty) { S.plTimeDirty = false; setTimeout(() => { if (S.plPick) render(); }, 0); }
 });
+document.addEventListener('keydown', e => {
+  const el = e.target; if (e.key === 'Enter' && el.dataset && (el.dataset.pl === 'start' || el.dataset.pl === 'end')) { e.preventDefault(); el.blur(); }
+}, true);
 
 // ---------- slepen in de kalender: naar een andere dag, of een persoon uit "Eerst inplannen" ----------
 document.getElementById('app').addEventListener('dragstart', e => {
