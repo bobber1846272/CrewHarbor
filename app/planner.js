@@ -69,8 +69,8 @@ function plFirstBar(R) {
     .map(p => ({ p, left: contractMin(p) - weekMin(R, p.id) })).filter(x => x.left > 0).sort((a, b) => b.left - a.left);
   if (!list.length) return R.people.some(p => contractMin(p)) ? '<div class="pl-first ok"><span>✓ Iedereen met vaste uren heeft deze week zijn contracturen.</span></div>' : '';
   const tot = list.reduce((a, x) => a + x.left, 0);
-  return '<div class="pl-first"><span class="pl-first-lab"><strong>Eerst inplannen</strong> · vaste uren nog ' + fmtHM(tot) + ' u</span>' +
-    list.slice(0, 12).map(x => '<button class="pl-first-chip" data-act="pl-person" data-id="' + x.p.id + '">' + avatar(x.p.id, x.p.name, 'xs') + esc(x.p.name.split(' ')[0]) + ' <b>' + fmtHM(x.left) + '</b></button>').join('') +
+  return '<div class="pl-first"><span class="pl-first-lab"><strong>Eerst inplannen</strong> · vaste uren nog ' + fmtHM(tot) + ' u <span class="pl-first-hint">· sleep een naam naar het rooster</span></span>' +
+    list.slice(0, 12).map(x => '<button class="pl-first-chip" draggable="true" data-person-drag="' + x.p.id + '" data-act="pl-person" data-id="' + x.p.id + '" title="Sleep naar een dag of dienst om in te plannen, of klik">' + avatar(x.p.id, x.p.name, 'xs') + esc(x.p.name.split(' ')[0]) + ' <b>' + fmtHM(x.left) + '</b></button>').join('') +
     (list.length > 12 ? '<span class="small muted">+' + (list.length - 12) + '</span>' : '') + '</div>';
 }
 
@@ -316,11 +316,46 @@ document.getElementById('app').addEventListener('change', e => {
   S.plPick[el.dataset.pl] = el.value; render();
 });
 
-// ---------- slepen in de kalender: naar een andere dag ----------
+// ---------- slepen in de kalender: naar een andere dag, of een persoon uit "Eerst inplannen" ----------
+document.getElementById('app').addEventListener('dragstart', e => {
+  const c = e.target.closest && e.target.closest('[data-person-drag]'); if (!c) return;
+  roDrag = { type: 'person', id: c.dataset.personDrag };
+  e.dataTransfer.effectAllowed = 'copy';
+  try { e.dataTransfer.setData('text/plain', 'person:' + c.dataset.personDrag); } catch (err) { /* */ }
+  c.classList.add('dragging'); document.body.classList.add('ro-dragging');
+});
+// welke tijd hoort bij de plek waar je loslaat?
+function plDropMin(col, e) {
+  const r = col.getBoundingClientRect(); const from = Number(col.dataset.from);
+  if (col.dataset.span) return from + Math.floor((e.clientX - r.left) / r.width * Number(col.dataset.span) / 60) * 60;
+  return from + Math.floor((e.clientY - r.top) / Number(col.dataset.ph || PL_H)) * 60;
+}
+async function plDropPerson(pid, col, e) {
+  const R = S.roster; const d = col.dataset.plDay;
+  const p = R.people.find(x => same(x.id, pid)); if (!p) return;
+  let spec = null;
+  const card = e.target.closest('.pl-card');
+  if (card) { const [, a, b, f, dp] = card.dataset.v.split('|'); spec = { start: a, end: b, functionId: f || '', departmentId: dp || '' }; }
+  else {
+    const m = plDropMin(col, e);
+    const t = (R.templates || []).find(x => toMin(x.start) <= m && plEnd(x) > m && (!x.functionId || hasFunc(p, x.functionId)));
+    if (t) spec = { start: t.start, end: t.end, functionId: t.functionId || '', departmentId: t.departmentId || (S.roFilter || {}).dept || '' };
+  }
+  // geen dienst op die plek: kies zelf de tijden in de pop-up
+  if (!spec) { plOpen({ date: d, q: p.name, start: hhmm(plDropMin(col, e)), end: hhmm(Math.min(plDropMin(col, e) + 4 * 60, 1439)), functionId: '', departmentId: (S.roFilter || {}).dept || '' }); return; }
+  const off = blockedAbs(R, p.id, d);
+  if (off) { toast(p.name.split(' ')[0] + ' is ' + (off.kind === 'ziek' ? 'ziek' : 'met ' + off.kindLabel.toLowerCase()) + ' op ' + dayShort(d) + '.', true); return; }
+  const sp = Object.assign({ memberId: p.id, date: d, note: '', locationId: S.locFilter || memberLoc(p.id) }, spec);
+  const s = await roCreate(sp);
+  roDone(opCreate([sp], 'Dienst ingepland', [s.id]), p.name.split(' ')[0] + ' ingepland ' + dayShort(d) + ' ' + spec.start + '–' + spec.end);
+  await roReload();
+}
 document.getElementById('app').addEventListener('dragover', e => {
   if (typeof roDrag === 'undefined' || !roDrag) return; const c = e.target.closest('.pl-col'); if (!c) return;
-  e.preventDefault(); e.dataTransfer.dropEffect = roDrag.type === 'tpl' || e.ctrlKey || e.altKey || e.metaKey ? 'copy' : 'move';
+  e.preventDefault(); e.dataTransfer.dropEffect = roDrag.type === 'tpl' || roDrag.type === 'person' || e.ctrlKey || e.altKey || e.metaKey ? 'copy' : 'move';
   document.querySelectorAll('.pl-col.drop-over').forEach(x => { if (x !== c) x.classList.remove('drop-over'); }); c.classList.add('drop-over');
+  const card = roDrag.type === 'person' ? e.target.closest('.pl-card') : null;
+  document.querySelectorAll('.pl-card.drop-over').forEach(x => { if (x !== card) x.classList.remove('drop-over'); }); if (card) card.classList.add('drop-over');
 });
 document.getElementById('app').addEventListener('drop', async e => {
   if (typeof roDrag === 'undefined' || !roDrag) return; const c = e.target.closest('.pl-col'); if (!c) return;
@@ -328,6 +363,7 @@ document.getElementById('app').addEventListener('drop', async e => {
   const D = roDrag; roDrag = null; document.body.classList.remove('ro-dragging');
   const d = c.dataset.plDay; const R = S.roster;
   try {
+    if (D.type === 'person') { await plDropPerson(D.id, c, e); return; }
     if (D.type === 'tpl') {
       const t = R.templates.find(x => same(x.id, D.id));
       plOpen({ date: d, start: t.start, end: t.end, functionId: t.functionId || '', departmentId: t.departmentId || (S.roFilter || {}).dept || '' });
@@ -348,4 +384,4 @@ document.getElementById('app').addEventListener('drop', async e => {
     await roReload();
   } catch (err) { toast(err.message, true); }
 });
-document.getElementById('app').addEventListener('dragend', () => { document.querySelectorAll('.pl-col.drop-over').forEach(c => c.classList.remove('drop-over')); });
+document.getElementById('app').addEventListener('dragend', () => { document.querySelectorAll('.pl-first-chip.dragging').forEach(c => c.classList.remove('dragging')); document.querySelectorAll('.pl-card.drop-over').forEach(c => c.classList.remove('drop-over')); document.querySelectorAll('.pl-col.drop-over').forEach(c => c.classList.remove('drop-over')); });

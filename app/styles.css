@@ -1649,3 +1649,7 @@ body.ro-big .pl-name { min-height: 26px; font-size: 13px; }
 .pl-wk i.here { background: #1849A9; color: #fff; }
 .pl-wk.none { background: #F2F4F7; color: #667085; font-weight: 500; }
 @media (max-width: 640px) { .pl-wk small { display: none; } }
+.pl-first-chip { cursor: grab; }
+.pl-first-chip.dragging { opacity: .5; }
+.pl-first-hint { color: #B54708; opacity: .75; font-size: 12px; }
+.pl-card.drop-over { outline: 3px solid var(--accent, #1D6E7B); outline-offset: 1px; z-index: 5; }
