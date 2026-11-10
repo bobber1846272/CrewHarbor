@@ -251,7 +251,11 @@ const ROUTE_PERM = { team: 'team.board', cijfers: 'reports.view', telefonie: 'ph
 function route() { const h = location.hash.replace(/^#\/?/, '').split('?')[0]; return ROUTES.includes(h) ? h : (S.me ? 'overzicht' : (kioskToken() ? 'klok' : 'login')); }
 function go(r) { if (location.hash === '#/' + r) onRoute(); else location.hash = '#/' + r; }
 window.addEventListener('hashchange', onRoute);
+// taken en terugbelverzoeken zijn een extra die alleen CrewHarbor Beheer per bedrijf aanzet
+function tasksOn() { return typeof hasFeature === 'function' && !!(S.org && S.org.plan) && hasFeature('tasks'); }
+const TASK_ROUTES = ['terugbellen', 'verzoek', 'taken', 'taak', 'team', 'cijfers'];
 function allowed(r) {
+  if (TASK_ROUTES.includes(r) && !tasksOn()) return false;
   if (r === 'dashboard') return !!(S.me && (S.me.isOwner || can('reports.view')));
   if (r === 'telefonie' && typeof hasFeature === 'function' && !hasFeature('phone')) return false;
   const p = ROUTE_PERM[r];
@@ -310,7 +314,8 @@ async function loadRoute() {
   if (typeof isMobileApp === 'function' && isMobileApp()) return loadMobile();
   const r = route();
   const jobs = [loadCounts(), loadPresence()];
-  if (r === 'overzicht' && can('reports.view')) jobs.push(rpc('cd_stats', { p_days: 7 }).then(s => { S.weekStats = s; }));
+  if (r === 'overzicht' && !tasksOn()) jobs.push(loadHomeRo());
+  if (r === 'overzicht' && can('reports.view') && tasksOn()) jobs.push(rpc('cd_stats', { p_days: 7 }).then(s => { S.weekStats = s; }));
   if (r === 'terugbellen') jobs.push(loadCallbacks(), loadColleagues());
   if (r === 'taken') jobs.push(loadTasks());
   if (r === 'team') jobs.push(rpc('cd_team_board').then(d => { S.team = d; }));
@@ -341,7 +346,8 @@ async function loadRoute() {
   }
 }
 async function loadCounts() {
-  const [a, b, c, w, p] = await Promise.all([rpc('cd_callbacks', { p_scope: 'mine' }), rpc('cd_callbacks', { p_scope: 'pool' }), rpc('cd_tasks', { p_scope: 'mine' }),
+  const tk = tasksOn();
+  const [a, b, c, w, p] = await Promise.all([tk ? rpc('cd_callbacks', { p_scope: 'mine' }) : [], tk ? rpc('cd_callbacks', { p_scope: 'pool' }) : [], tk ? rpc('cd_tasks', { p_scope: 'mine' }) : [],
     rpc('cd_hours_week', { p_member: null, p_week: null }), can('hours.approve') ? rpc('cd_hours_pending') : Promise.resolve([])]);
   S.nowWeek = w; S.running = w.running; S.pendingCount = p.length;
   try {
@@ -490,12 +496,12 @@ function selfOn(k) { return !S.me || !S.me.isOwner || !!(S.me.uiPrefs || {})[k];
 // ----- navigatie (groepen die je kunt in- en uitklappen) -----
 function navGroups() {
   const G = [
-    { id: 'werk', label: 'Werk', items: [['meldingen', 'Meldingen', S.notif ? S.notif.unread : 0], ['terugbellen', 'Terugbellen', S.counts.mine], ['taken', 'Taken', S.counts.tasks]] },
+    { id: 'werk', label: 'Werk', items: [['meldingen', 'Meldingen', S.notif ? S.notif.unread : 0], tasksOn() ? ['terugbellen', 'Terugbellen', S.counts.mine] : null, tasksOn() ? ['taken', 'Taken', S.counts.tasks] : null] },
     { id: 'planning', label: 'Planning', items: [['rooster', 'Rooster', S.swaps && S.swaps.pending ? S.swaps.pending.length : 0], selfOn('selfAvail') ? ['beschikbaar', 'Beschikbaarheid'] : null, selfOn('selfLeave') || can('hours.approve') ? ['verlof', selfOn('selfLeave') ? 'Verlof & ziek' : 'Verlof', S.absPending] : null] },
     { id: 'uren', label: 'Uren', items: [selfOn('selfHours') ? ['uren', 'Mijn uren', 0, S.running ? 'live' : ''] : null,
       can('hours.approve') ? ['goedkeuren', 'Goedkeuren', S.pendingCount] : null, can('hours.view_all') ? ['urenoverzicht', 'Urenoverzicht'] : null, can('hours.kiosk') ? ['prikklok', 'Prikklok'] : null] },
     { id: 'kennis', label: 'Kennis', items: [['kennisbank', 'Kennisbank'], ['documenten', 'Documenten']] },
-    { id: 'leiding', label: 'Teamleiding', items: [S.me && (S.me.isOwner || can('reports.view')) ? ['dashboard', 'Dashboard'] : null, can('team.board') ? ['team', 'Teambord'] : null, can('reports.view') ? ['cijfers', 'Cijfers'] : null, can('phone.view') ? ['telefonie', 'Telefonie'] : null, can('audit.view') ? ['logboek', 'Logboek'] : null] },
+    { id: 'leiding', label: 'Teamleiding', items: [S.me && (S.me.isOwner || can('reports.view')) ? ['dashboard', 'Dashboard'] : null, can('team.board') && tasksOn() ? ['team', 'Teambord'] : null, can('reports.view') && tasksOn() ? ['cijfers', 'Cijfers'] : null, can('phone.view') ? ['telefonie', 'Telefonie'] : null, can('audit.view') ? ['logboek', 'Logboek'] : null] },
     { id: 'beheer', label: 'Beheer', items: [can('members.manage') || can('roles.manage') ? ['mensen', 'Mensen'] : null,
       can('members.manage') || can('roles.manage') ? ['rollen', 'Rollen & rechten'] : null, ['instellingen', 'Instellingen']] }
   ];
@@ -531,7 +537,49 @@ function viewNav(r) {
 }
 
 // ----- overzicht -----
+// ---------- startpagina zonder taken/terugbellen: rooster, open diensten en uren ----------
+async function loadHomeRo() {
+  const jobs = [rpc('cd_roster', { p_week: today() }).then(d => { S.homeRo = d; }).catch(() => { S.homeRo = null; })];
+  if (typeof loadOpenMine === 'function') jobs.push(loadOpenMine());
+  if (can('hours.plan')) jobs.push(rpc('cd_open_shifts', { p_from: today(), p_to: addDays(today(), 13) }).then(d => { S.homeOpen = d; }).catch(() => { S.homeOpen = null; }));
+  await Promise.all(jobs);
+}
+function viewHomePlan() {
+  const h0 = new Date().getHours();
+  const groet = h0 < 12 ? 'Goedemorgen' : h0 < 18 ? 'Goedemiddag' : 'Goedenavond';
+  const R = S.homeRo;
+  let html = '<header class="page-head"><div class="hello"><h1>' + groet + ', ' + esc(S.me.name.split(' ')[0]) + '</h1>' +
+    '<p>' + DAYS_FULL[new Date().getDay()] + ' ' + new Date().getDate() + ' ' + MONTHS[new Date().getMonth()] + ' · ' + esc(S.org.name) + '</p></div>' +
+    '<div class="actions"><a class="btn' + (can('hours.plan') ? '' : ' primary') + '" href="#/rooster" data-act="home-mine">Mijn rooster</a>' + (can('hours.plan') ? '<a class="btn primary" href="#/rooster" data-act="home-plan">Rooster maken</a>' : '') + '</div></header>';
+  if (typeof billingBanner === 'function') html += billingBanner();
+  const mine = R ? R.shifts.filter(s => same(s.memberId, S.me.id) && s.date >= today()).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start)) : [];
+  const todayL = R ? R.shifts.filter(s => s.date === today()).sort((a, b) => a.start.localeCompare(b.start) || a.memberName.localeCompare(b.memberName)) : [];
+  const openN = (S.homeOpen || []).filter(o => o.status === 'open');
+  const openReps = openN.reduce((a, o) => a + (o.replies || []).filter(r => r.status === 'aangemeld').length, 0);
+  const stats = [];
+  if (selfOn('selfHours') || !S.me.isOwner) stats.push(stat('Mijn diensten deze week', R ? R.shifts.filter(s => same(s.memberId, S.me.id)).length : '–'));
+  if (can('hours.plan')) stats.push(stat('Vandaag aan het werk', new Set(todayL.map(s => String(s.memberId))).size), stat('Open diensten', openN.length, openN.length ? 'var(--orange)' : null, openReps ? openReps + ' ' + (openReps === 1 ? 'reactie' : 'reacties') + ' om te bekijken' : ''));
+  if (can('hours.approve')) stats.push(stat('Te keuren', (S.pendingCount || 0) + (S.absPending || 0), (S.pendingCount || S.absPending) ? 'var(--orange)' : null, 'uren en verlof'));
+  if (stats.length) html += '<div class="stats">' + stats.join('') + '</div>';
+  if (typeof openMineSection === 'function') html += openMineSection();
+  html += '<div class="cards">';
+  if (selfOn('selfHours')) html += homeHoursCard();
+  if (!S.me.isOwner || selfOn('selfHours')) {
+    html += '<section class="card"><h2>Mijn volgende diensten</h2>' + (mine.length ? '<div class="mini-list">' + mine.slice(0, 5).map(s => '<a class="mini-row" href="#/rooster" data-act="home-mine"><span>' + esc(dayLong(s.date)) + '</span><span class="badge">' + esc(s.start + '–' + s.end) + '</span></a>').join('') + '</div>'
+      : '<p class="muted small">' + (R && !R.canPlan && !(R.published || []).length ? 'Het rooster voor deze week is nog niet verstuurd.' : 'Deze week geen diensten meer.') + '</p>') + '</section>';
+  }
+  if (can('hours.plan')) {
+    html += '<section class="card"><h2>Vandaag aan het werk</h2>' + (todayL.length ? '<div class="mini-list">' + todayL.slice(0, 8).map(s => '<div class="mini-row"><span class="home-who">' + avatar(s.memberId, s.memberName, 'xs') + esc(s.memberName) + '</span><span class="badge">' + esc(s.start + '–' + s.end) + '</span></div>').join('') + '</div>' +
+      (todayL.length > 8 ? '<p class="small muted" style="margin:8px 0 0">en nog ' + (todayL.length - 8) + '</p>' : '') : '<p class="muted small">Vandaag staat er niemand ingepland.</p>') +
+      '<p style="margin:12px 0 0"><a class="more" href="#/rooster" data-act="home-plan">Naar het rooster</a></p></section>';
+    if (openN.length) html += '<section class="card"><h2>Open diensten</h2><div class="mini-list">' + openN.slice(0, 5).map(o => { const n = (o.replies || []).filter(r => r.status === 'aangemeld').length;
+      return '<a class="mini-row" href="#/rooster" data-act="home-plan" data-v="' + o.date + '"><span>' + esc(dayShort(o.date)) + ' · ' + esc(o.start + '–' + o.end) + '</span><span class="badge ' + (n ? 'green' : 'orange') + '">' + (n ? n + ' ' + (n === 1 ? 'reactie' : 'reacties') : 'nog niemand') + '</span></a>'; }).join('') + '</div></section>';
+  }
+  html += '</div>';
+  return html;
+}
 function viewHome() {
+  if (!tasksOn()) return viewHomePlan();
   const h = new Date().getHours();
   const groet = h < 12 ? 'Goedemorgen' : h < 18 ? 'Goedemiddag' : 'Goedenavond';
   const late = S.myCbs.filter(c => isLate(c.dueAt)).length;
@@ -1614,6 +1662,7 @@ async function loadRoster() {
   } else {
     S.roster = await rpc('cd_roster', { p_week: S.rosterWeek || today() }); S.rosterWeek = S.roster.weekStart;
   }
+  if (typeof loadOpenMine === 'function') await Promise.all([loadOpenMine(), S.rosterView !== 'maand' ? loadOpenPlan(S.roster) : Promise.resolve()]);
 }
 function UNITS(R) { return (R && R.units) || (S.roster && S.roster.units) || { departments: [], functions: [] }; }
 function deptOf(id, R) { return UNITS(R).departments.find(d => same(d.id, id)); }
@@ -1764,6 +1813,7 @@ function rosterMine(R) {
         : ab ? '' : '<span class="muted">Vrij</span>') +
       (list.length && names.length ? '<div class="small muted">Ook aan het werk: ' + esc(names.slice(0, 6).join(', ')) + (names.length > 6 ? ' en ' + (names.length - 6) + ' anderen' : '') + '</div>' : '') + '</div></div>';
   }).join('') + '</div>';
+  if (typeof openMineSection === 'function') h += openMineSection();
   if (typeof swapsSection === 'function') h += swapsSection(R);
   return h;
 }
@@ -2694,6 +2744,8 @@ $app.addEventListener('click', async e => {
       case 'sound': prefs.sound = !prefs.sound; savePrefs(); unlockAudio(); if (prefs.sound) beep(); render(); return;
       case 'notif-allow': await Notification.requestPermission(); render(); return;
       case 'go-pool': S.cbTab = 'pool'; return;
+      case 'home-mine': S.rosterView = 'mijn'; S.rosterWeek = null; return;
+      case 'home-plan': S.rosterView = 'week'; S.rosterWeek = el.dataset.v ? mondayOf(el.dataset.v) : null; return;
       case 'hidecode': S.shownCode = null; render(); return;
       case 'k-exit-mode': K.exit = Object.assign({}, K.exit, { legacy: !(K.exit && K.exit.legacy), err: null, name: '' }); render(); return;
       case 'nav-group': {
@@ -3013,6 +3065,7 @@ $app.addEventListener('click', async e => {
         const n = S.notif.items.find(x => same(x.id, raw)); if (!n || !n.link) return;
         if (n.link.startsWith('instellingen|factuur|')) { S.setTab = 'abonnement'; S.invFocus = Number(n.link.split('|')[2]); go('instellingen'); }
         else if (n.link.startsWith('rooster|')) { S.rosterView = 'week'; S.rosterWeek = n.link.split('|')[1]; go('rooster'); }
+        else if (n.link === 'open') { S.rosterView = 'mijn'; S.rosterWeek = null; go('rooster'); }
         else if (n.link === 'ruilen') { if (can('hours.plan')) { S.rosterView = 'week'; S.swReview = true; } else S.rosterView = 'mijn'; go('rooster'); }
         else if (n.link === 'verlof') go('verlof');
         return;

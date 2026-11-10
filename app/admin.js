@@ -199,12 +199,13 @@ function viewOverview() {
 const eur = c => '€ ' + (Math.round(c || 0) / 100).toFixed(2).replace('.', ',');
 const planName = id => ((A.data.plans || []).find(p => p.id === id) || {}).name || id || '–';
 const BSTAT = { trial: ['Proefperiode', ''], active: ['Betaalt', 'green'], past_due: ['Betaling mislukt', 'red'], canceled: ['Opgezegd', 'orange'], free: ['Gratis', 'green'], expired: ['Proef voorbij', 'red'] };
-const FEAT = [['payroll', 'Salarisexport'], ['phone', '3CX-telefonie'], ['locations', 'Meerdere vestigingen']];
+// 'tasks' (taken & terugbellen) zet alleen Beheer aan: in een pakket of per bedrijf. De klant kan het zelf niet.
+const FEAT = [['payroll', 'Salarisexport'], ['phone', '3CX-telefonie'], ['locations', 'Meerdere vestigingen'], ['tasks', 'Taken & terugbellen']];
 // vaste lijst met wat een pakket kan bevatten (komt als opsomming op de website én in de vergelijkingstabel)
 // LET OP: dezelfde lijst staat in prijzen.js (website)
 const HL = [
-  ['Basis', ['Terugbelverzoeken en taken', 'Uren, in- en uitklokken en prikklok', 'Rooster, verlof en beschikbaarheid', 'Diensten ruilen tussen collega\u2019s', 'Afdelingen en functies in het rooster', 'Kennisbank en documenten', 'Meldingen per mail', 'Dashboard voor de eigenaar']],
-  ['Extra\u2019s', ['Salarisexport (Excel, Nmbrs, Loket.nl, AFAS)', 'Koppeling met 3CX-telefonie', 'Meerdere vestigingen met eigen rooster en prikklok']],
+  ['Basis', ['Open diensten: invallers vinden met één klik', 'Uren, in- en uitklokken en prikklok', 'Rooster, verlof en beschikbaarheid', 'Diensten ruilen tussen collega\u2019s', 'Afdelingen en functies in het rooster', 'Kennisbank en documenten', 'Meldingen per mail', 'Dashboard voor de eigenaar']],
+  ['Extra\u2019s', ['Salarisexport (Excel, Nmbrs, Loket.nl, AFAS)', 'Koppeling met 3CX-telefonie', 'Meerdere vestigingen met eigen rooster en prikklok', 'Taken en terugbelverzoeken']],
   ['Service', ['30 dagen gratis proberen', 'Per maand opzegbaar', 'Hulp bij het overstappen', 'Persoonlijke hulp bij de start', 'Betalen per factuur mogelijk', 'Voorrang bij support']]
 ];
 const HL_ALL = HL.flatMap(g => g[1]);
@@ -292,6 +293,7 @@ function orgAddons(o) {
   return '<form class="box" data-form="org-addons" data-id="' + o.id + '" novalidate><div class="item-top"><strong>Losse extra\u2019s</strong></div>' +
     '<div class="row">' + extra.map(f => '<label class="check"><input type="checkbox" name="x-' + f[0] + '"' + ((o.addons || []).includes(f[0]) ? ' checked' : '') + '> ' + f[1] +
       ' <span class="small muted">+' + eur((pl.addonCents || {})[f[0]] || 0) + '/mnd</span></label>').join('') + '</div>' +
+    (extra.some(f => f[0] === 'tasks') ? '<p class="small muted" style="margin:0">Taken &amp; terugbellen kan alleen jij aanzetten; de klant ziet dit niet bij zijn abonnement.</p>' : '') +
     '<div class="row"><button class="btn small" type="submit">Extra\u2019s opslaan</button></div></form>';
 }
 const INV_ST = { open: ['Open', 'orange'], vervallen: ['Te laat', 'red'], betaald: ['Betaald', 'green'], geannuleerd: ['Geannuleerd', ''] };

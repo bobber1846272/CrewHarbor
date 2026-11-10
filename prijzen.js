@@ -9,9 +9,9 @@
 
   let MAX = 150, YM = 12;
   let PLANS = [];
-  const EXTRA = [['payroll', 'Salarisexport (Excel, Nmbrs, Loket.nl, AFAS)'], ['phone', 'Koppeling met 3CX-telefonie'], ['locations', 'Meerdere vestigingen']];
+  const EXTRA = [['payroll', 'Salarisexport (Excel, Nmbrs, Loket.nl, AFAS)'], ['phone', 'Koppeling met 3CX-telefonie'], ['locations', 'Meerdere vestigingen'], ['tasks', 'Taken en terugbelverzoeken']];
   // zelfde lijst als in Beheer → Pakketten (wat je daar aanvinkt, komt hier als ✓)
-  const BASE = ['Terugbelverzoeken en taken', 'Uren, in- en uitklokken en prikklok', 'Rooster, verlof en beschikbaarheid', 'Diensten ruilen tussen collega\u2019s', 'Afdelingen en functies in het rooster', 'Kennisbank en documenten', 'Meldingen per mail', 'Dashboard voor de eigenaar'];
+  const BASE = ['Open diensten: invallers vinden met één klik', 'Uren, in- en uitklokken en prikklok', 'Rooster, verlof en beschikbaarheid', 'Diensten ruilen tussen collega\u2019s', 'Afdelingen en functies in het rooster', 'Kennisbank en documenten', 'Meldingen per mail', 'Dashboard voor de eigenaar'];
   const SERVICE = ['30 dagen gratis proberen', 'Per maand opzegbaar', 'Hulp bij het overstappen', 'Persoonlijke hulp bij de start', 'Betalen per factuur mogelijk', 'Voorrang bij support'];
   // wat zit er in een pakket? Eigen vinkjes + alles uit het pakket waar "Alles uit …" naar verwijst
   function has(p, item, seen) {
@@ -44,7 +44,7 @@
       row('Korting', p => !p.custom && Number(p.discountPct) > 0 ? String(p.discountPct).replace(/\.0+$/, '').replace('.', ',') + '%' : NO) +
       (base.length ? grp('Functies') + base.map(b => row(b, p => has(p, b) ? YES : NO)).join('') : '') +
       grp('Uitbreidingen') + EXTRA.map(([k, l]) => row(l, p => p.custom || (p.features || []).includes(k) ? YES
-        : (p.addonCents || {})[k] ? '<span class="add">+' + eur(p.addonCents[k]) + ' p.m.</span>' : NO)).join('') +
+        : k === 'tasks' ? '<span class="add">op aanvraag</span>' : (p.addonCents || {})[k] ? '<span class="add">+' + eur(p.addonCents[k]) + ' p.m.</span>' : NO)).join('') +
       grp('Service') + serv.map(l => row(l, p => has(p, l) ? YES : NO)).join('') + row('Prijs en afspraken op maat', p => p.custom ? YES : NO) +
       '<tr><td></td>' + cols.map(p => td(p, '<a class="btn ' + (p.popular ? 'primary' : 'outline') + '" href="./?pakket=' + esc(p.id) + '#aanvragen">Kies ' + esc(p.name) + '</a>')).join('') + '</tr>';
     $('cmp').innerHTML = head + '<tbody>' + body + '</tbody>';

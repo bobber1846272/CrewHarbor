@@ -31,6 +31,10 @@ function plGroups(R, d) {
     else map.set('t' + t.id, { key: 't' + t.id, start: t.start, end: t.end, functionId: t.functionId || '', departmentId: t.departmentId || '', shifts: [], tpl: t, need: it.need, have: 0 });
   });
   const list = [...map.values()].map(g => Object.assign(g, { a: toMin(g.start), b: plEnd(g) }));
+  // open diensten (nog niemand gevonden) als eigen kaart
+  const dpf = (S.roFilter || {}).dept;
+  (S.openPlan || []).filter(o => o.date === d && o.status === 'open' && (!dpf || !o.departmentId || same(o.departmentId, dpf)))
+    .forEach(o => list.push({ key: 'o' + o.id, open: o, start: o.start, end: o.end, a: toMin(o.start), b: plEnd(o), shifts: [] }));
   // naast elkaar zetten als ze overlappen
   list.sort((x, y) => x.a - y.a || y.b - x.b);
   let cluster = [], end = -1;
@@ -48,6 +52,7 @@ function plFn(R, pid, fid) {
   return L.find(x => x.color) || L[0] || null;
 }
 function plCard(R, g, d, top, pos) {
+  if (g.open && typeof openCard === 'function') return openCard(R, g.open, pos || ('top:' + top + 'px;height:' + Math.max(34, (g.b - g.a) / 60 * PL_H - 3) + 'px;left:calc(' + (g.lane / g.lanes * 100) + '% + 3px);width:calc(' + (100 / g.lanes) + '% - 6px);'));
   const fn = funcOf(g.functionId, R), dp = deptOf(g.departmentId, R);
   const tp = g.tpl ? { i: (R.templates || []).indexOf(g.tpl) % 6, t: g.tpl } : (g.shifts[0] ? tplOf(R, g.shifts[0]) : null);
   const fc = fn && fn.color;
@@ -88,7 +93,8 @@ function roHelp() {
   return '<section class="card stack ro-help" style="gap:16px;max-width:none"><div class="item-top"><div><h2 style="margin:0">Uitleg rooster</h2><p class="small muted" style="margin:4px 0 0">Alles wat je kunt doen, op één plek.</p></div><button class="icon-btn" data-act="pl-help-x" aria-label="Sluiten">' + ICON.x + '</button></div>' +
     '<div class="rh-grid">' +
     sec('👀', 'Weergaven', ['<strong>Week</strong>: de week per dag, met de diensten op een tijdlijn. Kies rechtsboven <strong>Verticaal</strong> of <strong>Horizontaal</strong>.', '<strong>Per persoon</strong>: elke medewerker een rij, handig om uren per persoon te zien.', '<strong>Dag</strong>: één dag als tijdlijn. Klik op een dag in de kop om er snel heen te gaan.', '<strong>Groot beeld</strong>: het rooster over het hele scherm. Terug met <strong>Esc</strong>.']) +
-    sec('➕', 'Inplannen', ['Klik in een <strong>lege plek</strong> van een dag, op <strong>+</strong> of op een blok. Je krijgt alle mensen te zien.', 'Bovenaan staan de mensen met <strong>vaste uren die nog uren over hebben</strong>, daarna flex die kan, daarna de rest.', 'Filter op <strong>Vaste uren</strong> of <strong>Flex</strong>, of zoek op naam.', 'Klik op een naam en hij staat erin. De pop-up blijft open, zodat je meer mensen kunt toevoegen.', 'De strook <strong>Eerst inplannen</strong> laat zien wie nog vaste uren over heeft deze week.']) +
+    sec('➕', 'Inplannen', ['Klik in een <strong>lege plek</strong> van een dag, op <strong>+</strong> of op een blok. Je krijgt alle mensen te zien.', 'Bovenaan staan de mensen met <strong>vaste uren die nog uren over hebben</strong>, daarna flex die kan, daarna de rest.', 'Filter op <strong>Vaste uren</strong> of <strong>Flex</strong>, of zoek op naam.', 'Klik op een naam en hij staat erin. De pop-up blijft open, zodat je meer mensen kunt toevoegen.', 'De strook <strong>Eerst inplannen</strong> laat zien wie nog vaste uren over heeft deze week. Sleep een naam naar een dag of dienst.']) +
+    sec('📣', 'Open diensten', ['Niemand gevonden? Klik in de pop-up op <strong>Zet open voor collega’s</strong>.', 'Iedereen die kan (juiste functie, geen verlof, werkt dan nog niet) krijgt een melding.', 'Kies <strong>Ik kies zelf</strong>: je ziet de reacties en plant met één klik in. Of <strong>Wie het eerst reageert</strong>: die staat er meteen in.', 'Een open dienst staat <span class="os-tag">OPEN</span> gestreept in het rooster. Klik erop voor de reacties of om hem in te trekken.']) +
     sec('✋', 'Slepen', ['Sleep een <strong>vaste dienst</strong> naar een dag: de pop-up opent al ingevuld.', 'Sleep een <strong>naam</strong> naar een andere dag om de dienst te verplaatsen.', 'Houd <strong>Ctrl</strong> ingedrukt tijdens het slepen om te kopiëren.', 'Klik op een naam om de dienst te wijzigen of te verwijderen.']) +
     sec('🎨', 'Kleuren en tekens', ['<span class="pl-cov ok">2/2</span> <span class="pl-cov half">1/2</span> <span class="pl-cov bad">0/2</span> hoeveel mensen er staan van het aantal dat nodig is.', '<span class="rh-sw dash"></span> Stippellijn: hier is nog niemand ingepland, maar er is wel iemand nodig.', '<span class="rh-sw closed"></span> Gearceerd: je bent dan dicht (Openingstijden).', '<span class="rh-sw gap"></span> Rode streep: tijdens openingstijden werkt er (te) weinig mensen.', '<span class="ro-warn">!</span> Let op: bijvoorbeeld dubbel ingepland, boven contracturen of heeft aangegeven niet te kunnen.', 'De kleur van een blok komt van de <strong>functie</strong> of de <strong>vaste dienst</strong>.']) +
     sec('⚙️', 'Instellen', ['<strong>Vaste diensten</strong>: diensten die vaak terugkomen, met tijden, functie en afdeling.', '<strong>Openingstijden</strong>: dan zie je gaten in het rooster.', '<strong>Bezetting per dienst</strong>: hoeveel mensen je per dienst nodig hebt, ook per functie.', '<strong>Afdelingen &amp; functies</strong>: met de afdelingsknoppen laat je alleen die afdeling zien.']) +
@@ -129,7 +135,7 @@ function plDayHead(R, d) {
     '<button class="pl-dh-add" data-act="pl-new" data-v="' + d + '" aria-label="Dienst inplannen op ' + esc(dayShort(d)) + '">+</button></div>';
 }
 function rosterCal(R) {
-  const tail = S.plPick ? modal(plPopup(R), 'pl-x') : '';
+  const tail = (S.plPick ? modal(plPopup(R), 'pl-x') : '') + (S.osView && typeof openViewModal === 'function' ? modal(openViewModal(R), 'os-view-x') : '');
   return plFirstBar(R) + (plDir() === 'h' ? rosterCalH(R) : rosterCalV(R)) + tail;
 }
 // horizontaal: elke dag een rij, de uren van links naar rechts
@@ -257,6 +263,7 @@ function plPopup(R) {
         return '<button class="shift ' + (f && f.color ? 'has-fc' : 't' + (i % 6)) + (on ? ' on' : '') + '"' + (f && f.color ? ' style="--fc:' + esc(f.color) + '"' : '') + ' data-act="pl-tpl" data-id="' + t.id + '" aria-pressed="' + on + '">' + esc(t.name) + '<small>' + esc(t.start + '–' + t.end) + (f ? ' · ' + esc(f.name) : '') + '</small></button>'; }).join('') +
         '<span class="pl-times"><label class="sr-only" for="pl-s">Begin</label><input class="input" type="time" id="pl-s" data-pl="start" value="' + esc(P.start) + '"><span>–</span><label class="sr-only" for="pl-e">Eind</label><input class="input" type="time" id="pl-e" data-pl="end" value="' + esc(P.end) + '"></span></div>' +
     '</div>' +
+    (typeof openForm === 'function' ? openForm(R) : '') +
     '<div class="pl-filter"><div class="seg small" role="group" aria-label="Contract">' + [['alle', 'Iedereen'], ['vast', 'Vaste uren'], ['flex', 'Flex']].map(o => '<button class="' + (ct === o[0] ? 'on' : '') + '" aria-pressed="' + (ct === o[0]) + '" data-act="pl-ct" data-v="' + o[0] + '">' + o[1] + ' <span class="muted">' + cnt(o[0]) + '</span></button>').join('') + '</div>' +
       (UNITS(R).functions.length ? '<label class="sr-only" for="pl-fn">Functie</label><select class="input pl-fnsel" id="pl-fn" data-plfn="1"><option value="">Alle functies</option>' + UNITS(R).functions.map(f => '<option value="' + f.id + '"' + (same(ff, f.id) ? ' selected' : '') + '>' + esc(f.name) + ' (' + R.people.filter(p => hasFunc(p, f.id)).length + ')</option>').join('') + '<option value="-"' + (ff === '-' ? ' selected' : '') + '>Zonder functie</option></select>' : '') +
       '<input class="input" id="pl-q" data-pl="q" placeholder="Zoek op naam" value="' + esc(P.q || '') + '" aria-label="Zoek op naam" autocomplete="off">' +

@@ -20,6 +20,7 @@ async function loadMobile() {
       jobs.push(rpc('cd_leave_me').then(d => { M.leave = d; }).catch(() => { M.leave = null; }));
     }
   }
+  if ((M.tab === 'code' || M.tab === 'rooster') && typeof loadOpenMine === 'function') jobs.push(loadOpenMine());
   if (M.tab === 'rooster') { jobs.push(loadPlan()); if (typeof loadSwaps === 'function') jobs.push(loadSwaps()); }
   if (M.tab === 'verlof') jobs.push(loadAbsences());
   if (M.tab === 'beschikbaar') jobs.push(loadAvailability());
@@ -110,6 +111,10 @@ function mToday() {
     ? '<strong>' + esc(dayWord(next.date)) + ' · ' + esc(next.start + '–' + next.end) + '</strong>' + (next.note ? '<span>' + esc(next.note) + '</span>' : '')
     : '<strong>Niets ingepland</strong><span>De komende 4 weken heb je geen diensten.</span>') + '</div>' + ICON.right + '</button>';
 
+  // open diensten: iemand gezocht
+  const osN = (S.openMine || []).filter(o => o.status === 'open' && !o.mine && !o.why).length;
+  if (osN) h += '<button class="m-card m-next os-teaser" data-mact="tab" data-v="rooster"><div><p class="m-label">Open diensten</p><strong>' + osN + (osN === 1 ? ' dienst zoekt' : ' diensten zoeken') + ' iemand</strong><span>Kun jij? Tik om te reageren.</span></div>' + ICON.right + '</button>';
+
   // in één oogopslag: uren en verlof
   const tiles = [];
   if (W && selfOn('selfHours')) {
@@ -145,6 +150,7 @@ function mRoster() {
     if (list.length || ab) days.push({ d, to: d, list, ab });
   }
   let h = '<h1 class="m-h1">Mijn diensten</h1>';
+  if (typeof openMineSection === 'function') h += openMineSection(true);
   if (!days.length) return h + '<div class="m-empty">Je hebt de komende 4 weken geen diensten.</div>';
   let wk = null;
   days.forEach(x => {
