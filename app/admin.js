@@ -142,7 +142,18 @@ const ADM_ICON = (() => { const i = d => '<svg viewBox="0 0 24 24" width="18" he
     facturen: i('<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>'), support: i('<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2-3 4M12 17h.01"/>'),
     status: i('<path d="M3 12h4l3-8 4 16 3-8h4"/>'), betalen: i('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>'),
     mail: i('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>'), beheerders: i('<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/>'),
-    logboek: i('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>') }; })();
+    logboek: i('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>'), website: i('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01M8 14l-2 2 2 2M16 14l2 2-2 2"/>') }; })();
+// ---------- website: teksten aanpassen ----------
+function viewWebsite() {
+  const W = (A.web && A.web.site) || {};
+  const pages = [['home', 'index.html', 'Home', 'De hoofdpagina: functies, prijzen, vragen en het aanvraagformulier.'], ['prijzen', 'prijzen.html', 'Prijzen', 'De vergelijkingstabel van de pakketten (de pakketten zelf pas je aan bij Pakketten & betalen).'],
+    ['support', 'support.html', 'Support', 'Veelgestelde vragen en het contactformulier.'], ['status', 'status.html', 'Status', 'De statuspagina (meldingen zet je bij Status).'], ['global', 'index.html', 'Menu en voettekst', 'Gelden voor alle pagina’s. Pas ze aan vanaf elke pagina.']];
+  return '<section class="card stack" style="gap:14px"><h2 style="margin:0">Teksten van de website aanpassen</h2>' +
+    '<p class="small muted" style="margin:0">Open een pagina in de bewerkmodus. Klik op een tekst om hem te wijzigen; bij lijsten (functies, vragen, stappen) kun je items toevoegen, verplaatsen en weghalen. Sla op en het staat meteen voor iedereen online. Elk stuk kun je terugzetten naar het origineel.</p>' +
+    '<div class="web-pages">' + pages.map(p => { const w = W[p[0]]; return '<div class="web-page"><div><strong>' + p[2] + '</strong><p class="small muted" style="margin:2px 0 0">' + p[3] + '</p>' +
+      '<span class="small ' + (w && w.n ? '' : 'muted') + '">' + (w && w.n ? w.n + ' aanpassing' + (w.n === 1 ? '' : 'en') + ' · laatst door ' + esc(w.by || '?') + ' op ' + esc(fmt(w.at, true)) : 'Originele tekst') + '</span></div>' +
+      (p[0] === 'global' ? '' : '<a class="btn small primary" href="../' + p[1] + '?bewerken" target="_blank" rel="noopener">Bewerken</a>') + '</div>'; }).join('') + '</div></section>';
+}
 function viewPanel() {
   const d = A.data;
   const open = d.requests.filter(r => r.status === 'nieuw').length;
@@ -150,11 +161,11 @@ function viewPanel() {
   const groups = [
     ['', [['overzicht', 'Overzicht', 0]]],
     ['Klanten', [['aanvragen', 'Aanvragen', open], ['bedrijven', 'Bedrijven', 0], ['facturen', 'Facturen', A.inv ? A.inv.invoices.filter(i => i.status === 'open' || i.status === 'vervallen').length : 0], ['support', 'Support', A.sup ? A.sup.filter(x => x.status === 'nieuw').length : 0]]],
-    ['Systeem', [['status', 'Status', stOpen], ['betalen', 'Pakketten & betalen', 0], ['mail', 'Mail', 0]]],
+    ['Systeem', [['status', 'Status', stOpen], ['betalen', 'Pakketten & betalen', 0], ['website', 'Website', 0], ['mail', 'Mail', 0]]],
     ['Beheer', [['beheerders', 'Beheerders', 0], ['logboek', 'Logboek', 0]]]
   ];
   const title = groups.flatMap(g => g[1]).find(t => t[0] === A.tab) || ['', 'Beheer'];
-  const body = { overzicht: viewOverview, aanvragen: viewRequests, bedrijven: viewOrgs, facturen: viewInvoices, support: viewSupport, status: viewStatus, beheerders: viewAdmins, betalen: viewBilling, mail: viewMail, logboek: viewLog }[A.tab]();
+  const body = { overzicht: viewOverview, aanvragen: viewRequests, bedrijven: viewOrgs, facturen: viewInvoices, support: viewSupport, status: viewStatus, website: viewWebsite, beheerders: viewAdmins, betalen: viewBilling, mail: viewMail, logboek: viewLog }[A.tab]();
   return '<div class="adm2">' +
     '<aside class="adm-side" aria-label="Beheer-menu"><div class="adm-brand"><span class="logo">' + LOGO(26) + '</span><span class="adm-sub">Beheer</span></div>' +
       '<nav class="adm-nav">' + groups.map(g => (g[0] ? '<span class="adm-nav-h">' + g[0] + '</span>' : '') + g[1].map(t => '<button class="' + (A.tab === t[0] ? 'on' : '') + '" data-act="tab" data-id="' + t[0] + '"' + (A.tab === t[0] ? ' aria-current="page"' : '') + '>' +
@@ -617,6 +628,7 @@ $app.addEventListener('click', async e => {
         if (id === 'mail') { A.mail = await svc('admin-mail-get'); render(); }
         if (id === 'betalen') { A.mollie = await svc('admin-mollie-get'); render(); }
         if (id === 'facturen') { A.inv = await rpc('cd_admin_invoices'); render(); }
+        if (id === 'website') { A.web = await rpc('cd_admin_whoami').catch(() => null); render(); }
         if (id === 'support') { A.sup = await rpc('cd_admin_support'); render(); }
         if (id === 'status') { A.st = await rpc('cd_status'); render(); }
         break;

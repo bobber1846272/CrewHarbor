@@ -10,7 +10,7 @@
 
   // reserve-pakketten als de server even niet bereikbaar is (worden vervangen door de echte prijzen)
   let PLANS = [
-    { id: 'start', name: 'Start', tagline: 'Voor kleine teams die overzicht willen.', monthCents: 3000, minMembers: 1, maxMembers: 10, fixed: true, discountPct: 0, features: [], addonCents: { payroll: 1000, phone: 1000, locations: 1500 }, highlights: ['Terugbelverzoeken en taken', 'Uren, in- en uitklokken en prikklok', 'Rooster, verlof en beschikbaarheid', 'Kennisbank en documenten', 'Meldingen per mail'] },
+    { id: 'start', name: 'Start', tagline: 'Voor kleine teams die overzicht willen.', monthCents: 3000, minMembers: 1, maxMembers: 10, fixed: true, discountPct: 0, features: [], addonCents: { payroll: 1000, phone: 1000, locations: 1500 }, highlights: ['Open diensten: invallers vinden met één klik', 'Uren, in- en uitklokken en prikklok', 'Rooster, verlof en beschikbaarheid', 'Kennisbank en documenten', 'Meldingen per mail'] },
     { id: 'team', name: 'Team', tagline: 'Alles voor een groeiend team, met export naar je salarisadministratie.', monthCents: 23750, minMembers: 11, maxMembers: 50, fixed: true, discountPct: 5, features: ['payroll', 'phone'], addonCents: { locations: 7125 }, highlights: ['Alles uit Start', 'Salarisexport (Excel, Nmbrs, Loket.nl, AFAS)', 'Koppeling met 3CX-telefonie'], popular: true },
     { id: 'bedrijf', name: 'Bedrijf', tagline: 'Voor bedrijven met meerdere vestigingen.', monthCents: 29835, minMembers: 51, maxMembers: null, fixed: false, discountPct: 10, features: ['payroll', 'phone', 'locations'], addonCents: {}, highlights: ['Alles uit Team', 'Meerdere vestigingen met eigen rooster en prikklok', 'Hulp bij het overstappen'] }
   ];
@@ -29,7 +29,10 @@
   }
 
   // jaarlijks betalen: hoeveel maanden gratis
+  let lastYm = null;
+  document.addEventListener('cms', () => { if (lastYm != null) yearNote(lastYm); });
   function yearNote(ym) {
+    lastYm = ym;
     const f = 12 - (Number(ym) || 12);
     document.querySelectorAll('.year-free').forEach(el => { el.textContent = f > 0 ? '(per jaar krijg je ' + String(f).replace('.', ',') + (f === 1 ? ' maand' : ' maanden') + ' gratis)' : ''; });
   }

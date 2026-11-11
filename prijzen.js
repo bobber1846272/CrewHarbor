@@ -53,7 +53,11 @@
   const post = (url, body) => fetch(CFG.supabaseUrl + url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey }, body: JSON.stringify(body || {}) }).then(r => r.ok ? r.json() : null).catch(() => null);
   Promise.all([post('/functions/v1/crewdeck', { action: 'plans' }), post('/rest/v1/rpc/cd_public_pricing')]).then(([d, pr]) => {
     if (pr && Number(pr.customFrom) > 0) MAX = Number(pr.customFrom);
-    if (pr && Number(pr.yearMonths)) { YM = Number(pr.yearMonths); const f = 12 - YM; document.querySelectorAll('.year-free').forEach(el => { el.textContent = f > 0 ? '(per jaar krijg je ' + String(f).replace('.', ',') + (f === 1 ? ' maand' : ' maanden') + ' gratis)' : ''; }); }
+    if (pr && Number(pr.yearMonths)) {
+      YM = Number(pr.yearMonths); const f = 12 - YM;
+      const fill = () => document.querySelectorAll('.year-free').forEach(el => { el.textContent = f > 0 ? '(per jaar krijg je ' + String(f).replace('.', ',') + (f === 1 ? ' maand' : ' maanden') + ' gratis)' : ''; });
+      fill(); document.addEventListener('cms', fill);
+    }
     if (d && d.plans && d.plans.length) { PLANS = d.plans; render(); }
     else $('cmp').innerHTML = '<tbody><tr><td>De pakketten konden even niet geladen worden. Probeer het later opnieuw.</td></tr></tbody>';
   });

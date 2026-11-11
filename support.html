@@ -10,24 +10,25 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..750&display=swap">
-<link rel="stylesheet" href="site.css?v=10">
+<link rel="stylesheet" href="site.css?v=11">
+<script>try{if(!localStorage.getItem("ch-cms-support")&&!/bewerken/.test(location.search))document.documentElement.classList.add("cms-wait")}catch(e){}</script>
 </head>
-<body class="v3 sub">
+<body class="v3 sub" data-page="support">
 <a class="skip" href="#main">Naar de inhoud</a>
 <header class="top" id="top">
   <div class="wrap top-in">
     <a class="brand" href="./" aria-label="CrewHarbor, naar het begin"><span id="logo"></span></a>
     <nav class="nav" id="nav" aria-label="Hoofdmenu">
-      <a href="./#functies">Functies</a>
-      <a href="./#hoe">Zo werkt het</a>
-      <a href="./#prijzen">Prijzen</a>
-      <a href="./#veilig">Veiligheid</a>
-      <a href="./#vragen">Vragen</a>
-      <a href="support.html" aria-current="page">Support</a>
+      <a href="./#functies" data-e="g1">Functies</a>
+      <a href="./#hoe" data-e="g2">Zo werkt het</a>
+      <a href="./#prijzen" data-e="g3">Prijzen</a>
+      <a href="./#veilig" data-e="g4">Veiligheid</a>
+      <a href="./#vragen" data-e="g5">Vragen</a>
+      <a href="support.html" aria-current="page" data-e="g6">Support</a>
     </nav>
     <div class="top-act">
-      <a class="btn light hide-s" href="app/">Inloggen</a>
-      <a class="btn glow" href="./#aanvragen">Gratis proberen</a>
+      <a class="btn light hide-s" href="app/" data-e="g7">Inloggen</a>
+      <a class="btn glow" href="./#aanvragen" data-e="g8">Gratis proberen</a>
       <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav"><span></span></button>
     </div>
   </div>
@@ -37,13 +38,13 @@
   <section class="hx sup-hx" aria-labelledby="s-h">
     <div class="hx-glow" aria-hidden="true"></div>
     <div class="wrap hx-in">
-      <span class="pill-badge"><i></i> Meestal binnen één werkdag antwoord</span>
-      <h1 id="s-h">Hoe kunnen we<br><span class="grad">helpen?</span></h1>
-      <p class="hx-lead">Zoek je antwoord hieronder, of neem contact met ons op.</p>
-      <div class="sup-search"><label class="sr-only" for="sup-q">Zoek in de vragen</label><input class="input" id="sup-q" type="search" placeholder="Zoek, bijvoorbeeld: wachtwoord, prikklok, factuur"></div>
+      <span class="pill-badge" data-e="s1"><i></i> Meestal binnen één werkdag antwoord</span>
+      <h1 id="s-h" data-e="s2">Hoe kunnen we<br><span class="grad">helpen?</span></h1>
+      <p class="hx-lead" data-e="s3">Zoek je antwoord hieronder, of neem contact met ons op.</p>
+      <div class="sup-search"><label class="sr-only" for="sup-q" data-e="s4">Zoek in de vragen</label><input class="input" id="sup-q" type="search" placeholder="Zoek, bijvoorbeeld: wachtwoord, prikklok, factuur"></div>
       <div class="sup-ways" id="sup-ways">
-        <a class="sup-way" id="sup-mail" href="mailto:support@crewharbor.nl"><strong>Mail ons</strong><span id="sup-mail-txt">support@crewharbor.nl</span></a>
-        <a class="sup-way" href="#contact"><strong>Stuur een bericht</strong><span>Via het formulier onderaan</span></a>
+        <a class="sup-way" id="sup-mail" href="mailto:support@crewharbor.nl" data-e="s5"><strong>Mail ons</strong><span id="sup-mail-txt">support@crewharbor.nl</span></a>
+        <a class="sup-way" href="#contact" data-e="s6"><strong>Stuur een bericht</strong><span>Via het formulier onderaan</span></a>
         <!-- telefoon verschijnt alleen als die in Beheer is ingesteld -->
       </div>
     </div>
@@ -52,44 +53,44 @@
   <section class="sec" id="faq" aria-labelledby="f-h">
     <div class="wrap qa">
       <div class="qa-head">
-        <h2 id="f-h">Veelgestelde<br><span class="soft">vragen.</span></h2>
-        <nav class="sup-cats" aria-label="Onderwerpen"><a href="#cat-0">Inloggen en account</a><a href="#cat-1">Klokken en uren</a><a href="#cat-2">Rooster en verlof</a><a href="#cat-3">Abonnement en betalen</a><a href="#cat-4">Privacy en veiligheid</a></nav>
+        <h2 id="f-h" data-e="s7">Veelgestelde<br><span class="soft">vragen.</span></h2>
+        <nav class="sup-cats" aria-label="Onderwerpen"><a href="#cat-0" data-e="s8">Inloggen en account</a><a href="#cat-1" data-e="s9">Klokken en uren</a><a href="#cat-2" data-e="s10">Rooster en verlof</a><a href="#cat-3" data-e="s11">Abonnement en betalen</a><a href="#cat-4" data-e="s12">Privacy en veiligheid</a></nav>
       </div>
       <div>
         <div id="faq-groups">
-        <h3 class="faq-cat" id="cat-0">Inloggen en account</h3>
-        <div class="faq">
-          <details><summary>Ik ben mijn wachtwoord vergeten</summary><p>Klik op de inlogpagina op <strong>Wachtwoord vergeten</strong> en vul je e-mailadres in. Je krijgt een mail met een link om een nieuw wachtwoord te kiezen. Geen mail? Kijk in je spammap, of vraag je leidinggevende om je een nieuwe link te sturen.</p></details>
-          <details><summary>Ik krijg de code voor tweestapsverificatie niet goed</summary><p>Controleer of de tijd op je telefoon automatisch wordt ingesteld; de codes werken alleen als de klok klopt. Nieuwe telefoon? Vraag de eigenaar of een beheerder om je tweestapsverificatie te resetten bij Mensen.</p></details>
-          <details><summary>Hoe verander ik mijn profielfoto, e-mailadres of wachtwoord?</summary><p>Klik linksonder op je naam. Je komt dan bij <strong>Mijn account</strong>, waar je je foto, e-mailadres, wachtwoord en tweestapsverificatie regelt.</p></details>
-          <details><summary>Ik zie een menu-onderdeel niet</summary><p>Wat je ziet hangt af van je rol. De eigenaar bepaalt bij <strong>Rollen &amp; rechten</strong> wie wat mag, bijvoorbeeld het rooster maken of uren goedkeuren.</p></details>
+        <h3 class="faq-cat" id="cat-0" data-e="s13">Inloggen en account</h3>
+        <div class="faq" data-list="faq">
+          <details><summary data-e="s14">Ik ben mijn wachtwoord vergeten</summary><p data-e="s15">Klik op de inlogpagina op <strong>Wachtwoord vergeten</strong> en vul je e-mailadres in. Je krijgt een mail met een link om een nieuw wachtwoord te kiezen. Geen mail? Kijk in je spammap, of vraag je leidinggevende om je een nieuwe link te sturen.</p></details>
+          <details><summary data-e="s16">Ik krijg de code voor tweestapsverificatie niet goed</summary><p data-e="s17">Controleer of de tijd op je telefoon automatisch wordt ingesteld; de codes werken alleen als de klok klopt. Nieuwe telefoon? Vraag de eigenaar of een beheerder om je tweestapsverificatie te resetten bij Mensen.</p></details>
+          <details><summary data-e="s18">Hoe verander ik mijn profielfoto, e-mailadres of wachtwoord?</summary><p data-e="s19">Klik linksonder op je naam. Je komt dan bij <strong>Mijn account</strong>, waar je je foto, e-mailadres, wachtwoord en tweestapsverificatie regelt.</p></details>
+          <details><summary data-e="s20">Ik zie een menu-onderdeel niet</summary><p data-e="s21">Wat je ziet hangt af van je rol. De eigenaar bepaalt bij <strong>Rollen &amp; rechten</strong> wie wat mag, bijvoorbeeld het rooster maken of uren goedkeuren.</p></details>
         </div>
-        <h3 class="faq-cat" id="cat-1">Klokken en uren</h3>
-        <div class="faq">
-          <details><summary>Hoe klok ik in bij de prikklok?</summary><p>Tik op de prikklok op je naam en voer de <strong>klokcode</strong> in die je in de CrewHarbor-app ziet. Die code heeft 8 cijfers en verandert elke 20 seconden, zodat niemand voor een ander kan inklokken.</p></details>
-          <details><summary>Kan ik ook inklokken met een eigen pincode?</summary><p>Alleen als de eigenaar dat tijdelijk heeft toegestaan, bijvoorbeeld als de app een paar dagen niet werkt. Dan staat er een melding op de prikklok. Je eigen pincode (8 cijfers) stel je in bij Mijn account.</p></details>
-          <details><summary>Ik ben vergeten uit te klokken</summary><p>Pas de tijd aan bij <strong>Mijn uren</strong> en dien de dag opnieuw in. Je leidinggevende ziet de wijziging bij het goedkeuren.</p></details>
-          <details><summary>Waarom is mijn pauze automatisch aangepast?</summary><p>De Arbeidstijdenwet schrijft een minimale pauze voor bij langere diensten. CrewHarbor past die standaard toe. De eigenaar kan de pauzeregels aanpassen bij Instellingen → Uren &amp; verlof.</p></details>
+        <h3 class="faq-cat" id="cat-1" data-e="s22">Klokken en uren</h3>
+        <div class="faq" data-list="faq2">
+          <details><summary data-e="s23">Hoe klok ik in bij de prikklok?</summary><p data-e="s24">Tik op de prikklok op je naam en voer de <strong>klokcode</strong> in die je in de CrewHarbor-app ziet. Die code heeft 8 cijfers en verandert elke 20 seconden, zodat niemand voor een ander kan inklokken.</p></details>
+          <details><summary data-e="s25">Kan ik ook inklokken met een eigen pincode?</summary><p data-e="s26">Alleen als de eigenaar dat tijdelijk heeft toegestaan, bijvoorbeeld als de app een paar dagen niet werkt. Dan staat er een melding op de prikklok. Je eigen pincode (8 cijfers) stel je in bij Mijn account.</p></details>
+          <details><summary data-e="s27">Ik ben vergeten uit te klokken</summary><p data-e="s28">Pas de tijd aan bij <strong>Mijn uren</strong> en dien de dag opnieuw in. Je leidinggevende ziet de wijziging bij het goedkeuren.</p></details>
+          <details><summary data-e="s29">Waarom is mijn pauze automatisch aangepast?</summary><p data-e="s30">De Arbeidstijdenwet schrijft een minimale pauze voor bij langere diensten. CrewHarbor past die standaard toe. De eigenaar kan de pauzeregels aanpassen bij Instellingen → Uren &amp; verlof.</p></details>
         </div>
-        <h3 class="faq-cat" id="cat-2">Rooster en verlof</h3>
-        <div class="faq">
-          <details><summary>Waar zie ik mijn rooster?</summary><p>Bij <strong>Rooster → Mijn week</strong>. Je krijgt een melding (en als je dat wilt een mail) zodra er een nieuw rooster klaarstaat of een dienst verandert.</p></details>
-          <details><summary>Hoeveel verlof heb ik nog?</summary><p>Bij <strong>Verlof &amp; ziek</strong> zie je je verlofsaldo in uren, als je werkgever dat bijhoudt. Vraag je meer aan dan je hebt, dan kiest je leidinggevende hoe dat wordt opgelost.</p></details>
-          <details><summary>Hoe geef ik door wanneer ik kan werken?</summary><p>Bij <strong>Beschikbaarheid</strong>. Stel een vaste week in (bijvoorbeeld ma t/m vr vanaf 12:00) en pas losse dagen aan als het een keer anders is.</p></details>
+        <h3 class="faq-cat" id="cat-2" data-e="s31">Rooster en verlof</h3>
+        <div class="faq" data-list="faq3">
+          <details><summary data-e="s32">Waar zie ik mijn rooster?</summary><p data-e="s33">Bij <strong>Rooster → Mijn week</strong>. Je krijgt een melding (en als je dat wilt een mail) zodra er een nieuw rooster klaarstaat of een dienst verandert.</p></details>
+          <details><summary data-e="s34">Hoeveel verlof heb ik nog?</summary><p data-e="s35">Bij <strong>Verlof &amp; ziek</strong> zie je je verlofsaldo in uren, als je werkgever dat bijhoudt. Vraag je meer aan dan je hebt, dan kiest je leidinggevende hoe dat wordt opgelost.</p></details>
+          <details><summary data-e="s36">Hoe geef ik door wanneer ik kan werken?</summary><p data-e="s37">Bij <strong>Beschikbaarheid</strong>. Stel een vaste week in (bijvoorbeeld ma t/m vr vanaf 12:00) en pas losse dagen aan als het een keer anders is.</p></details>
         </div>
-        <h3 class="faq-cat" id="cat-3">Abonnement en betalen</h3>
-        <div class="faq">
-          <details><summary>Kan ik per factuur betalen?</summary><p>Ja. De eigenaar vraagt dat aan bij Instellingen → Abonnement → Betaalwijze. Daarna krijg je elke maand een factuur per mail, die je ook als PDF kunt downloaden.</p></details>
-          <details><summary>Wie telt mee als medewerker?</summary><p>Iedereen met een actief account. Oud-medewerkers in het archief tellen niet mee.</p></details>
-          <details><summary>Hoe zeg ik op?</summary><p>Bij Instellingen → Abonnement. Opzeggen kan per maand. Wil je dat we je gegevens verwijderen? Stuur ons dan een bericht.</p></details>
-          <details><summary>Wij hebben meer medewerkers dan in een pakket past</summary><p>Dan maken we graag een voorstel op maat. Vraag <a href="./#prijzen">maatwerk</a> aan of stuur ons een bericht.</p></details>
+        <h3 class="faq-cat" id="cat-3" data-e="s38">Abonnement en betalen</h3>
+        <div class="faq" data-list="faq4">
+          <details><summary data-e="s39">Kan ik per factuur betalen?</summary><p data-e="s40">Ja. De eigenaar vraagt dat aan bij Instellingen → Abonnement → Betaalwijze. Daarna krijg je elke maand een factuur per mail, die je ook als PDF kunt downloaden.</p></details>
+          <details><summary data-e="s41">Wie telt mee als medewerker?</summary><p data-e="s42">Iedereen met een actief account. Oud-medewerkers in het archief tellen niet mee.</p></details>
+          <details><summary data-e="s43">Hoe zeg ik op?</summary><p data-e="s44">Bij Instellingen → Abonnement. Opzeggen kan per maand. Wil je dat we je gegevens verwijderen? Stuur ons dan een bericht.</p></details>
+          <details><summary data-e="s45">Wij hebben meer medewerkers dan in een pakket past</summary><p data-e="s46">Dan maken we graag een voorstel op maat. Vraag <a href="./#prijzen">maatwerk</a> aan of stuur ons een bericht.</p></details>
         </div>
-        <h3 class="faq-cat" id="cat-4">Privacy en veiligheid</h3>
-        <div class="faq">
-          <details><summary>Waar worden onze gegevens bewaard?</summary><p>Op servers in de Europese Unie (Frankfurt). Elk bedrijf ziet alleen zijn eigen gegevens. Lees meer in onze <a href="app/privacy.html">privacyverklaring</a>.</p></details>
-          <details><summary>Kan ik alle gegevens downloaden?</summary><p>Ja. Iedereen kan zijn eigen gegevens downloaden bij Mijn account. De eigenaar kan alle bedrijfsgegevens downloaden bij Instellingen → Beveiliging &amp; privacy.</p></details>
+        <h3 class="faq-cat" id="cat-4" data-e="s47">Privacy en veiligheid</h3>
+        <div class="faq" data-list="faq5">
+          <details><summary data-e="s48">Waar worden onze gegevens bewaard?</summary><p data-e="s49">Op servers in de Europese Unie (Frankfurt). Elk bedrijf ziet alleen zijn eigen gegevens. Lees meer in onze <a href="app/privacy.html">privacyverklaring</a>.</p></details>
+          <details><summary data-e="s50">Kan ik alle gegevens downloaden?</summary><p data-e="s51">Ja. Iedereen kan zijn eigen gegevens downloaden bij Mijn account. De eigenaar kan alle bedrijfsgegevens downloaden bij Instellingen → Beveiliging &amp; privacy.</p></details>
         </div>
-        <p class="fine center" id="faq-none" hidden>Geen vraag gevonden. Stuur ons hieronder een bericht.</p>
+        <p class="fine center" id="faq-none" hidden data-e="s52">Geen vraag gevonden. Stuur ons hieronder een bericht.</p>
       </div>
       </div>
     </div>
@@ -100,28 +101,28 @@
       <div class="cta-box">
         <div class="hx-glow small" aria-hidden="true"></div>
         <div class="cta-copy">
-          <span class="pill-badge"><i></i> Direct bij het CrewHarbor-team</span>
-          <h2 id="c-h">Stuur ons<br><span class="grad">een bericht.</span></h2>
-          <p>Vertel zo precies mogelijk wat er aan de hand is. Een schermafbeelding kun je meesturen door ons daarna te mailen.</p>
+          <span class="pill-badge" data-e="s53"><i></i> Direct bij het CrewHarbor-team</span>
+          <h2 id="c-h" data-e="s54">Stuur ons<br><span class="grad">een bericht.</span></h2>
+          <p data-e="s55">Vertel zo precies mogelijk wat er aan de hand is. Een schermafbeelding kun je meesturen door ons daarna te mailen.</p>
           <ul class="checks" id="sup-contact-list">
-            <li>Antwoord meestal binnen één werkdag</li>
-            <li>Je bericht komt direct bij het CrewHarbor-team</li>
+            <li data-e="s56">Antwoord meestal binnen één werkdag</li>
+            <li data-e="s57">Je bericht komt direct bij het CrewHarbor-team</li>
           </ul>
         </div>
         <form class="ask-form" id="sup-form" novalidate>
         <div id="sup-msg" role="status" aria-live="polite"></div>
         <div class="fields2">
-          <div class="field"><label for="s-name">Je naam</label><input class="input" id="s-name" name="name" autocomplete="name" required></div>
-          <div class="field"><label for="s-email">E-mailadres</label><input class="input" id="s-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required></div>
-          <div class="field"><label for="s-company">Bedrijf <span class="opt">(optioneel)</span></label><input class="input" id="s-company" name="company" autocomplete="organization"></div>
-          <div class="field"><label for="s-phone">Telefoon <span class="opt">(optioneel)</span></label><input class="input" id="s-phone" name="phone" type="tel" autocomplete="tel"></div>
+          <div class="field"><label for="s-name" data-e="s58">Je naam</label><input class="input" id="s-name" name="name" autocomplete="name" required></div>
+          <div class="field"><label for="s-email" data-e="s59">E-mailadres</label><input class="input" id="s-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required></div>
+          <div class="field"><label for="s-company" data-e="s60">Bedrijf <span class="opt">(optioneel)</span></label><input class="input" id="s-company" name="company" autocomplete="organization"></div>
+          <div class="field"><label for="s-phone" data-e="s61">Telefoon <span class="opt">(optioneel)</span></label><input class="input" id="s-phone" name="phone" type="tel" autocomplete="tel"></div>
         </div>
-        <div class="field"><label for="s-topic">Waar gaat het over?</label><select class="input" id="s-topic" name="topic">
+        <div class="field"><label for="s-topic" data-e="s62">Waar gaat het over?</label><select class="input" id="s-topic" name="topic">
           <option>Inloggen</option><option>Klokken en uren</option><option>Rooster en verlof</option><option>Abonnement en facturen</option><option>Iets werkt niet</option><option>Idee of wens</option><option selected>Anders</option></select></div>
-        <div class="field"><label for="s-message">Je vraag</label><textarea class="input" id="s-message" name="message" rows="5" maxlength="3000" required></textarea></div>
-        <div class="hp" aria-hidden="true"><label for="s-web">Website</label><input id="s-web" name="website" tabindex="-1" autocomplete="off"></div>
+        <div class="field"><label for="s-message" data-e="s63">Je vraag</label><textarea class="input" id="s-message" name="message" rows="5" maxlength="3000" required></textarea></div>
+        <div class="hp" aria-hidden="true"><label for="s-web" data-e="s64">Website</label><input id="s-web" name="website" tabindex="-1" autocomplete="off"></div>
         <button class="btn primary big" type="submit">Versturen</button>
-        <p class="fine">We gebruiken je gegevens alleen om je vraag te beantwoorden. Zie onze <a href="app/privacy.html">privacyverklaring</a>.</p>
+        <p class="fine" data-e="s65">We gebruiken je gegevens alleen om je vraag te beantwoorden. Zie onze <a href="app/privacy.html">privacyverklaring</a>.</p>
       </form>
       </div>
     </div>
@@ -131,16 +132,17 @@
 <footer class="foot v3f">
   <div class="wrap">
     <div class="foot-cols">
-      <div class="foot-brand"><span id="logo2"></span><p>De vaste haven voor je team.<br>Een product van <strong>Spark Apps</strong>.</p></div>
-      <nav aria-label="Product"><b>Product</b><a href="./#functies">Functies</a><a href="./#prijzen">Prijzen</a><a href="prijzen.html">Pakketten vergelijken</a><a href="app/">Inloggen</a></nav>
-      <nav aria-label="Hulp"><b>Hulp</b><a href="support.html">Support</a><a href="status.html">Status</a><a href="./#vragen">Veelgestelde vragen</a><a href="mailto:support@crewharbor.nl">support@crewharbor.nl</a></nav>
-      <nav aria-label="Juridisch"><b>Juridisch</b><a href="app/privacy.html">Privacyverklaring</a><a href="app/verwerkersovereenkomst.html">Verwerkersovereenkomst</a></nav>
+      <div class="foot-brand"><span id="logo2"></span><p data-e="g9">De vaste haven voor je team.<br>Een product van <strong>Spark Apps</strong>.</p></div>
+      <nav aria-label="Product"><b data-e="g10">Product</b><a href="./#functies" data-e="g11">Functies</a><a href="./#prijzen" data-e="g12">Prijzen</a><a href="prijzen.html" data-e="g13">Pakketten vergelijken</a><a href="app/" data-e="g14">Inloggen</a></nav>
+      <nav aria-label="Hulp"><b data-e="g15">Hulp</b><a href="support.html" data-e="g16">Support</a><a href="status.html" data-e="g17">Status</a><a href="./#vragen" data-e="g18">Veelgestelde vragen</a><a href="mailto:support@crewharbor.nl" data-e="g19">support@crewharbor.nl</a></nav>
+      <nav aria-label="Juridisch"><b data-e="g20">Juridisch</b><a href="app/privacy.html" data-e="g21">Privacyverklaring</a><a href="app/verwerkersovereenkomst.html" data-e="g22">Verwerkersovereenkomst</a></nav>
     </div>
     <div class="foot-word" aria-hidden="true">crewharbor</div>
   </div>
 </footer>
 
 <script src="app/config.js"></script>
+<script src="cms.js?v=2"></script>
 <script src="app/logo.js"></script>
 <script src="support.js?v=1"></script>
 <script src="nav.js?v=1"></script>
