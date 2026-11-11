@@ -1597,7 +1597,7 @@ function viewHours() {
   const self = same(H.member.id, S.me.id);
   const mon = H.weekStart;
   const ct = H.member.contractType, ch = Number(H.member.contractHours) * 60;
-  const planned = H.shifts.reduce((a, s) => a + spanMin(s.start, s.end), 0);
+  const planned = H.shifts.reduce((a, s) => a + shiftMin(s), 0);
   let h = '<header class="page-head"><div><h1>' + (self ? 'Mijn uren' : 'Uren van ' + esc(H.member.name)) + '</h1><p>' +
     (self ? 'Geklokte uren zijn meteen goedgekeurd. Uren die je zelf invult, dien je in en worden daarna goedgekeurd.' : esc(contractText(H.member)) + '.' + (can('hours.approve') ? ' Klopt er iets niet? Klik op Corrigeren.' : '')) + '</p></div>' +
     (!self ? '<div class="actions"><button class="btn" data-act="h-me">' + ICON.left + 'Mijn eigen uren</button></div>' : '') + '</header>';
@@ -1685,12 +1685,25 @@ function shiftForm(R) {
     '<div class="field"><label for="sh-date">Datum</label><input class="input" type="date" id="sh-date" data-sh="date" data-rerender="1" value="' + esc(E.date) + '"' + (p && p.leavingOn ? ' max="' + esc(p.leavingOn) + '"' : '') + '></div>' +
     '<div class="field"><label for="sh-start">Begin</label><input class="input" type="time" id="sh-start" data-sh="start" value="' + esc(E.start) + '"></div>' +
     '<div class="field"><label for="sh-end">Eind</label><input class="input" type="time" id="sh-end" data-sh="end" value="' + esc(E.end) + '"></div></div>' +
+    shiftBreakField(E) +
     (p && p.leavingOn ? '<p class="small" style="margin:0;color:var(--red)">' + esc(p.name) + ' vertrekt: de laatste werkdag is ' + esc(dayLong(p.leavingOn).toLowerCase()) + '.</p>' : '') +
     (R.templates && R.templates.length ? '<div class="chips"><span class="small muted">Vaste dienst:</span>' + R.templates.map(t => '<button class="chip quick" data-act="sh-tpl" data-id="' + t.id + '">' + esc(t.name) + ' ' + esc(t.start + '–' + t.end) + '</button>').join('') + '</div>' : '') +
     unitFields(R, E) + shiftWarnings(R, E) + whoCanWork(R, E) +
     '<div class="fields2">' + shiftLocField(E) + '<div class="field"><label for="sh-note">Notitie <span class="muted" style="font-weight:400">(optioneel, bijv. balie of magazijn)</span></label><input class="input" id="sh-note" data-sh="note" maxlength="120" value="' + esc(E.note) + '"></div></div>' +
     '<div class="form-foot">' + (E.id ? '<button class="btn danger small" data-act="sh-del" data-id="' + E.id + '" style="margin-right:auto">' + ICON.trash + 'Verwijderen</button>' : '') +
     '<button class="btn small ghost" data-act="sh-cancel">Annuleren</button><button class="btn primary small" data-act="sh-save">' + (E.id ? 'Opslaan' : 'Inplannen') + '</button></div></section>';
+}
+// pauze bij een dienst: automatisch volgens de pauzeregels, of zelf kiezen
+function shiftBreakField(E) {
+  if (!E.start || !E.end) return '';
+  const p = S.roster && S.roster.people.find(x => same(x.id, E.memberId));
+  const auto = breakAuto(spanMin(E.start, E.end), p && p.isMinor);
+  const cur = E.breakSet == null ? '' : String(E.breakSet);
+  const opts = [['', 'Automatisch (' + (auto ? auto + ' min' : 'geen') + ')']].concat([0, 15, 30, 45, 60, 90].map(v => [String(v), v ? v + ' minuten' : 'Geen pauze']));
+  const net = Math.max(0, spanMin(E.start, E.end) - (cur === '' ? auto : Number(cur)));
+  return '<div class="fields2"><div class="field"><label for="sh-break">Pauze</label><select class="input" id="sh-break" data-sh="breakSet" data-rerender="1">' +
+    opts.map(o => '<option value="' + o[0] + '"' + (cur === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
+    '<div class="field"><span class="label-like">Werktijd</span><p class="sh-net"><strong>' + fmtHM(net) + ' uur</strong> <span class="small muted">van ' + fmtHM(spanMin(E.start, E.end)) + ' aanwezig</span></p></div></div>';
 }
 // goedgekeurd verlof of ziek: niet in te plannen
 // pop-up: legt een venster over de pagina; klik ernaast of Esc sluit het
@@ -1797,7 +1810,7 @@ function tplOf(R, s) {
 function rosterMine(R) {
   const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(R.weekStart, i));
   const mine = R.shifts.filter(s => same(s.memberId, S.me.id));
-  const tot = mine.reduce((a, s) => a + spanMin(s.start, s.end), 0);
+  const tot = mine.reduce((a, s) => a + shiftMin(s), 0);
   const meP = R.people.find(p => same(p.id, S.me.id)) || {};
   const ch = meP.contractType === 'vast' ? Number(meP.contractHours) * 60 : 0;
   let h = '<section class="card my-week-sum"><div><span class="small muted">Ingepland deze week</span><strong>' + fmtHM(tot) + ' uur</strong>' + (ch ? '<span class="small muted">van ' + fmtHM(ch) + ' contract</span>' : '') + '</div>' +
@@ -1809,7 +1822,7 @@ function rosterMine(R) {
     const names = [...new Set(others.map(s => s.memberName.split(' ')[0]))];
     return '<div class="my-day' + (d === today() ? ' today' : '') + (d < today() ? ' past' : '') + (list.length ? ' has' : '') + '"><div class="my-day-date"><strong>' + esc(DAYS_FULL[pd(d).getDay()]) + '</strong><span>' + pd(d).getDate() + ' ' + esc(MONTHS[pd(d).getMonth()]) + '</span>' + (d === today() ? '<span class="badge green">Vandaag</span>' : '') + '</div>' +
       '<div class="my-day-main">' + (ab ? absChip(ab) : '') +
-      (list.length ? list.map(s => { const tp = tplOf(R, s); return '<div class="my-shift' + (tp ? ' t' + tp.i : '') + '"><strong>' + esc(s.start + ' – ' + s.end) + '</strong><span>' + fmtHM(spanMin(s.start, s.end)) + ' uur' + (tp ? ' · ' + esc(tp.t.name) : '') + (s.note ? ' · ' + esc(s.note) : '') + '</span>' + (typeof swapBtn === 'function' ? swapBtn(s) : '') + '</div>'; }).join('')
+      (list.length ? list.map(s => { const tp = tplOf(R, s); return '<div class="my-shift' + (tp ? ' t' + tp.i : '') + '"><strong>' + esc(s.start + ' – ' + s.end) + '</strong><span>' + fmtHM(shiftMin(s)) + ' uur' + (breakTxt(s) ? ' · ' + breakTxt(s) : '') + (tp ? ' · ' + esc(tp.t.name) : '') + (s.note ? ' · ' + esc(s.note) : '') + '</span>' + (typeof swapBtn === 'function' ? swapBtn(s) : '') + '</div>'; }).join('')
         : ab ? '' : '<span class="muted">Vrij</span>') +
       (list.length && names.length ? '<div class="small muted">Ook aan het werk: ' + esc(names.slice(0, 6).join(', ')) + (names.length > 6 ? ' en ' + (names.length - 6) + ' anderen' : '') + '</div>' : '') + '</div></div>';
   }).join('') + '</div>';
@@ -1898,7 +1911,7 @@ function rosterMonth(R) {
   const people = who ? [who] : R.people;
   h += '<section class="card"><h2>Ingepland in ' + esc(monthLabel(m).toLowerCase()) + '</h2><div class="month-sum">' + people.map(p => {
     const mine = inMonth.filter(s => same(s.memberId, p.id));
-    const tot = mine.reduce((a, s) => a + spanMin(s.start, s.end), 0);
+    const tot = mine.reduce((a, s) => a + shiftMin(s), 0);
     return '<button class="month-person" data-act="ro-who" data-id="' + p.id + '">' + avatar(p.id, p.name, 'sm2') + '<span><strong>' + esc(p.name) + '</strong><small>' + mine.length + (mine.length === 1 ? ' dienst' : ' diensten') + ' · ' + fmtHM(tot) + ' uur</small>' + leaveTag(p.leavingOn, true) + '</span></button>';
   }).join('') + '</div></section>';
   return h;
@@ -2902,7 +2915,7 @@ $app.addEventListener('click', async e => {
       case 'sh-cancel': S.shiftEdit = null; render(); return;
       case 'sh-save': {
         const E = S.shiftEdit;
-        const saved = await rpc('cd_shift_save', { p_id: E.id || null, p: { memberId: E.memberId, date: E.date, start: E.start, end: E.end, note: E.note, departmentId: E.departmentId || '', functionId: E.functionId || '' } });
+        const saved = await rpc('cd_shift_save', { p_id: E.id || null, p: { memberId: E.memberId, date: E.date, start: E.start, end: E.end, note: E.note, departmentId: E.departmentId || '', functionId: E.functionId || '', breakMin: E.breakSet == null ? '' : E.breakSet } });
         if (!E.id && saved) roPush(opCreate([Object.assign({}, E, { locationId: E.locationId })], 'Dienst ingepland', [saved.id]));
         if (LOCS().length && saved && (saved.locationId || '') !== (E.locationId || '')) await rpc('cd_shift_location', { p_id: saved.id, p_location: E.locationId || null });
         toast(E.id ? 'Dienst gewijzigd.' : 'Dienst ingepland.');

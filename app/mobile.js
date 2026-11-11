@@ -159,7 +159,7 @@ function mRoster() {
     if (w !== wk) {
       if (wk) h += '</div>';
       wk = w;
-      const min = shifts.filter(s => mondayOf(s.date) === w).reduce((a, s) => a + spanMin(s.start, s.end), 0);
+      const min = shifts.filter(s => mondayOf(s.date) === w).reduce((a, s) => a + shiftMin(s), 0);
       h += '<div class="m-weekhead"><strong>' + esc(weekName(w)) + '</strong>' + (min ? '<span>' + fmtHM(min) + ' uur</span>' : '') + '</div><div class="m-list">';
     }
     const dd = pd(x.d);
@@ -167,7 +167,7 @@ function mRoster() {
     if (!x.list.length) { h += '<div class="m-shift off">' + date + '<div class="m-shift-main">' + absChip(x.ab) + '<span>' + (x.to !== x.d ? 't/m ' + esc(dayShort(x.to)) : 'hele dag') + (x.ab.status === 'aangevraagd' ? ' · nog niet goedgekeurd' : '') + '</span></div></div>'; return; }
     x.list.forEach(s => {
       h += '<div class="m-shift' + (x.d === today() ? ' today' : '') + '">' + date + '<div class="m-shift-main"><strong>' + esc(s.start + ' – ' + s.end) + '</strong>' +
-        '<span>' + fmtHM(spanMin(s.start, s.end)) + ' uur' + (s.note ? ' · ' + esc(s.note) : '') + '</span>' + (x.ab ? absChip(x.ab) : '') + '</div>' +
+        '<span>' + fmtHM(shiftMin(s)) + ' uur' + (breakTxt(s) ? ' · ' + breakTxt(s) : '') + (s.note ? ' · ' + esc(s.note) : '') + '</span>' + (x.ab ? absChip(x.ab) : '') + '</div>' +
         (typeof swapBtn === 'function' ? '<div class="m-shift-act">' + swapBtn(s) + '</div>' : '') + '</div>';
     });
   });

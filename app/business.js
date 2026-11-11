@@ -265,6 +265,7 @@ function payrollSettingsCard() {
     '<div class="fields2">' + f('py-cw', 'codeWorked', 'Looncomponent gewerkte uren', '', 'Bijv. 2') + f('py-cl', 'codeLeave', 'Looncomponent verlofuren', 'Leeg laten om niet mee te sturen.') + '</div>' +
     '<div class="fields2">' + f('py-cs', 'codeSick', 'Looncomponent ziekte-uren', 'Leeg laten om niet mee te sturen.') + f('py-cb', 'codeBought', 'Looncomponent gekocht verlof (inhouding)', 'Leeg laten om niet mee te sturen.') + '</div>' +
     '<div class="fields2">' + f('py-cu', 'codeUnpaid', 'Looncomponent onbetaald verlof', 'Leeg laten om niet mee te sturen.') + '</div>' +
+    (typeof surchargesBlock === 'function' ? surchargesBlock() : '') +
     '<div><button class="btn dark" data-act="py-save">Opslaan</button></div></section>';
 }
 // urenoverzicht: per vestiging
@@ -294,15 +295,23 @@ function payrollPanel(R) {
   if (needCodes && !P.codeWorked) h += '<div class="alert warn">' + ICON.warn + '<span>Vul eerst de looncomponent voor gewerkte uren in bij <a href="#/instellingen">Instellingen → Salarisadministratie</a>.</span></div>';
   if (fmt === 'loket' && !P.employerNo) h += '<div class="alert warn">' + ICON.warn + '<span>Vul eerst het aansluitnummer voor Loket.nl in bij <a href="#/instellingen">Instellingen → Salarisadministratie</a>.</span></div>';
   if (needCodes && noNo.length) h += '<div class="alert warn">' + ICON.warn + '<span>Nog geen personeelsnummer: ' + noNo.slice(0, 6).map(p => esc(p.name)).join(', ') + (noNo.length > 6 ? ' en ' + (noNo.length - 6) + ' anderen' : '') + '. Vul het in bij Mensen; zonder nummer gaan ze niet mee.</span></div>';
+  const SCR = P.surcharges || [];
+  if (SCR.length && typeof surchargeHours === 'function') {
+    const SC = surchargeHours(R); const tot = SCR.map((x, i) => Object.values(SC).reduce((a, acc) => a + (acc[i] || 0), 0));
+    h += '<div class="sc-sum"><span class="small muted">Toeslaguren in deze periode:</span>' + SCR.map((x, i) => '<span class="hol-chip"><b>' + esc(scLabel(x)) + '</b> ' + nl2(tot[i]) + ' u' + (needCodes && !x.code ? ' · <span style="color:var(--red)">geen looncomponent</span>' : '') + '</span>').join('') + '</div>';
+  }
   if (['nmbrs', 'afas'].includes(fmt)) h += '<p class="small muted" style="margin:0">Controleer bij de eerste keer samen met je salarisadministratie of de kolommen goed overkomen.</p>';
   return h + '<div><button class="btn primary" data-act="py-go">' + ICON.download + 'Downloaden</button></div></section>';
 }
 function payrollRows(R) {
   const M = (S.payroll && S.payroll.members) || {};
+  const SC = typeof surchargeHours === 'function' ? surchargeHours(R) : {};
+  const nSc = (((S.payroll && S.payroll.settings) || {}).surcharges || []).length;
   return R.people.map(p => {
     const perDay = Number(p.contractHours) > 0 ? Number(p.contractHours) / 5 : 0;
-    return { id: p.id, no: (M[p.id] || {}).personnelNo || '', name: p.name, loc: locName((M[p.id] || {}).locationId), contract: Number(p.contractHours) || 0,
-      worked: (p.approvedMin || 0) / 60, leaveDays: p.leaveDays || 0, leaveH: (p.leaveDays || 0) * perDay, sickDays: p.sickDays || 0, sickH: (p.sickDays || 0) * perDay, boughtH: Number(p.boughtH) || 0, unpaidH: Number(p.unpaidH) || 0 };
+    const sc = {}; for (let i = 0; i < nSc; i++) sc['sc' + i] = ((SC[p.id] || {})[i]) || 0;
+    return Object.assign(sc, { id: p.id, no: (M[p.id] || {}).personnelNo || '', name: p.name, loc: locName((M[p.id] || {}).locationId), contract: Number(p.contractHours) || 0,
+      worked: (p.approvedMin || 0) / 60, leaveDays: p.leaveDays || 0, leaveH: (p.leaveDays || 0) * perDay, sickDays: p.sickDays || 0, sickH: (p.sickDays || 0) * perDay, boughtH: Number(p.boughtH) || 0, unpaidH: Number(p.unpaidH) || 0 });
   }).filter(r => r.worked || r.leaveDays || r.sickDays || r.boughtH || r.unpaidH);
 }
 const nl2 = n => (Math.round(n * 100) / 100).toFixed(2).replace('.', ',');
@@ -329,16 +338,19 @@ async function payrollExport(R) {
   const rows = payrollRows(R);
   if (!rows.length) throw new Error('Er zijn in deze periode geen goedgekeurde uren, verlof of ziekte.');
   const base = 'salaris-' + R.from + '-tm-' + R.to + (S.locFilter ? '-' + locName(S.locFilter).toLowerCase().replace(/[^a-z0-9]+/g, '-') : '');
-  const head = ['Personeelsnummer', 'Naam', 'Vestiging', 'Contract (uur/week)', 'Gewerkt (uren)', 'Verlof (dagen)', 'Verlof (uren)', 'Ziek (dagen)', 'Ziek (uren)', 'Verlof gekocht (uren, inhouden)', 'Onbetaald verlof (uren)', 'Van', 'Tot en met'];
+  const SCR = P.surcharges || [];
+  const head = ['Personeelsnummer', 'Naam', 'Vestiging', 'Contract (uur/week)', 'Gewerkt (uren)', 'Verlof (dagen)', 'Verlof (uren)', 'Ziek (dagen)', 'Ziek (uren)', 'Verlof gekocht (uren, inhouden)', 'Onbetaald verlof (uren)']
+    .concat(SCR.map(x => 'Toeslag ' + scLabel(x) + ' (uren)')).concat(['Van', 'Tot en met']);
+  const scCells = (r, f) => SCR.map((x, i) => f(r['sc' + i] || 0));
   if (fmt === 'csv') {
-    const lines = [csvLine(head)].concat(rows.map(r => csvLine([r.no, r.name, r.loc, nl2(r.contract), nl2(r.worked), r.leaveDays, nl2(r.leaveH), r.sickDays, nl2(r.sickH), nl2(r.boughtH), nl2(r.unpaidH), R.from, R.to])));
+    const lines = [csvLine(head)].concat(rows.map(r => csvLine([r.no, r.name, r.loc, nl2(r.contract), nl2(r.worked), r.leaveDays, nl2(r.leaveH), r.sickDays, nl2(r.sickH), nl2(r.boughtH), nl2(r.unpaidH)].concat(scCells(r, nl2)).concat([R.from, R.to]))));
     return saveFile(base + '.csv', lines.join('\r\n'), 'text/csv', true);
   }
   if (fmt === 'xlsx') {
     if (!window.XLSX) await loadScript('vendor/xlsx.mini.min.js');
     const n = v => Math.round(v * 100) / 100;
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(rows.map(r => [r.no, r.name, r.loc, n(r.contract), n(r.worked), r.leaveDays, n(r.leaveH), r.sickDays, n(r.sickH), n(r.boughtH), n(r.unpaidH), R.from, R.to]))), 'Salaris');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(rows.map(r => [r.no, r.name, r.loc, n(r.contract), n(r.worked), r.leaveDays, n(r.leaveH), r.sickDays, n(r.sickH), n(r.boughtH), n(r.unpaidH)].concat(scCells(r, n)).concat([R.from, R.to])))), 'Salaris');
     const ids = new Set(rows.map(r => String(r.id)));
     const ent = (R.entries || []).filter(e => e.status === 'goedgekeurd' && ids.has(String(e.memberId)));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Naam', 'Datum', 'Begin', 'Eind', 'Pauze (min)', 'Uren', 'Notitie']].concat(ent.map(e => [e.memberName, e.date, e.start, e.end, e.breakMin, n((e.minutes || 0) / 60), e.note || '']))), 'Diensten');
@@ -349,7 +361,7 @@ async function payrollExport(R) {
   if (!P.codeWorked) throw new Error('Vul eerst de looncomponent voor gewerkte uren in bij Instellingen → Salarisadministratie.');
   const withNo = rows.filter(r => r.no);
   if (!withNo.length) throw new Error('Niemand heeft nog een personeelsnummer. Vul die eerst in bij Mensen.');
-  const comps = [[P.codeWorked, 'worked', 'Gewerkte uren'], [P.codeLeave, 'leaveH', 'Verlofuren'], [P.codeSick, 'sickH', 'Ziekte-uren'], [P.codeBought, 'boughtH', 'Gekocht verlof'], [P.codeUnpaid, 'unpaidH', 'Onbetaald verlof']].filter(c => c[0]);
+  const comps = [[P.codeWorked, 'worked', 'Gewerkte uren'], [P.codeLeave, 'leaveH', 'Verlofuren'], [P.codeSick, 'sickH', 'Ziekte-uren'], [P.codeBought, 'boughtH', 'Gekocht verlof'], [P.codeUnpaid, 'unpaidH', 'Onbetaald verlof']].concat(SCR.map((x, i) => [x.code, 'sc' + i, 'Toeslag ' + scLabel(x)])).filter(c => c[0]);
   if (fmt === 'loket') {
     if (!P.employerNo) throw new Error('Vul eerst het aansluitnummer voor Loket.nl in bij Instellingen → Salarisadministratie.');
     const lines = [['aanslnr', 'persnr', 'ploeg'].concat(comps.map(c => c[0])).join(';')]
@@ -616,9 +628,14 @@ document.getElementById('app').addEventListener('click', async e => {
       // salaris
       case 'py-save': {
         const p = {}; document.querySelectorAll('[data-pk]').forEach(x => { p[x.dataset.pk] = x.value; });
+        if (S.scEdit) {
+          const bad = S.scEdit.find(r => !String(r.name || '').trim() || !(Number(r.pct) >= 0) || (!(r.days || []).length && !r.hol));
+          if (bad) throw new Error('Geef elke toeslag een naam, een percentage en minstens één dag (of Feestdag).');
+          p.surcharges = S.scEdit;
+        }
         el.disabled = true;
         const s = await rpc('cd_payroll_settings_save', { p });
-        if (S.payroll) S.payroll.settings = s; el.disabled = false; toast('Opgeslagen.'); return;
+        if (S.payroll) S.payroll.settings = s; S.scEdit = null; el.disabled = false; toast('Opgeslagen.'); render(); return;
       }
       case 'py-open': S.payOpen = true; S.payFmt = null; render(); return;
       case 'py-close': S.payOpen = false; render(); return;

@@ -4,7 +4,20 @@
 // ---------- hulpjes ----------
 const isoDow = d => pd(d).getDay() || 7;
 const toMin = t => { const [h, m] = String(t || '0:0').split(':').map(Number); return h * 60 + m; };
-const shiftMin = s => spanMin(s.start, s.end);
+// pauze van een dienst: zelf ingesteld, anders automatisch volgens de pauzeregels (Instellingen → Uren)
+function breakAuto(min, minor) {
+  const B = typeof breakRules === 'function' && S.org ? breakRules() : null; if (!B) return 0;
+  return (B[minor ? 'minor' : 'adult'] || []).filter(r => min > r.fromMin).reduce((a, r) => Math.max(a, Number(r.breakMin) || 0), 0);
+}
+function shiftBreak(s) {
+  if (s.breakSet != null && s.breakSet !== '') return Number(s.breakSet);
+  if (s.breakMin != null && s.id) return Number(s.breakMin);
+  const R = S.roster; const p = R && s.memberId != null ? R.people.find(x => same(x.id, s.memberId)) : null;
+  return breakAuto(spanMin(s.start, s.end), p && p.isMinor);
+}
+// netto werktijd van een dienst (zonder pauze)
+const shiftMin = s => Math.max(0, spanMin(s.start, s.end) - shiftBreak(s));
+const breakTxt = s => { const b = shiftBreak(s); return b ? b + ' min pauze' : ''; };
 function needsFor(R, d) { return (R.needs || {})[String(isoDow(d))] || {}; }
 function coverage(R, d) {
   const N = needsFor(R, d); const dayShifts = R.shifts.filter(s => s.date === d);
@@ -73,9 +86,9 @@ async function roReload() { S.quiet = true; try { await loadRoster(); } finally 
 // ---------- ongedaan maken (Ctrl+Z) en opnieuw (Ctrl+Shift+Z) ----------
 const RO_UNDO = [], RO_REDO = [];
 function roPush(op) { RO_UNDO.push(op); if (RO_UNDO.length > 50) RO_UNDO.shift(); RO_REDO.length = 0; }
-const specOf = (x, over) => Object.assign({ memberId: x.memberId, date: x.date, start: x.start, end: x.end, note: x.note || '', locationId: x.locationId || '', departmentId: x.departmentId || '', functionId: x.functionId || '' }, over || {});
+const specOf = (x, over) => Object.assign({ memberId: x.memberId, date: x.date, start: x.start, end: x.end, note: x.note || '', locationId: x.locationId || '', departmentId: x.departmentId || '', functionId: x.functionId || '', breakSet: x.breakSet == null ? '' : x.breakSet }, over || {});
 async function roCreate(spec) {
-  const s = await rpc('cd_shift_save', { p_id: null, p: { memberId: spec.memberId, date: spec.date, start: spec.start, end: spec.end, note: spec.note || '', departmentId: spec.departmentId || '', functionId: spec.functionId || '' } });
+  const s = await rpc('cd_shift_save', { p_id: null, p: { memberId: spec.memberId, date: spec.date, start: spec.start, end: spec.end, note: spec.note || '', departmentId: spec.departmentId || '', functionId: spec.functionId || '', breakMin: spec.breakSet == null ? '' : spec.breakSet } });
   if (spec.locationId && LOCS().length) { try { await rpc('cd_shift_location', { p_id: s.id, p_location: spec.locationId }); } catch (e) { /* */ } }
   return s;
 }

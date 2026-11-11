@@ -230,7 +230,7 @@ function plPopup(R) {
     .filter(p => !(S.roFilter || {}).dept || !R.people.some(x => (x.departmentIds || []).length) || (p.departmentIds || []).some(x => same(x, S.roFilter.dept)) || !(p.departmentIds || []).length);
   const rows = people.map(p => Object.assign({ p }, plStatus(R, p, P)));
   const sorted = (cat, fn2) => rows.filter(r => r.cat === cat).sort(fn2 || ((a, b) => a.p.name.localeCompare(b.p.name)));
-  const dur = spanMin(P.start, P.end);
+  const gross = spanMin(P.start, P.end), brk = breakAuto(gross, false), dur = Math.max(0, gross - brk);
   const groups = [
     ['eerst', 'Eerst inplannen · vaste uren over', 'Hebben een vast contract en nog uren over deze week.', sorted('eerst', (a, b) => ((b.av && b.av.status === 'kan') - (a.av && a.av.status === 'kan')) || b.left - a.left)],
     ['kan', 'Flex · heeft aangegeven te kunnen', '', sorted('kan', (a, b) => weekMin(R, a.p.id) - weekMin(R, b.p.id))],
@@ -258,7 +258,7 @@ function plPopup(R) {
   const vastLeft = R.people.filter(p => contractMin(p)).reduce((a, p) => a + Math.max(0, contractMin(p) - weekMin(R, p.id)), 0);
   const cnt = k => k === 'alle' ? R.people.length : R.people.filter(p => (p.contractType === 'vast') === (k === 'vast')).length;
   return '<section class="card stack pl-pop" style="gap:14px;max-width:none">' +
-    '<div class="item-top"><div><h2 style="margin:0">Wie plan je in?</h2><p class="small muted" style="margin:4px 0 0">' + esc(dayLong(P.date)) + ' · ' + esc(P.start + '–' + P.end) + ' (' + fmtHM(dur) + ' u)' + (fn ? ' · ' + esc(fn.name) : '') + (dp ? ' · ' + esc(dp.name) : '') + '</p></div><button class="icon-btn" data-act="pl-x" aria-label="Sluiten">' + ICON.x + '</button></div>' +
+    '<div class="item-top"><div><h2 style="margin:0">Wie plan je in?</h2><p class="small muted" style="margin:4px 0 0">' + esc(dayLong(P.date)) + ' · ' + esc(P.start + '–' + P.end) + ' (' + fmtHM(dur) + ' u' + (brk ? ', ' + brk + ' min pauze' : '') + ')' + (fn ? ' · ' + esc(fn.name) : '') + (dp ? ' · ' + esc(dp.name) : '') + '</p></div><button class="icon-btn" data-act="pl-x" aria-label="Sluiten">' + ICON.x + '</button></div>' +
     '<div class="pl-pick">' +
       '<div class="pl-days" role="group" aria-label="Dag">' + days.map(d => '<button class="' + (d === P.date ? 'on' : '') + '" data-act="pl-day" data-v="' + d + '" aria-pressed="' + (d === P.date) + '"' + (typeof holidayOn === 'function' && holidayOn(R, d) ? ' title="' + esc(holidayOn(R, d)) + '"' : '') + '>' + esc(dayShort(d).split(' ')[0]) + '<b>' + pd(d).getDate() + '</b>' + (typeof holidayOn === 'function' && holidayOn(R, d) ? '<i class="hol-dot">🎉</i>' : '') + '</button>').join('') + '</div>' +
       '<div class="pl-shifts">' + T.map((t, i) => { const on = t.start === P.start && t.end === P.end && same(t.functionId || '', P.functionId || '') && same(t.departmentId || '', P.departmentId || ''); const f = funcOf(t.functionId, R);
@@ -340,7 +340,8 @@ document.getElementById('app').addEventListener('change', e => { const el = e.ta
 function plTimeSub() {
   const P = S.plPick; const el = document.querySelector('.pl-pop .item-top p'); if (!P || !el || !P.start || !P.end) return;
   const R = S.roster; const fn = funcOf(P.functionId, R), dp = deptOf(P.departmentId, R);
-  el.textContent = dayLong(P.date) + ' · ' + P.start + '–' + P.end + ' (' + fmtHM(spanMin(P.start, P.end)) + ' u)' + (fn ? ' · ' + fn.name : '') + (dp ? ' · ' + dp.name : '');
+  const g = spanMin(P.start, P.end), b = breakAuto(g, false);
+  el.textContent = dayLong(P.date) + ' · ' + P.start + '–' + P.end + ' (' + fmtHM(g - b) + ' u' + (b ? ', ' + b + ' min pauze' : '') + ')' + (fn ? ' · ' + fn.name : '') + (dp ? ' · ' + dp.name : '');
 }
 ['change', 'input'].forEach(ev => document.getElementById('app').addEventListener(ev, e => {
   const el = e.target; if (!el.dataset.pl || el.dataset.pl === 'q' || !S.plPick || !el.value) return;
